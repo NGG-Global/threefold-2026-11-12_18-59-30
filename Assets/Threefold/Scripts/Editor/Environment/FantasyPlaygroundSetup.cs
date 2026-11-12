@@ -163,12 +163,13 @@ namespace Threefold.EditorTools
             GameObject oldRoot = FindEnvironmentRoot(scene);
             if (oldRoot != null)
             {
-                Object.DestroyImmediate(oldRoot);
+                Undo.DestroyObjectImmediate(oldRoot);
                 report.AppendLine("Removed the previous generated environment.");
             }
 
             var root = new GameObject(RootName);
             root.AddComponent<GeneratedEnvironment>().Generator = GeneratorName;
+            Undo.RegisterCreatedObjectUndo(root, DialogTitle);
 
             Transform architecture = CreateGroup(root.transform, "Architecture");
             Transform nature = CreateGroup(root.transform, "Nature");

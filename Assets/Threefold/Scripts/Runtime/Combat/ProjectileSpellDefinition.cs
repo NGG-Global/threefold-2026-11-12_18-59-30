@@ -41,6 +41,7 @@ namespace Threefold.Combat
         public float Damage => damage;
         public float Speed => speed;
         public float MaxRange => maxRange;
+        public float Radius => radius;
 
         /// <summary>Sets the projectile values. Called by the setup tooling.</summary>
         public void ConfigureProjectile(Projectile projectile, PooledObject impactEffect, float damageAmount,

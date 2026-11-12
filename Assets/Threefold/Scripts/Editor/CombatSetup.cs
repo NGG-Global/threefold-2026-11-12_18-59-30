@@ -24,8 +24,9 @@ namespace Threefold.EditorTools
     /// Threefold > Setup > Mage Prototype and is also available on its own.
     ///
     /// It is safe to run repeatedly. Assets that already exist are kept as they are, so values
-    /// tuned later are not lost; delete an asset from Assets/Threefold/Generated/Combat to have it
-    /// regenerated with defaults.
+    /// tuned later are not lost. To regenerate with defaults, delete the whole folder
+    /// Assets/Threefold/Generated/Combat: assets refer to each other, so deleting only one of
+    /// them can leave the others pointing at nothing.
     /// </summary>
     public static class CombatSetup
     {
@@ -70,7 +71,7 @@ namespace Threefold.EditorTools
 
         private static readonly Vector3[] ConstructPositions =
         {
-            new Vector3(-7f, 0f, 5f), new Vector3(7f, 0f, 5f), new Vector3(0f, 0f, -7f),
+            new Vector3(-7f, 0f, 7f), new Vector3(7f, 0f, 7f), new Vector3(0f, 0f, -7f),
         };
 
         private static readonly Vector3[] DummyPositions =
@@ -324,6 +325,9 @@ namespace Threefold.EditorTools
         /// <summary>A single small burst that fades and shrinks. Few particles, no collision, no lights.</summary>
         private static void ConfigureBurst(ParticleSystem particles, Material material, Color color, int count)
         {
+            // The duration cannot be changed while a system is playing.
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
             ParticleSystem.MainModule main = particles.main;
             main.duration = 0.5f;
             main.loop = false;
@@ -408,6 +412,15 @@ namespace Threefold.EditorTools
             ProjectileSpellDefinition existing = AssetDatabase.LoadAssetAtPath<ProjectileSpellDefinition>(SpellPath);
             if (existing != null)
             {
+                // A regenerated prefab has a new identity, which leaves the spell pointing at nothing.
+                if (existing.ProjectilePrefab == null || existing.ImpactEffectPrefab == null)
+                {
+                    existing.ConfigureProjectile(bolt, impact, existing.Damage, existing.Speed, existing.MaxRange,
+                        existing.Radius);
+                    EditorUtility.SetDirty(existing);
+                    report.AppendLine("Reconnected the spell asset to its regenerated prefabs.");
+                }
+
                 return existing;
             }
 
@@ -452,9 +465,9 @@ namespace Threefold.EditorTools
 
             if (core != null)
             {
-                CreatePart(PrimitiveType.Sphere, "ChestCore", visual.transform, new Vector3(0f, 1.2f, -0.27f),
+                CreatePart(PrimitiveType.Sphere, "ChestCore", visual.transform, new Vector3(0f, 1.2f, 0.27f),
                     new Vector3(0.24f, 0.24f, 0.16f), core);
-                CreatePart(PrimitiveType.Sphere, "HeadCore", visual.transform, new Vector3(0f, 1.8f, -0.15f),
+                CreatePart(PrimitiveType.Sphere, "HeadCore", visual.transform, new Vector3(0f, 1.8f, 0.15f),
                     new Vector3(0.14f, 0.1f, 0.1f), core);
             }
 

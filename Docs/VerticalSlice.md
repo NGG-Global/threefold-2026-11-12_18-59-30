@@ -3,8 +3,8 @@
 Sprint 6 joins the existing systems into one playable loop: start in the courtyard, defeat
 three magical training constructs, see a completion screen, restart.
 
-**Status:** nothing in this repository has been compiled in Unity or played. Unity validation in
-GitHub Actions is switched off (see "Validation" below). The first Unity import is still ahead.
+**Status:** the code compiles against Unity 6000.6.0f1 (see `Docs/ReleaseReadiness.md`), but it
+has never run in Unity and has not been played. Unity validation in GitHub Actions is switched off.
 
 ## What exists, and what does not
 
@@ -84,9 +84,9 @@ because they can only be judged by playing.
 | Repository checker (`Tools/ci/check_unity_repo.py`) | Passed |
 | C# syntax parse of every script | Passed |
 | Independent review of the runtime code | No definite compile errors found; six risks, four fixed |
-| Independent review of the Editor code and tests | See the pull request |
-| **Unity compilation** | **Not run** |
-| **Unity Edit Mode tests** (80 written) | **Not run** |
+| Independent review of the Editor code and tests | No definite compile errors found; two layout bugs, one idempotence gap and three risks, fixed |
+| Compilation against Unity 6000.6.0f1 assemblies | Passed, outside the Unity Editor (`Tools/ci/compile_check.sh`) |
+| Edit Mode tests (80 written) | 26 that need no engine passed outside Unity; **54 not run** |
 | **GitHub Actions** | **Disabled.** All workflow runs so far ended as "skipped" because the repository variable `CI_ENABLED` is not set, and no Unity licence secret exists |
 | **Android build** | **Not run.** A workflow is prepared but has never executed |
 

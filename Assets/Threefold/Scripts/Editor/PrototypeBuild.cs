@@ -19,6 +19,8 @@ namespace Threefold.EditorTools
     {
         private const string ApplicationIdentifier = "com.nggglobal.threefold";
         private const string DefaultOutputPath = "build/Android/Threefold.apk";
+        private const string ProductName = "Threefold";
+        private const string CompanyName = "NGG Global";
 
         /// <summary>
         /// Assembles the Fantasy Playground scene, validates it and builds a development APK.
@@ -40,13 +42,7 @@ namespace Threefold.EditorTools
                     return;
                 }
 
-                // The repository still carries the project template's identifier until the laptop's
-                // project settings are committed.
-                if (PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android) != ApplicationIdentifier)
-                {
-                    PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, ApplicationIdentifier);
-                }
-
+                ApplyPlayerSettings();
                 EditorUserBuildSettings.buildAppBundle = false;
 
                 string outputPath = GetArgument("-customBuildPath") ?? DefaultOutputPath;
@@ -83,6 +79,33 @@ namespace Threefold.EditorTools
                 Debug.LogException(exception);
                 EditorApplication.Exit(1);
             }
+        }
+
+        /// <summary>
+        /// Settings the first build depends on. They are applied here, not only stored in the
+        /// project settings file, because the repository still carries the project template's
+        /// values until the laptop's settings are committed.
+        /// </summary>
+        private static void ApplyPlayerSettings()
+        {
+            if (PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android) != ApplicationIdentifier)
+            {
+                PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, ApplicationIdentifier);
+            }
+
+            if (PlayerSettings.companyName == "DefaultCompany")
+            {
+                PlayerSettings.companyName = CompanyName;
+            }
+
+            PlayerSettings.productName = ProductName;
+
+            // The touch controls are laid out for landscape only.
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToPortrait = false;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
         }
 
         private static string GetArgument(string name)

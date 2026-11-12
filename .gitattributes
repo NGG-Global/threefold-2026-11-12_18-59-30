@@ -169,3 +169,7 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# Windows batch scripts need CRLF line endings
+*.cmd                   text eol=crlf
+*.bat                   text eol=crlf

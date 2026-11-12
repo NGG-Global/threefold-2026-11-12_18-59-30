@@ -29,6 +29,7 @@ Unity Editor, Windows tooling or a physical Android device.
 | Feature branches and pull requests from the tablet | Working |
 | Git LFS for models, textures and audio | Working |
 | Scene setup by Editor command (`Threefold > Setup > Mage Prototype`) | Written in pull request #2; not yet run in Unity |
+| Compile check without Unity (`Tools/ci/compile_check.sh`) | Working when run by Claude Code: all assemblies compile against Unity 6000.6.0f1 |
 | Repository checks without Unity (`Tools/ci/check_unity_repo.py`) | Working when run by Claude Code; runs in CI after `CI_ENABLED` is set |
 | Unity compile check and Edit Mode tests in CI | Workflow written; **not yet run**; needs a Unity licence secret |
 | Android touch controls (joystick, camera drag, jump, sprint) | Written; not yet compiled in Unity or run on a device |
