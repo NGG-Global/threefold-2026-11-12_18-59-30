@@ -109,8 +109,27 @@ namespace Threefold.EditorTools
             return !EditorApplication.isPlayingOrWillChangePlaymode;
         }
 
+        /// <summary>Where a training dummy stands, in world space.</summary>
+        internal readonly struct DummyPlacement
+        {
+            public readonly Vector3 Position;
+            public readonly float Yaw;
+
+            public DummyPlacement(Vector3 position, float yaw)
+            {
+                Position = position;
+                Yaw = yaw;
+            }
+        }
+
         /// <summary>Generates missing combat assets and adds missing combat objects to the scene.</summary>
         internal static void Ensure(Scene scene, GameObject mage, StringBuilder report)
+        {
+            Ensure(scene, mage, report, null);
+        }
+
+        /// <param name="dummies">Where to place training dummies, or null for the default positions.</param>
+        internal static void Ensure(Scene scene, GameObject mage, StringBuilder report, DummyPlacement[] dummies)
         {
             EnsureFolder(Folder);
 
@@ -134,7 +153,7 @@ namespace Threefold.EditorTools
             AssetDatabase.SaveAssets();
 
             AbilityCaster caster = EnsureMageCombat(mage, spell, report);
-            EnsureDummies(scene, dummyPrefab, report);
+            EnsureDummies(scene, dummyPrefab, dummies, report);
             EnsureHud(scene, mage, caster, report);
             EnsureCameraFeedback(scene, mage, caster, report);
 
@@ -512,7 +531,8 @@ namespace Threefold.EditorTools
             return caster;
         }
 
-        private static void EnsureDummies(Scene scene, GameObject dummyPrefab, StringBuilder report)
+        private static void EnsureDummies(Scene scene, GameObject dummyPrefab, DummyPlacement[] placements,
+            StringBuilder report)
         {
             if (FindByName(scene, DummiesName) != null)
             {
@@ -526,22 +546,30 @@ namespace Threefold.EditorTools
                 return;
             }
 
-            GameObject ground = FindByName(scene, GroundName);
-            Vector3 origin = ground != null ? ground.transform.position : Vector3.zero;
+            if (placements == null)
+            {
+                // Default layout of the grey-box prototype, relative to its ground plane.
+                GameObject ground = FindByName(scene, GroundName);
+                Vector3 origin = ground != null ? ground.transform.position : Vector3.zero;
+
+                placements = new DummyPlacement[DummyPositions.Length];
+                for (int i = 0; i < DummyPositions.Length; i++)
+                {
+                    placements[i] = new DummyPlacement(origin + DummyPositions[i], 180f);
+                }
+            }
 
             var parent = new GameObject(DummiesName);
-            parent.transform.position = origin;
 
-            for (int i = 0; i < DummyPositions.Length; i++)
+            for (int i = 0; i < placements.Length; i++)
             {
                 var dummy = (GameObject)PrefabUtility.InstantiatePrefab(dummyPrefab, parent.transform);
                 dummy.name = "TrainingDummy " + (i + 1);
-                dummy.transform.localPosition = DummyPositions[i];
-                dummy.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                dummy.transform.SetPositionAndRotation(placements[i].Position, Quaternion.Euler(0f, placements[i].Yaw, 0f));
             }
 
             Undo.RegisterCreatedObjectUndo(parent, DialogTitle);
-            report.AppendLine($"Placed {DummyPositions.Length} training dummies.");
+            report.AppendLine($"Placed {placements.Length} training dummies.");
         }
 
         private static void EnsureHud(Scene scene, GameObject mage, AbilityCaster caster, StringBuilder report)

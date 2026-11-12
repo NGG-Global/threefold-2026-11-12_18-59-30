@@ -58,20 +58,34 @@ namespace Threefold.EditorTools
             EnsureObstacles(scene, origin, report);
             EnsureDirectionalLight(scene, report);
 
-            GameObject mage = EnsureMage(scene, origin, report);
-            ThirdPersonMotor motor = EnsureComponent<ThirdPersonMotor>(mage, report);
-            CharacterInputSource input = EnsureInput(mage, motor, report);
-            ThirdPersonCamera cameraRig = EnsureCamera(scene, report);
-
-            WireReferences(mage, motor, input, cameraRig, report);
-            TouchControlsSetup.Ensure(scene, mage, report);
-            CombatSetup.Ensure(scene, mage, report);
+            GameObject mage = EnsureCharacterRig(scene, origin, Quaternion.identity, null, report);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(scene);
             Selection.activeGameObject = mage;
 
             Finish(scene, report);
+        }
+
+        /// <summary>
+        /// Adds everything that makes a scene playable, wherever its environment came from: the Mage,
+        /// the camera, input, touch controls, combat, HUD and training dummies. Existing parts are kept.
+        /// </summary>
+        /// <param name="spawnPosition">Where a newly created Mage is placed.</param>
+        /// <param name="spawnRotation">Which way a newly created Mage faces.</param>
+        /// <param name="dummies">Where to place training dummies, or null for the default positions.</param>
+        internal static GameObject EnsureCharacterRig(Scene scene, Vector3 spawnPosition, Quaternion spawnRotation,
+            CombatSetup.DummyPlacement[] dummies, StringBuilder report)
+        {
+            GameObject mage = EnsureMage(scene, spawnPosition, spawnRotation, report);
+            ThirdPersonMotor motor = EnsureComponent<ThirdPersonMotor>(mage, report);
+            CharacterInputSource input = EnsureInput(mage, motor, report);
+            ThirdPersonCamera cameraRig = EnsureCamera(scene, report);
+
+            WireReferences(mage, motor, input, cameraRig, report);
+            TouchControlsSetup.Ensure(scene, mage, report);
+            CombatSetup.Ensure(scene, mage, report, dummies);
+            return mage;
         }
 
         [MenuItem(MenuPath, true)]
@@ -196,7 +210,7 @@ namespace Threefold.EditorTools
 
         // ----------------------------------------------------------------- mage
 
-        private static GameObject EnsureMage(Scene scene, Vector3 origin, StringBuilder report)
+        private static GameObject EnsureMage(Scene scene, Vector3 origin, Quaternion rotation, StringBuilder report)
         {
             ThirdPersonMotor existingMotor = FindInScene<ThirdPersonMotor>(scene);
             GameObject mage = existingMotor != null ? existingMotor.gameObject : FindByName(scene, MageName);
@@ -204,7 +218,7 @@ namespace Threefold.EditorTools
             if (mage == null)
             {
                 mage = new GameObject(MageName);
-                mage.transform.position = origin + Vector3.up * 0.1f;
+                mage.transform.SetPositionAndRotation(origin + Vector3.up * 0.1f, rotation);
                 CreatePlaceholderVisual(mage.transform);
                 Undo.RegisterCreatedObjectUndo(mage, DialogTitle);
                 report.AppendLine($"Created '{MageName}' with a placeholder capsule body.");
