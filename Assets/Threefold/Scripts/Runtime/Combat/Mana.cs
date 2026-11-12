@@ -75,6 +75,14 @@ namespace Threefold.Combat
             return added;
         }
 
+        /// <summary>Restores mana to its maximum and ends any regeneration delay.</summary>
+        public void Refill()
+        {
+            delayRemaining = 0f;
+            pool.Fill();
+            Changed?.Invoke();
+        }
+
         /// <summary>Advances regeneration by the given time. Called every frame; public so it can be tested.</summary>
         public void Tick(float deltaTime)
         {

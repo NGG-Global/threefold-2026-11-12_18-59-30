@@ -22,6 +22,9 @@ namespace Threefold.Combat
         [Tooltip("Optional. Effect spawned when the dummy is defeated.")]
         [SerializeField] private PooledObject defeatEffectPrefab;
 
+        [Tooltip("Whether a defeated dummy returns by itself. Objective targets stay down until the level restarts.")]
+        [SerializeField] private bool respawns = true;
+
         [Tooltip("Seconds until a defeated dummy returns.")]
         [Min(0.1f)]
         [SerializeField] private float respawnSeconds = 4f;
@@ -36,6 +39,25 @@ namespace Threefold.Combat
             visualRoot = visuals;
             colliders = bodyColliders ?? new Collider[0];
             defeatEffectPrefab = defeatEffect;
+        }
+
+        public bool Respawns
+        {
+            get => respawns;
+            set => respawns = value;
+        }
+
+        /// <summary>Brings the dummy back at full health immediately, whether or not it was defeated.</summary>
+        public void Restore()
+        {
+            if (health == null)
+            {
+                health = GetComponent<Health>();
+            }
+
+            down = false;
+            SetPresent(true);
+            health.Revive();
         }
 
         private void Awake()
@@ -55,7 +77,7 @@ namespace Threefold.Combat
 
         private void Update()
         {
-            if (!down)
+            if (!down || !respawns)
             {
                 return;
             }

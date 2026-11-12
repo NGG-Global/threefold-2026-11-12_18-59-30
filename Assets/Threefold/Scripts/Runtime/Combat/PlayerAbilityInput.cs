@@ -29,7 +29,13 @@ namespace Threefold.Combat
         [Min(0.05f)]
         [SerializeField] private float retryInterval = 0.5f;
 
+        [Tooltip("An attack pressed this long before the cooldown ends is still performed when it ends. " +
+                 "Makes quick taps reliable.")]
+        [Min(0f)]
+        [SerializeField] private float pressBufferSeconds = 0.2f;
+
         private float retryTime;
+        private float bufferedUntil = -1f;
 
         /// <summary>Connects the bridge. Called by the setup tooling.</summary>
         public void Bind(CharacterInputSource input, AbilityCaster abilityCaster, ThirdPersonMotor characterMotor)
@@ -63,17 +69,34 @@ namespace Threefold.Combat
             }
 
             bool pressed = inputSource.AttackPressedThisFrame;
-            if (!pressed && !inputSource.AttackHeld)
+            bool held = inputSource.AttackHeld;
+
+            if (pressed)
+            {
+                bufferedUntil = Time.time + pressBufferSeconds;
+            }
+
+            bool buffered = Time.time <= bufferedUntil;
+            if (!held && !buffered)
             {
                 return;
             }
 
-            // A fresh press always tries, so the player gets feedback. A held control waits for the
-            // cooldown, and after a refusal waits a moment before trying again.
-            if (!pressed && (!caster.IsReady(PrimarySlot) || Time.time < retryTime))
+            // Nothing can be cast during the cooldown. A press made now is remembered and performed
+            // the moment the cooldown ends, so a tap that comes slightly early is not lost.
+            if (!caster.IsReady(PrimarySlot))
             {
                 return;
             }
+
+            // A press always gets an attempt, so the player sees why nothing happened. A control
+            // that is merely held waits a moment after a refusal before trying again.
+            if (!buffered && Time.time < retryTime)
+            {
+                return;
+            }
+
+            bufferedUntil = -1f;
 
             CastResult result = caster.TryCast(PrimarySlot);
             if (result == CastResult.NotEnoughMana || result == CastResult.CasterDefeated)

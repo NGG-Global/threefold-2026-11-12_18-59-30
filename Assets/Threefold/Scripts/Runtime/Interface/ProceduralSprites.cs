@@ -84,7 +84,9 @@ namespace Threefold.Interface
             texture.SetPixels32(pixels);
             texture.Apply(false, true);
 
-            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, Size, Size), new Vector2(0.5f, 0.5f), 100f);
+            // A full-rectangle mesh: outline tracing would need to read the pixels, which were just released.
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, Size, Size), new Vector2(0.5f, 0.5f), 100f, 0,
+                SpriteMeshType.FullRect);
             sprite.name = texture.name;
             sprite.hideFlags = HideFlags.HideAndDontSave;
             return sprite;

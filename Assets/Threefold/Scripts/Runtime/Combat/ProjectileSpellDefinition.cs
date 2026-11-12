@@ -36,6 +36,8 @@ namespace Threefold.Combat
         [Min(1)]
         [SerializeField] private int maxActiveProjectiles = 12;
 
+        public Projectile ProjectilePrefab => projectilePrefab;
+        public PooledObject ImpactEffectPrefab => impactEffectPrefab;
         public float Damage => damage;
         public float Speed => speed;
         public float MaxRange => maxRange;

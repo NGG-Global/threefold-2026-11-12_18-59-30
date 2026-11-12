@@ -47,6 +47,10 @@ namespace Threefold.EditorTools
         private const string SpellPath = Folder + "/ArcaneBolt.asset";
 
         private const string DummiesName = "TrainingDummies";
+        internal const string ConstructsName = "TrainingConstructs";
+        private const string ConstructPrefabPath = Folder + "/TrainingConstruct.prefab";
+        private const string ConstructBodyMaterialPath = Folder + "/TrainingConstructBody.mat";
+        private const string ConstructCoreMaterialPath = Folder + "/TrainingConstructCore.mat";
         private const string GroundName = "PrototypeGround";
         private const string HudName = "CombatHud";
         private const int UiLayer = 5;
@@ -63,6 +67,11 @@ namespace Threefold.EditorTools
         private static readonly Color HealthColor = new Color(0.86f, 0.24f, 0.22f, 0.95f);
         private static readonly Color ManaColor = new Color(0.33f, 0.56f, 0.98f, 0.95f);
         private static readonly Color CrosshairColor = new Color(1f, 0.97f, 0.9f, 0.8f);
+
+        private static readonly Vector3[] ConstructPositions =
+        {
+            new Vector3(-7f, 0f, 5f), new Vector3(7f, 0f, 5f), new Vector3(0f, 0f, -7f),
+        };
 
         private static readonly Vector3[] DummyPositions =
         {
@@ -115,10 +124,14 @@ namespace Threefold.EditorTools
             public readonly Vector3 Position;
             public readonly float Yaw;
 
-            public DummyPlacement(Vector3 position, float yaw)
+            /// <summary>True for an objective target, false for a practice dummy that returns by itself.</summary>
+            public readonly bool Construct;
+
+            public DummyPlacement(Vector3 position, float yaw, bool construct = false)
             {
                 Position = position;
                 Yaw = yaw;
+                Construct = construct;
             }
         }
 
@@ -148,12 +161,20 @@ namespace Threefold.EditorTools
                 new Color(1f, 0.82f, 0.5f, 1f), 28, 1.1f, report);
             Projectile bolt = EnsureBoltPrefab(coreMaterial, glowMaterial, report);
             ProjectileSpellDefinition spell = EnsureSpell(bolt, impact, report);
-            GameObject dummyPrefab = EnsureDummyPrefab(bodyMaterial, postMaterial, barBackMaterial, barFillMaterial, burst, report);
+            GameObject dummyPrefab = EnsureDummyPrefab(DummyPrefabPath, "TrainingDummy", bodyMaterial, postMaterial, null,
+                barBackMaterial, barFillMaterial, burst, 100f, true, report);
+
+            Material constructBody = EnsureMaterial(ConstructBodyMaterialPath,
+                () => CreateColorMaterial(LitShader, new Color(0.3f, 0.33f, 0.42f, 1f)), report);
+            Material constructCore = EnsureMaterial(ConstructCoreMaterialPath,
+                () => CreateColorMaterial(UnlitShader, new Color(0.55f, 0.9f, 1f, 1f)), report);
+            GameObject constructPrefab = EnsureDummyPrefab(ConstructPrefabPath, "TrainingConstruct", constructBody, postMaterial,
+                constructCore, barBackMaterial, barFillMaterial, burst, 140f, false, report);
 
             AssetDatabase.SaveAssets();
 
             AbilityCaster caster = EnsureMageCombat(mage, spell, report);
-            EnsureDummies(scene, dummyPrefab, dummies, report);
+            EnsureTargets(scene, dummyPrefab, constructPrefab, dummies, report);
             EnsureHud(scene, mage, caster, report);
             EnsureCameraFeedback(scene, mage, caster, report);
 
@@ -398,19 +419,24 @@ namespace Threefold.EditorTools
             return spell;
         }
 
-        private static GameObject EnsureDummyPrefab(Material body, Material post, Material barBack, Material barFill,
-            PooledObject defeatEffect, StringBuilder report)
+        /// <summary>
+        /// Builds a stationary target. With a core material it becomes a magical construct: a
+        /// glowing gem is set in its chest and head, so objective targets are told apart at a glance.
+        /// </summary>
+        private static GameObject EnsureDummyPrefab(string path, string prefabName, Material body, Material post,
+            Material core, Material barBack, Material barFill, PooledObject defeatEffect, float maxHealth, bool respawns,
+            StringBuilder report)
         {
-            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(DummyPrefabPath);
+            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (existing != null)
             {
                 return existing;
             }
 
-            var root = new GameObject("TrainingDummy");
+            var root = new GameObject(prefabName);
 
             Health health = root.AddComponent<Health>();
-            health.Configure(100f, new Vector3(0f, 1.15f, 0f));
+            health.Configure(maxHealth, new Vector3(0f, 1.15f, 0f));
 
             CapsuleCollider capsule = root.AddComponent<CapsuleCollider>();
             capsule.center = new Vector3(0f, 0.95f, 0f);
@@ -423,6 +449,14 @@ namespace Threefold.EditorTools
             CreatePart(PrimitiveType.Capsule, "Body", visual.transform, new Vector3(0f, 1.15f, 0f), new Vector3(0.6f, 0.45f, 0.6f), body);
             CreatePart(PrimitiveType.Sphere, "Head", visual.transform, new Vector3(0f, 1.78f, 0f), new Vector3(0.36f, 0.36f, 0.36f), body);
             CreatePart(PrimitiveType.Cube, "Arms", visual.transform, new Vector3(0f, 1.32f, 0f), new Vector3(1.1f, 0.1f, 0.1f), post);
+
+            if (core != null)
+            {
+                CreatePart(PrimitiveType.Sphere, "ChestCore", visual.transform, new Vector3(0f, 1.2f, -0.27f),
+                    new Vector3(0.24f, 0.24f, 0.16f), core);
+                CreatePart(PrimitiveType.Sphere, "HeadCore", visual.transform, new Vector3(0f, 1.8f, -0.15f),
+                    new Vector3(0.14f, 0.1f, 0.1f), core);
+            }
 
             var bar = new GameObject("HealthBar");
             bar.transform.SetParent(root.transform, false);
@@ -437,11 +471,15 @@ namespace Threefold.EditorTools
 
             bar.AddComponent<WorldHealthBar>().Bind(health, fill.transform, barVisuals);
             root.AddComponent<HitFlash>().Bind(health, visual.transform);
-            root.AddComponent<TrainingDummy>().Bind(visual, new Collider[] { capsule }, defeatEffect);
+            TrainingDummy dummy = root.AddComponent<TrainingDummy>();
+            dummy.Bind(visual, new Collider[] { capsule }, defeatEffect);
+            dummy.Respawns = respawns;
 
-            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, DummyPrefabPath);
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
-            report.AppendLine("Generated prefab 'TrainingDummy' (100 health, returns 4 s after defeat).");
+            report.AppendLine(respawns
+                ? $"Generated prefab '{prefabName}' ({maxHealth:0} health, returns 4 s after defeat)."
+                : $"Generated prefab '{prefabName}' ({maxHealth:0} health, stays down until the level restarts).");
             return prefab;
         }
 
@@ -531,45 +569,68 @@ namespace Threefold.EditorTools
             return caster;
         }
 
-        private static void EnsureDummies(Scene scene, GameObject dummyPrefab, DummyPlacement[] placements,
-            StringBuilder report)
+        /// <summary>
+        /// Places the practice dummies and the objective constructs, each group under its own parent.
+        /// A group that already exists in the scene is kept as it is.
+        /// </summary>
+        private static void EnsureTargets(Scene scene, GameObject dummyPrefab, GameObject constructPrefab,
+            DummyPlacement[] placements, StringBuilder report)
         {
-            if (FindByName(scene, DummiesName) != null)
-            {
-                report.AppendLine($"Kept existing '{DummiesName}'.");
-                return;
-            }
-
-            if (dummyPrefab == null)
-            {
-                report.AppendLine("WARNING: the training dummy prefab could not be created, so no dummies were placed.");
-                return;
-            }
-
             if (placements == null)
             {
                 // Default layout of the grey-box prototype, relative to its ground plane.
                 GameObject ground = FindByName(scene, GroundName);
                 Vector3 origin = ground != null ? ground.transform.position : Vector3.zero;
 
-                placements = new DummyPlacement[DummyPositions.Length];
+                placements = new DummyPlacement[DummyPositions.Length + ConstructPositions.Length];
                 for (int i = 0; i < DummyPositions.Length; i++)
                 {
                     placements[i] = new DummyPlacement(origin + DummyPositions[i], 180f);
                 }
+
+                for (int i = 0; i < ConstructPositions.Length; i++)
+                {
+                    placements[DummyPositions.Length + i] = new DummyPlacement(origin + ConstructPositions[i], 180f, true);
+                }
             }
 
-            var parent = new GameObject(DummiesName);
+            PlaceGroup(scene, DummiesName, "TrainingDummy", dummyPrefab, placements, false, report);
+            PlaceGroup(scene, ConstructsName, "TrainingConstruct", constructPrefab, placements, true, report);
+        }
+
+        private static void PlaceGroup(Scene scene, string groupName, string instanceName, GameObject prefab,
+            DummyPlacement[] placements, bool constructs, StringBuilder report)
+        {
+            if (FindByName(scene, groupName) != null)
+            {
+                report.AppendLine($"Kept existing '{groupName}'.");
+                return;
+            }
+
+            if (prefab == null)
+            {
+                report.AppendLine($"WARNING: the prefab for '{groupName}' could not be created, so none were placed.");
+                return;
+            }
+
+            var parent = new GameObject(groupName);
+            int placed = 0;
 
             for (int i = 0; i < placements.Length; i++)
             {
-                var dummy = (GameObject)PrefabUtility.InstantiatePrefab(dummyPrefab, parent.transform);
-                dummy.name = "TrainingDummy " + (i + 1);
-                dummy.transform.SetPositionAndRotation(placements[i].Position, Quaternion.Euler(0f, placements[i].Yaw, 0f));
+                if (placements[i].Construct != constructs)
+                {
+                    continue;
+                }
+
+                placed++;
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent.transform);
+                instance.name = instanceName + " " + placed;
+                instance.transform.SetPositionAndRotation(placements[i].Position, Quaternion.Euler(0f, placements[i].Yaw, 0f));
             }
 
             Undo.RegisterCreatedObjectUndo(parent, DialogTitle);
-            report.AppendLine($"Placed {placements.Length} training dummies.");
+            report.AppendLine($"Placed {placed} object(s) in '{groupName}'.");
         }
 
         private static void EnsureHud(Scene scene, GameObject mage, AbilityCaster caster, StringBuilder report)

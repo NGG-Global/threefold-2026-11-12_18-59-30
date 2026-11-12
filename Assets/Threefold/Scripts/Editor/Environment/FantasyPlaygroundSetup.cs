@@ -28,7 +28,7 @@ namespace Threefold.EditorTools
         private const string MenuPath = "Threefold/Setup/Fantasy Playground";
         private const string RebuildMenuPath = "Threefold/Setup/Fantasy Playground (Regenerate Assets)";
         private const string DialogTitle = "Fantasy Playground";
-        private const string ScenePath = "Assets/Scenes/FantasyPlayground.unity";
+        internal const string ScenePath = "Assets/Scenes/FantasyPlayground.unity";
         private const string RootName = "FantasyPlayground Environment";
         private const string GeneratorName = "FantasyPlayground";
         private const string PostProcessingProfilePath = "Assets/Settings/SampleSceneProfile.asset";
@@ -92,6 +92,7 @@ namespace Threefold.EditorTools
             return -0.05f + rise + hills;
         }
 
+        /// <summary>The interactive command: asks before discarding or replacing anything.</summary>
         private static void Build(bool rebuildAssets)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -105,18 +106,61 @@ namespace Threefold.EditorTools
                 return;
             }
 
-            GameObject oldRoot = FindEnvironmentRoot(scene);
-            if (oldRoot != null && !EditorUtility.DisplayDialog(DialogTitle,
+            if (FindEnvironmentRoot(scene) != null && !EditorUtility.DisplayDialog(DialogTitle,
                     "This scene already contains the generated environment.\n\n" +
                     "Rebuild it? Only the generated environment is replaced. The Mage, camera, HUD, touch " +
-                    "controls, training dummies and anything you added yourself are kept.", "Rebuild", "Cancel"))
+                    "controls, training targets and anything you added yourself are kept.", "Rebuild", "Cancel"))
             {
                 return;
             }
 
             var report = new StringBuilder();
+            GameObject mage = Assemble(scene, rebuildAssets, report);
+            bool saved = EditorSceneManager.SaveScene(scene);
+            Selection.activeGameObject = mage;
+
+            string summary = report.ToString().TrimEnd();
+            Debug.Log($"[Threefold] {DialogTitle} finished.\n{summary}");
+            EditorUtility.DisplayDialog(DialogTitle,
+                summary + (saved ? "\n\nThe scene was saved. " : "\n\nThe scene could NOT be saved; save it with Ctrl+S. ") +
+                "Press Play to try it.", "OK");
+        }
+
+        /// <summary>
+        /// Builds the complete scene without asking anything, for automated builds and tests. It
+        /// opens the scene without saving whatever was open before, so it must only be called
+        /// where nobody has unsaved work: from the command line or a build server.
+        /// </summary>
+        /// <returns>The assembled and saved scene.</returns>
+        internal static Scene BuildForAutomation()
+        {
+            Scene scene;
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) != null)
+            {
+                scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            }
+            else
+            {
+                EnvironmentAssets.EnsureFolder("Assets/Scenes");
+                scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                EditorSceneManager.SaveScene(scene, ScenePath);
+            }
+
+            var report = new StringBuilder();
+            Assemble(scene, true, report);
+            EditorSceneManager.SaveScene(scene);
+
+            Debug.Log($"[Threefold] {DialogTitle} assembled for automation.\n{report.ToString().TrimEnd()}");
+            return scene;
+        }
+
+        /// <summary>Generates the assets, rebuilds the environment and makes the scene playable.</summary>
+        /// <returns>The Mage.</returns>
+        private static GameObject Assemble(Scene scene, bool rebuildAssets, StringBuilder report)
+        {
             EnvironmentAssets assets = EnvironmentAssets.Ensure(rebuildAssets, report);
 
+            GameObject oldRoot = FindEnvironmentRoot(scene);
             if (oldRoot != null)
             {
                 Object.DestroyImmediate(oldRoot);
@@ -145,7 +189,7 @@ namespace Threefold.EditorTools
             report.AppendLine("Built the courtyard, terrace, ruins, jump course, forest, background and lighting.");
 
             GameObject mage = MagePrototypeSetup.EnsureCharacterRig(scene, SpawnPosition, Quaternion.identity,
-                GetDummyPlacements(), report);
+                GetTargetPlacements(), report);
 
             if (mage.TryGetComponent(out Mana mana))
             {
@@ -154,17 +198,11 @@ namespace Threefold.EditorTools
 
             EnablePostProcessing(scene, report);
             AddToBuildSettings(report);
+            MagePrototypeSetup.AppendValidation(scene, report);
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(scene);
-            bool saved = EditorSceneManager.SaveScene(scene);
-            Selection.activeGameObject = mage;
-
-            string summary = report.ToString().TrimEnd();
-            Debug.Log($"[Threefold] {DialogTitle} finished.\n{summary}");
-            EditorUtility.DisplayDialog(DialogTitle,
-                summary + (saved ? "\n\nThe scene was saved. " : "\n\nThe scene could NOT be saved; save it with Ctrl+S. ") +
-                "Press Play to try it.", "OK");
+            return mage;
         }
 
         // ---------------------------------------------------------------- scene
@@ -597,22 +635,25 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
-        /// Targets at ground level, on the terrace, on the high platform, in the confined west
-        /// passage and far out on the hillside, so shots are tested near, far, uphill and across cover.
+        /// Three constructs that must be defeated to complete the level, and four practice dummies.
+        /// The constructs stand on the terrace, on the high platform at the end of the jump course
+        /// and in the west passage, so completing the objective takes the player up the stair,
+        /// across the jumps and through the confined space.
         /// </summary>
-        private static CombatSetup.DummyPlacement[] GetDummyPlacements()
+        private static CombatSetup.DummyPlacement[] GetTargetPlacements()
         {
             const float farX = 21f;
             const float farZ = 22f;
 
             return new[]
             {
+                new CombatSetup.DummyPlacement(new Vector3(0f, TerraceHeight, 14.2f), 180f, true),
+                new CombatSetup.DummyPlacement(new Vector3(14.5f, 2.4f, 5f), 220f, true),
+                new CombatSetup.DummyPlacement(new Vector3(-15.6f, 0f, 1f), 120f, true),
+
                 new CombatSetup.DummyPlacement(new Vector3(-5f, 0f, 3f), 160f),
                 new CombatSetup.DummyPlacement(new Vector3(5.5f, 0f, 2.5f), 200f),
                 new CombatSetup.DummyPlacement(new Vector3(-6f, TerraceHeight, 13.5f), 180f),
-                new CombatSetup.DummyPlacement(new Vector3(6f, TerraceHeight, 13.5f), 180f),
-                new CombatSetup.DummyPlacement(new Vector3(14.5f, 2.4f, 5f), 220f),
-                new CombatSetup.DummyPlacement(new Vector3(-15.6f, 0f, 1f), 120f),
                 new CombatSetup.DummyPlacement(new Vector3(farX, TerrainHeight(farX, farZ), farZ), 225f),
             };
         }

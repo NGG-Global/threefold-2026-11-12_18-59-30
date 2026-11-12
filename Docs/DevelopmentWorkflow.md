@@ -34,9 +34,10 @@ Unity Editor, Windows tooling or a physical Android device.
 | Android touch controls (joystick, camera drag, jump, sprint) | Written; not yet compiled in Unity or run on a device |
 | Mage combat (spell, health, mana, dummy, HUD, feedback) | Written; not yet compiled in Unity or played |
 | Fantasy Playground environment (generated level, lighting, modules) | Written; not yet compiled in Unity or seen |
-| Play Mode tests for movement and camera | Not started; depends on pull request #2 |
-| Android build (APK) in CI | Not started; planned after the compile job has passed once |
-| Running Editor commands in CI and committing the generated scenes | Not started; planned after the Android build |
+| Objective, completion and restart loop | Written; not yet compiled in Unity or played |
+| Play Mode tests for movement and camera | Not started |
+| Android build (APK) in CI | Workflow written (`android-build.yml`, started by hand); **never run**; needs a Unity licence secret |
+| Running Editor commands in CI | The Android build and one test assemble the scene from code in batch mode; never run. Committing the generated files back is not implemented |
 | Play-testing, feel tuning, device testing | Laptop only |
 
 Until the Unity job has passed once, no code in this repository has been confirmed to compile.
