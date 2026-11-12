@@ -60,7 +60,11 @@ namespace Threefold.Tests
             second.Sprint = true;
             first.JumpIsHeld = true;
             second.JumpPressed = true;
+            first.AttackIsHeld = true;
+            second.AttackPressed = true;
 
+            Assert.IsTrue(combined.AttackHeld);
+            Assert.IsTrue(combined.AttackPressedThisFrame);
             Assert.IsTrue(combined.SprintHeld);
             Assert.IsTrue(combined.JumpHeld);
             Assert.IsTrue(combined.JumpPressedThisFrame);
@@ -105,12 +109,16 @@ namespace Threefold.Tests
             public bool Sprint;
             public bool JumpIsHeld;
             public bool JumpPressed;
+            public bool AttackIsHeld;
+            public bool AttackPressed;
 
             public override Vector2 Move => MoveValue;
             public override Vector2 LookDelta => LookValue;
             public override bool SprintHeld => Sprint;
             public override bool JumpHeld => JumpIsHeld;
             public override bool JumpPressedThisFrame => JumpPressed;
+            public override bool AttackHeld => AttackIsHeld;
+            public override bool AttackPressedThisFrame => AttackPressed;
         }
     }
 }

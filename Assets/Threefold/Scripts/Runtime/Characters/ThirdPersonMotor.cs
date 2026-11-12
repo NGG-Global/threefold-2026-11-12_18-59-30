@@ -85,6 +85,7 @@ namespace Threefold.Characters
         [SerializeField] private float groundedStickSpeed = 3f;
 
         private const float ProbeLift = 0.1f;
+        private const float FacingOverrideSmoothTime = 0.05f;
         private const float InputDeadZoneSqr = 0.0001f;
         private const float TimerExpired = 1000f;
 
@@ -92,6 +93,8 @@ namespace Threefold.Characters
         private Vector3 horizontalVelocity;
         private float verticalSpeed;
         private float yawVelocity;
+        private float facingOverrideYaw;
+        private float facingOverrideTime;
         private float timeSinceGrounded = TimerExpired;
         private float timeSinceJumpPressed = TimerExpired;
         private bool isGrounded;
@@ -203,6 +206,23 @@ namespace Threefold.Characters
             {
                 verticalSpeed = 0f;
             }
+        }
+
+        /// <summary>
+        /// Turns the character towards a world direction and holds that facing for a short time,
+        /// overriding the usual turn towards the movement direction. Used when attacking, so the
+        /// character faces its target while it keeps moving.
+        /// </summary>
+        public void FaceDirection(Vector3 worldDirection, float holdSeconds)
+        {
+            worldDirection.y = 0f;
+            if (worldDirection.sqrMagnitude < 0.0001f || holdSeconds <= 0f)
+            {
+                return;
+            }
+
+            facingOverrideYaw = Mathf.Atan2(worldDirection.x, worldDirection.z) * Mathf.Rad2Deg;
+            facingOverrideTime = holdSeconds;
         }
 
         /// <summary>Moves the character instantly and clears its momentum.</summary>
@@ -342,15 +362,28 @@ namespace Threefold.Characters
 
         private void UpdateRotation(Vector3 moveDirection, bool hasMoveInput, float deltaTime)
         {
-            if (!hasMoveInput)
+            float targetYaw;
+            float smoothTime = rotationSmoothTime;
+
+            if (facingOverrideTime > 0f)
+            {
+                // An ability asked the character to face a direction; movement continues as strafing.
+                facingOverrideTime -= deltaTime;
+                targetYaw = facingOverrideYaw;
+                smoothTime = Mathf.Min(rotationSmoothTime, FacingOverrideSmoothTime);
+            }
+            else if (hasMoveInput)
+            {
+                targetYaw = Mathf.Atan2(moveDirection.x, moveDirection.z) * Mathf.Rad2Deg;
+            }
+            else
             {
                 yawVelocity = 0f;
                 return;
             }
 
-            float targetYaw = Mathf.Atan2(moveDirection.x, moveDirection.z) * Mathf.Rad2Deg;
-            float yaw = rotationSmoothTime > 0f
-                ? Mathf.SmoothDampAngle(transform.eulerAngles.y, targetYaw, ref yawVelocity, rotationSmoothTime,
+            float yaw = smoothTime > 0f
+                ? Mathf.SmoothDampAngle(transform.eulerAngles.y, targetYaw, ref yawVelocity, smoothTime,
                     Mathf.Infinity, deltaTime)
                 : targetYaw;
 

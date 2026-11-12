@@ -65,6 +65,7 @@ namespace Threefold.EditorTools
 
             WireReferences(mage, motor, input, cameraRig, report);
             TouchControlsSetup.Ensure(scene, mage, report);
+            CombatSetup.Ensure(scene, mage, report);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(scene);
@@ -434,7 +435,8 @@ namespace Threefold.EditorTools
 
             bool canSave = !string.IsNullOrEmpty(scene.path);
             string message = summary + "\n\nPress Play, click the Game view to capture the mouse, then use " +
-                             "WASD, Shift, Space and the mouse. To try the touch controls with the mouse, " +
+                             "WASD, Shift, Space and the mouse. The left mouse button attacks. To try the touch controls " +
+                             "with the mouse, " +
                              "switch on Threefold > Controls > Preview Touch Controls In Editor first.";
 
             if (!canSave)

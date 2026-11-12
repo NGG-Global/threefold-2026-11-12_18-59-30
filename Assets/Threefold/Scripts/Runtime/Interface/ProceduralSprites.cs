@@ -8,6 +8,7 @@ namespace Threefold.Interface
         Ring,
         ChevronUp,
         DoubleChevronUp,
+        Diamond,
     }
 
     /// <summary>
@@ -18,7 +19,7 @@ namespace Threefold.Interface
     public static class ProceduralSprites
     {
         private const int Size = 128;
-        private const int ShapeCount = 4;
+        private const int ShapeCount = 5;
 
         private static readonly Sprite[] Cache = new Sprite[ShapeCount];
 
@@ -35,6 +36,12 @@ namespace Threefold.Interface
         private static readonly Vector2[] LowerChevron =
         {
             new Vector2(0.29f, 0.28f), new Vector2(0.50f, 0.49f), new Vector2(0.71f, 0.28f),
+        };
+
+        private static readonly Vector2[] Diamond =
+        {
+            new Vector2(0.50f, 0.74f), new Vector2(0.70f, 0.50f), new Vector2(0.50f, 0.26f),
+            new Vector2(0.30f, 0.50f), new Vector2(0.50f, 0.74f),
         };
 
         public static Sprite Get(ProceduralShape shape)
@@ -104,6 +111,9 @@ namespace Threefold.Interface
                 case ProceduralShape.DoubleChevronUp:
                     return Mathf.Min(DistanceToPolyline(point, UpperChevron), DistanceToPolyline(point, LowerChevron))
                            - Size * 0.04f;
+
+                case ProceduralShape.Diamond:
+                    return DistanceToPolyline(point, Diamond) - Size * 0.04f;
 
                 default:
                     return fromCentre - outerRadius;

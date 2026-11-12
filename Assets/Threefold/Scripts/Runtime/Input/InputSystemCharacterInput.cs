@@ -22,6 +22,7 @@ namespace Threefold.InputHandling
         [SerializeField] private string lookActionName = "Look";
         [SerializeField] private string jumpActionName = "Jump";
         [SerializeField] private string sprintActionName = "Sprint";
+        [SerializeField] private string attackActionName = "Attack";
 
         [Header("Look")]
         [Tooltip("Look units per second produced by a gamepad stick at full deflection.")]
@@ -38,12 +39,16 @@ namespace Threefold.InputHandling
         private InputAction lookAction;
         private InputAction jumpAction;
         private InputAction sprintAction;
+        private InputAction attackAction;
 
         private Vector2 move;
         private Vector2 lookDelta;
         private bool sprintHeld;
         private bool jumpHeld;
         private bool jumpPressedThisFrame;
+        private bool attackHeld;
+        private bool attackPressedThisFrame;
+        private bool suppressAttackUntilRelease;
         private bool cursorLockedHere;
         private bool mouseCaptureEnabled = true;
 
@@ -52,6 +57,8 @@ namespace Threefold.InputHandling
         public override bool SprintHeld => sprintHeld;
         public override bool JumpHeld => jumpHeld;
         public override bool JumpPressedThisFrame => jumpPressedThisFrame;
+        public override bool AttackHeld => attackHeld;
+        public override bool AttackPressedThisFrame => attackPressedThisFrame;
 
         /// <summary>Actions asset this component reads. Change it only while the component is disabled.</summary>
         public InputActionAsset ActionsAsset
@@ -90,6 +97,11 @@ namespace Threefold.InputHandling
             EnableIfNeeded(lookAction);
             EnableIfNeeded(jumpAction);
             EnableIfNeeded(sprintAction);
+
+            if (attackAction != null)
+            {
+                EnableIfNeeded(attackAction);
+            }
         }
 
         private void OnDisable()
@@ -113,6 +125,47 @@ namespace Threefold.InputHandling
             jumpHeld = jumpAction.IsPressed();
             jumpPressedThisFrame = jumpAction.WasPressedThisFrame();
             lookDelta = ReadLook();
+            ReadAttack();
+        }
+
+        private void ReadAttack()
+        {
+            attackHeld = false;
+            attackPressedThisFrame = false;
+
+            if (attackAction == null)
+            {
+                return;
+            }
+
+            bool held = attackAction.IsPressed();
+            if (!held)
+            {
+                suppressAttackUntilRelease = false;
+                return;
+            }
+
+            InputControl control = attackAction.activeControl;
+            InputDevice device = control != null ? control.device : null;
+
+            // A tap anywhere on a touchscreen must not attack; touch has its own attack button.
+            if (device is Touchscreen)
+            {
+                return;
+            }
+
+            if (device is Mouse)
+            {
+                // The click that captures the mouse, and clicks while it is free, are not attacks.
+                bool captured = !lockCursorForMouseLook || Cursor.lockState == CursorLockMode.Locked;
+                if (!captured || suppressAttackUntilRelease)
+                {
+                    return;
+                }
+            }
+
+            attackHeld = true;
+            attackPressedThisFrame = attackAction.WasPressedThisFrame();
         }
 
         private Vector2 ReadLook()
@@ -161,6 +214,7 @@ namespace Threefold.InputHandling
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
                 cursorLockedHere = true;
+                suppressAttackUntilRelease = true;
                 return;
             }
 
@@ -208,6 +262,15 @@ namespace Threefold.InputHandling
             jumpAction = FindAction(map, jumpActionName);
             sprintAction = FindAction(map, sprintActionName);
 
+            // Attack is optional: without it the character can still move.
+            attackAction = map.FindAction(attackActionName, false);
+            if (attackAction == null)
+            {
+                Debug.LogWarning(
+                    $"{nameof(InputSystemCharacterInput)} on '{name}': action '{attackActionName}' was not found in " +
+                    $"action map '{map.name}'. Attacking from keyboard, mouse and gamepad is unavailable.", this);
+            }
+
             return moveAction != null && lookAction != null && jumpAction != null && sprintAction != null;
         }
 
@@ -242,6 +305,9 @@ namespace Threefold.InputHandling
             sprintHeld = false;
             jumpHeld = false;
             jumpPressedThisFrame = false;
+            attackHeld = false;
+            attackPressedThisFrame = false;
+            suppressAttackUntilRelease = false;
         }
     }
 }
