@@ -1,0 +1,19 @@
+{
+    "name": "Threefold.Editor",
+    "rootNamespace": "Threefold.EditorTools",
+    "references": [
+        "Threefold.Runtime",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
