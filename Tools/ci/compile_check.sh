@@ -132,7 +132,19 @@ fi
 
 echo; echo "Running the tests that do not need the Unity engine..."
 RUNNER="$CACHE/testrunner"
-rm -rf "$RUNNER"; mkdir -p "$RUNNER"; cp "$ROOT/Tools/ci/testrunner/"* "$RUNNER/"
+rm -rf "$RUNNER"; mkdir -p "$RUNNER"; cp "$ROOT/Tools/ci/testrunner/Program.cs" "$RUNNER/"
+# The project file is written here because the repository's Unity .gitignore excludes *.csproj.
+cat > "$RUNNER/runner.csproj" <<'CSPROJ'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+</Project>
+CSPROJ
 ( cd "$RUNNER" && dotnet build -c Release -v q --nologo > build.log 2>&1 ) || { cat "$RUNNER/build.log"; exit 1; }
 dotnet "$RUNNER/bin/Release/net8.0/runner.dll" "$OUT/Threefold.Tests.Editor.dll" "$OUT" "$DATA/Managed/UnityEngine" "$NUNIT_DIR" "$DATA/NetStandard/compat/2.1.0/shims/netfx" > "$OUT/tests.log" 2>&1 || FAILED=1
 grep -E '^(FAIL|TOTAL)' "$OUT/tests.log" || true
