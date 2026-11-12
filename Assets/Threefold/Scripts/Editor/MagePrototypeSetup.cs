@@ -7,6 +7,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using static Threefold.EditorTools.SceneSetupUtility;
 
 namespace Threefold.EditorTools
 {
@@ -63,6 +64,7 @@ namespace Threefold.EditorTools
             ThirdPersonCamera cameraRig = EnsureCamera(scene, report);
 
             WireReferences(mage, motor, input, cameraRig, report);
+            TouchControlsSetup.Ensure(scene, mage, report);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(scene);
@@ -423,59 +425,7 @@ namespace Threefold.EditorTools
             }
         }
 
-        // -------------------------------------------------------------- helpers
-
-        private static T EnsureComponent<T>(GameObject target, StringBuilder report) where T : Component
-        {
-            if (target.TryGetComponent(out T component))
-            {
-                return component;
-            }
-
-            component = Undo.AddComponent<T>(target);
-            report.AppendLine($"Added {typeof(T).Name}.");
-            return component;
-        }
-
-        private static T FindInScene<T>(Scene scene) where T : Component
-        {
-            foreach (GameObject root in scene.GetRootGameObjects())
-            {
-                T found = root.GetComponentInChildren<T>(true);
-                if (found != null)
-                {
-                    return found;
-                }
-            }
-
-            return null;
-        }
-
-        private static GameObject FindByName(Scene scene, string objectName)
-        {
-            foreach (GameObject root in scene.GetRootGameObjects())
-            {
-                foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                {
-                    if (child.name == objectName)
-                    {
-                        return child.gameObject;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        private static void MarkChanged(Object changed)
-        {
-            EditorUtility.SetDirty(changed);
-
-            if (PrefabUtility.IsPartOfPrefabInstance(changed))
-            {
-                PrefabUtility.RecordPrefabInstancePropertyModifications(changed);
-            }
-        }
+        // --------------------------------------------------------------- finish
 
         private static void Finish(Scene scene, StringBuilder report)
         {
@@ -484,7 +434,8 @@ namespace Threefold.EditorTools
 
             bool canSave = !string.IsNullOrEmpty(scene.path);
             string message = summary + "\n\nPress Play, click the Game view to capture the mouse, then use " +
-                             "WASD, Shift, Space and the mouse.";
+                             "WASD, Shift, Space and the mouse. To try the touch controls with the mouse, " +
+                             "switch on Threefold > Controls > Preview Touch Controls In Editor first.";
 
             if (!canSave)
             {

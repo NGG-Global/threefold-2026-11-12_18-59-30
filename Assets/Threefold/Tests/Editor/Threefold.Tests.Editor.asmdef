@@ -3,7 +3,8 @@
     "rootNamespace": "Threefold.Tests",
     "references": [
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "Threefold.Runtime"
     ],
     "includePlatforms": [
         "Editor"

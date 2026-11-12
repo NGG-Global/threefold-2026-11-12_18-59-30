@@ -45,6 +45,7 @@ namespace Threefold.InputHandling
         private bool jumpHeld;
         private bool jumpPressedThisFrame;
         private bool cursorLockedHere;
+        private bool mouseCaptureEnabled = true;
 
         public override Vector2 Move => move;
         public override Vector2 LookDelta => lookDelta;
@@ -57,6 +58,24 @@ namespace Threefold.InputHandling
         {
             get => actionsAsset;
             set => actionsAsset = value;
+        }
+
+        /// <summary>
+        /// Whether clicking may capture the mouse for camera look. Turned off while touch controls
+        /// are in use, so that the pointer stays free to operate them. Turning it off releases
+        /// a captured mouse.
+        /// </summary>
+        public bool MouseCaptureEnabled
+        {
+            get => mouseCaptureEnabled;
+            set
+            {
+                mouseCaptureEnabled = value;
+                if (!value)
+                {
+                    ReleaseCursor();
+                }
+            }
         }
 
         private void OnEnable()
@@ -131,7 +150,7 @@ namespace Threefold.InputHandling
 
         private void UpdateCursorLock()
         {
-            if (!lockCursorForMouseLook || Application.isMobilePlatform)
+            if (!lockCursorForMouseLook || !mouseCaptureEnabled || Application.isMobilePlatform)
             {
                 return;
             }
