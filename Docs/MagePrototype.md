@@ -62,8 +62,8 @@ tooltip. The most useful ones:
 
 ## Extending
 
-- **Virtual joystick and action buttons:** the Input System's on-screen controls (`OnScreenStick`,
-  `OnScreenButton`) act as a virtual gamepad and drive the existing actions. No gameplay code changes.
+- **Virtual joystick and action buttons:** implemented in Sprint 2 as a separate
+  `CharacterInputSource`, merged with the desktop input. No gameplay code changed.
 - **Touch camera:** raw touchscreen drag is deliberately ignored by the desktop input, so a thumb
   on the joystick does not turn the camera. Touch look comes from a dedicated screen region; see
   `Docs/TouchControls.md`.
