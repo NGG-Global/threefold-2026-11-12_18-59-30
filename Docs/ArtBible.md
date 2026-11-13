@@ -299,6 +299,15 @@ The first visual prototype should be **a small isolated scene**, not a full envi
 - Character designs, races, cultures, locations, creatures, and architecture families.
 - Camera and gameplay-distance visual rules.
 
+**Implementation note, 13 November 2026 (Sprint 11). Nothing in this note is approved.** A first
+implementation of the first four items above now exists in the project and is described in
+`Docs/VisualStyle.md`: an inverted-hull contour on the Mage with texture-authored lines elsewhere,
+a soft wrapped light response with a cool shade tint, two lighting conditions, a palette drawn
+from the families in section 7, and three provisional quality levels. It has not been run in
+Unity and has not been profiled on a device, so the acceptance test of section 10 has not been
+passed. The quality levels were set by reasoning, ahead of the profiling that section 9 asks for.
+These items stay proposed until the owner has reviewed the result in the Editor and on a device.
+
 ### Change control
 
 When a visual decision is approved, record the date, decision, reason, and affected asset classes here. Update this Bible before propagating major stylistic changes to the project.

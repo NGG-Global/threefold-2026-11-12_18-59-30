@@ -65,6 +65,50 @@ namespace Threefold.Tests
             Assert.AreEqual(0, PrototypeValidator.Validate(scene, problems), problems.ToString());
         }
 
+        [Test]
+        public void TheStyleLabAssemblesWithTheStyleApplied()
+        {
+            if (!Application.isBatchMode)
+            {
+                Assert.Ignore("Runs only in batch mode, because it replaces the open scene without saving it.");
+            }
+
+            Scene scene = StyleLabSetup.BuildForAutomation();
+
+            var problems = new StringBuilder();
+            Assert.AreEqual(0, PrototypeValidator.Validate(scene, problems), problems.ToString());
+            Assert.IsTrue(VisualStyleSetup.IsApplied(scene), "The Style Lab carries the visual style.");
+            Assert.IsNotNull(StyleProps.Find(scene), "The wood, cloth and metal props are present.");
+
+            int before = CountObjects(scene);
+            scene = StyleLabSetup.BuildForAutomation();
+            Assert.AreEqual(before, CountObjects(scene), "Building the lab a second time changed the number of objects.");
+        }
+
+        [Test]
+        public void TheStyleCanBeRemovedAndAppliedAgain()
+        {
+            if (!Application.isBatchMode)
+            {
+                Assert.Ignore("Runs only in batch mode, because it replaces the open scene without saving it.");
+            }
+
+            Scene scene = FantasyPlaygroundSetup.BuildForAutomation();
+            Assert.IsTrue(VisualStyleSetup.IsApplied(scene), "The playground is built with the visual style.");
+            int styled = CountObjects(scene);
+
+            VisualStyleSetup.Remove(scene, new StringBuilder());
+            Assert.IsFalse(VisualStyleSetup.IsApplied(scene));
+            Assert.IsNull(StyleProps.Find(scene));
+
+            VisualStyleSetup.Apply(scene, new StringBuilder(), false, FantasyPlaygroundSetup.StylePropPlacement);
+            Assert.IsTrue(VisualStyleSetup.IsApplied(scene));
+            Assert.AreEqual(styled, CountObjects(scene), "Removing and applying the style again did not give the same scene.");
+
+            var problems = new StringBuilder();
+            Assert.AreEqual(0, PrototypeValidator.Validate(scene, problems), problems.ToString());
+        }
+
         private static int CountObjects(Scene scene)
         {
             int count = 0;

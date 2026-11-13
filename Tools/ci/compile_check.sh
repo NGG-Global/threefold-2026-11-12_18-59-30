@@ -3,7 +3,9 @@
 # without running the Unity Editor and without a Unity licence. Then runs the tests that do
 # not need the Unity engine.
 #
-# What it proves:   the code compiles for the Editor and with Android player defines.
+# What it proves:   the code compiles for the Editor and with Android player defines, and the
+#                   project's shaders compile against the real URP shader library with a
+#                   stand-in compiler (see Tools/ci/shader_check.py for what that covers).
 # What it does not: that anything works at runtime. Tests that create GameObjects, the setup
 #                   commands and the game itself only run inside Unity.
 #
@@ -11,10 +13,12 @@
 # ProjectSettings/ProjectVersion.txt from Unity's public download server and extracts only the
 # managed reference assemblies and the bundled package sources. Nothing from the archive is
 # executed. The UI, Input System and AI Navigation packages are compiled from their own source.
-# Four render pipeline members are represented by Tools/ci/RenderPipelineStubs.cs.
+# The render pipeline members in use are represented by Tools/ci/RenderPipelineStubs.cs.
 #
-# Requirements: bash, curl, tar with xz, python3, and the .NET 8 SDK (`dotnet`).
-# First run downloads about 4 GB (streamed, about 300 MB kept). Later runs reuse the cache.
+# Requirements: bash, curl, tar with xz, python3, and the .NET 8 SDK (`dotnet`). The shader
+# check also needs glslangValidator (Ubuntu: apt-get install glslang-tools); without it that
+# step is skipped with a notice.
+# First run downloads about 4 GB (streamed, about 450 MB kept). Later runs reuse the cache.
 #
 # Usage: Tools/ci/compile_check.sh            cache in ~/.cache/threefold-compile
 #        THREEFOLD_COMPILE_CACHE=/path Tools/ci/compile_check.sh
@@ -43,14 +47,19 @@ NAV="$CACHE/ainavigation-$NAV_VERSION"
 OUT="$CACHE/out"
 mkdir -p "$UNITY" "$OUT"
 
-if [ ! -f "$UNITY/.complete" ]; then
-  echo "Downloading and extracting Unity reference assemblies (about 4 GB streamed)..."
+# The render pipeline packages are only needed for their shader library (the shader check).
+# A cache made before they were added is downloaded again once.
+if [ ! -f "$UNITY/.complete" ] || [ ! -d "$BUILTIN/com.unity.render-pipelines.universal/ShaderLibrary" ]; then
+  echo "Downloading and extracting Unity reference assemblies and shader library (about 4 GB streamed)..."
   ( cd "$UNITY" && curl -sS -L "https://download.unity3d.com/download_unity/$REVISION/LinuxEditorInstaller/Unity.tar.xz" \
       | tar -xJ --wildcards \
           'Editor/Data/Managed/UnityEngine/*.dll' \
           'Editor/Data/NetStandard/*' \
           'Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.ugui/*' \
-          'Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.ext.nunit/*' )
+          'Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.ext.nunit/*' \
+          'Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.render-pipelines.universal/*' \
+          'Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.render-pipelines.core/*' \
+          'Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.render-pipelines.universal-config/*' )
   touch "$UNITY/.complete"
 fi
 
@@ -133,8 +142,8 @@ find "$ROOT/Assets/Threefold/Scripts/Runtime" -name '*.cs' > "$OUT/runtime.rsp"
 find "$ROOT/Assets/Threefold/Scripts/Editor" -name '*.cs' > "$OUT/editor.rsp"
 find "$ROOT/Assets/Threefold/Tests/Editor" -name '*.cs' > "$OUT/tests.rsp"
 
-compile "Threefold.Runtime (Editor)" "$OUT/Threefold.Runtime.dll" 4 "$EDITOR_DEF" "$OUT/runtime.rsp" $REFS $PKG
-compile "Threefold.Runtime (Android player defines, no Editor references)" "$OUT/Threefold.Runtime.Player.dll" 4 "$PLAYER_DEF" "$OUT/runtime.rsp" $PLAYER_REFS $PKG
+compile "Threefold.Runtime (Editor)" "$OUT/Threefold.Runtime.dll" 4 "$EDITOR_DEF" "$OUT/runtime.rsp" $REFS $PKG -r:"$OUT/RenderPipelineStubs.dll"
+compile "Threefold.Runtime (Android player defines, no Editor references)" "$OUT/Threefold.Runtime.Player.dll" 4 "$PLAYER_DEF" "$OUT/runtime.rsp" $PLAYER_REFS $PKG -r:"$OUT/RenderPipelineStubs.dll"
 compile "Threefold.Editor" "$OUT/Threefold.Editor.dll" 4 "$EDITOR_DEF" "$OUT/editor.rsp" $REFS $PKG -r:"$OUT/Threefold.Runtime.dll" -r:"$OUT/RenderPipelineStubs.dll" -r:"$OUT/Unity.AI.Navigation.dll"
 compile "Threefold.Tests.Editor" "$OUT/Threefold.Tests.Editor.dll" 4 "$EDITOR_DEF" "$OUT/tests.rsp" $REFS $SHIMS -r:"$NUNIT_DIR/nunit.framework.dll" -r:"$OUT/Threefold.Runtime.dll" -r:"$OUT/Threefold.Editor.dll" -r:"$OUT/Unity.AI.Navigation.dll"
 
@@ -162,4 +171,12 @@ dotnet "$RUNNER/bin/Release/net8.0/runner.dll" "$OUT/Threefold.Tests.Editor.dll"
 grep -E '^(FAIL|TOTAL)' "$OUT/tests.log" || true
 
 if [ "$FAILED" != "0" ]; then echo; echo "TESTS FAILED (see $OUT/tests.log)"; exit 1; fi
+
+echo; echo "Compiling the shaders against the URP shader library..."
+if command -v glslangValidator >/dev/null; then
+  python3 "$ROOT/Tools/ci/shader_check.py" --urp "$BUILTIN" || { echo; echo "SHADER CHECK FAILED"; exit 1; }
+else
+  echo "SKIPPED: glslangValidator is not installed (apt-get install glslang-tools). Shaders were NOT checked."
+fi
+
 echo; echo "COMPILE CHECK PASSED"

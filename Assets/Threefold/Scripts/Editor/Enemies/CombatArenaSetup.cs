@@ -247,6 +247,9 @@ namespace Threefold.EditorTools
 
             FantasyPlaygroundSetup.EnablePostProcessing(scene, report);
             FantasyPlaygroundSetup.AddToBuildSettings(ScenePath, false, report);
+
+            // Same visual style as the playground, so the two linked levels look like one world.
+            VisualStyleSetup.ApplyDuringSetup(scene, report, null);
             ReportNavigation(enemies, report);
             MagePrototypeSetup.AppendValidation(scene, report);
 

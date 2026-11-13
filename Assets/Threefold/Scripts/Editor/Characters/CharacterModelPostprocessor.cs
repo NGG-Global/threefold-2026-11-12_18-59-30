@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEngine;
 
 namespace Threefold.EditorTools
 {
@@ -10,6 +11,10 @@ namespace Threefold.EditorTools
     /// Models are imported as Humanoid, so animations can be shared between characters. Clips are
     /// renamed to the part after the last '|' (Blender writes "Armature|Idle"), loops are marked,
     /// and root motion is baked into the pose, because the CharacterController moves the character.
+    ///
+    /// After import, smoothed normals are stored in every mesh's tangents, for the contour line of
+    /// the visual style (see <see cref="OutlineNormals"/>). Character materials use no normal maps,
+    /// so nothing else reads the tangents.
     /// </summary>
     internal sealed class CharacterModelPostprocessor : AssetPostprocessor
     {
@@ -24,7 +29,16 @@ namespace Threefold.EditorTools
         // Changing this number makes Unity re-import the characters with the new settings.
         public override uint GetVersion()
         {
-            return 2;
+            return 3;
+        }
+
+        /// <summary>
+        /// True if a model's tangents hold smoothed normals for outlines, which is the case for
+        /// every character model imported with this version of the settings.
+        /// </summary>
+        internal static bool StoresOutlineNormals(string modelPath)
+        {
+            return !string.IsNullOrEmpty(modelPath) && IsCharacterModel(modelPath);
         }
 
         internal static bool IsCharacterModel(string path)
@@ -67,6 +81,49 @@ namespace Threefold.EditorTools
             importer.isReadable = false;
             importer.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
             importer.materialLocation = ModelImporterMaterialLocation.InPrefab;
+        }
+
+        private void OnPostprocessModel(GameObject root)
+        {
+            if (!IsCharacterModel(assetPath))
+            {
+                return;
+            }
+
+            var done = new HashSet<Mesh>();
+            foreach (SkinnedMeshRenderer skinned in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                StoreOutlineNormals(skinned.sharedMesh, done);
+            }
+
+            foreach (MeshFilter filter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                StoreOutlineNormals(filter.sharedMesh, done);
+            }
+        }
+
+        private static void StoreOutlineNormals(Mesh mesh, HashSet<Mesh> done)
+        {
+            if (mesh == null || !done.Add(mesh))
+            {
+                return;
+            }
+
+            Vector3[] positions = mesh.vertices;
+            Vector3[] normals = mesh.normals;
+            if (positions.Length == 0 || normals.Length != positions.Length)
+            {
+                return;
+            }
+
+            Vector3[] smooth = OutlineNormals.Smooth(positions, normals);
+            var tangents = new Vector4[smooth.Length];
+            for (int i = 0; i < smooth.Length; i++)
+            {
+                tangents[i] = new Vector4(smooth[i].x, smooth[i].y, smooth[i].z, 1f);
+            }
+
+            mesh.tangents = tangents;
         }
 
         private void OnPreprocessAnimation()
