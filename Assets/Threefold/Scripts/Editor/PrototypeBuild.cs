@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Build;
@@ -19,8 +20,12 @@ namespace Threefold.EditorTools
     {
         private const string ApplicationIdentifier = "com.nggglobal.threefold";
         private const string DefaultOutputPath = "build/Android/Threefold.apk";
+        private const string LogDirectory = "build/logs";
         private const string ProductName = "Threefold";
         private const string CompanyName = "NGG Global";
+
+        private static readonly object LogLock = new object();
+        private static StreamWriter logWriter;
 
         /// <summary>
         /// Assembles the Fantasy Playground scene, validates it and builds a development APK.
@@ -29,6 +34,8 @@ namespace Threefold.EditorTools
         /// </summary>
         public static void BuildAndroid()
         {
+            StartLog();
+
             try
             {
                 Scene scene = FantasyPlaygroundSetup.BuildForAutomation();
@@ -38,7 +45,7 @@ namespace Threefold.EditorTools
                 if (problemCount > 0)
                 {
                     Debug.LogError($"[Threefold] The assembled scene has {problemCount} problem(s); the build was stopped.\n{problems}");
-                    EditorApplication.Exit(1);
+                    Exit(1);
                     return;
                 }
 
@@ -62,23 +69,121 @@ namespace Threefold.EditorTools
 
                 BuildReport report = BuildPipeline.BuildPlayer(options);
                 BuildSummary summary = report.summary;
+                WriteReport(report);
 
                 if (summary.result == BuildResult.Succeeded)
                 {
                     Debug.Log($"[Threefold] Android build succeeded: {outputPath} ({summary.totalSize} bytes).");
-                    EditorApplication.Exit(0);
+                    Exit(0);
                 }
                 else
                 {
                     Debug.LogError($"[Threefold] Android build finished with result {summary.result} and {summary.totalErrors} error(s).");
-                    EditorApplication.Exit(1);
+                    Exit(1);
                 }
             }
             catch (Exception exception)
             {
                 Debug.LogException(exception);
-                EditorApplication.Exit(1);
+                Exit(1);
             }
+        }
+
+        // ------------------------------------------------------------------ logs
+
+        // The build server shows Unity's output only in its console. These two files are written
+        // next to the build so they can be collected and downloaded when a build fails.
+
+        private static void StartLog()
+        {
+            try
+            {
+                Directory.CreateDirectory(LogDirectory);
+                logWriter = new StreamWriter(Path.Combine(LogDirectory, "threefold-build.log"), false) { AutoFlush = true };
+                logWriter.WriteLine($"Threefold build log. Unity {Application.unityVersion}. Started {DateTime.UtcNow:u}.");
+                Application.logMessageReceivedThreaded += HandleLogMessage;
+            }
+            catch (Exception exception)
+            {
+                // A build must not fail because its log file could not be opened.
+                logWriter = null;
+                Debug.LogWarning($"[Threefold] The build log file could not be created: {exception.Message}");
+            }
+        }
+
+        private static void HandleLogMessage(string condition, string stackTrace, LogType type)
+        {
+            StreamWriter writer = logWriter;
+            if (writer == null)
+            {
+                return;
+            }
+
+            lock (LogLock)
+            {
+                writer.WriteLine($"[{type}] {condition}");
+
+                bool isProblem = type == LogType.Error || type == LogType.Exception || type == LogType.Assert;
+                if (isProblem && !string.IsNullOrEmpty(stackTrace))
+                {
+                    writer.WriteLine(stackTrace);
+                }
+            }
+        }
+
+        /// <summary>Writes the outcome of the player build: result, size, time, each step and every error or warning.</summary>
+        private static void WriteReport(BuildReport report)
+        {
+            try
+            {
+                Directory.CreateDirectory(LogDirectory);
+                BuildSummary summary = report.summary;
+                var text = new StringBuilder();
+
+                text.AppendLine($"Result:    {summary.result}");
+                text.AppendLine($"Output:    {summary.outputPath}");
+                text.AppendLine($"Size:      {summary.totalSize} bytes");
+                text.AppendLine($"Duration:  {summary.totalTime}");
+                text.AppendLine($"Errors:    {summary.totalErrors}");
+                text.AppendLine($"Warnings:  {summary.totalWarnings}");
+                text.AppendLine();
+
+                foreach (BuildStep step in report.steps)
+                {
+                    text.AppendLine($"{step.duration}  {step.name}");
+
+                    foreach (BuildStepMessage message in step.messages)
+                    {
+                        if (message.type != LogType.Log)
+                        {
+                            text.AppendLine($"    [{message.type}] {message.content}");
+                        }
+                    }
+                }
+
+                File.WriteAllText(Path.Combine(LogDirectory, "build-report.txt"), text.ToString());
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[Threefold] The build report could not be written: {exception.Message}");
+            }
+        }
+
+        private static void Exit(int code)
+        {
+            Application.logMessageReceivedThreaded -= HandleLogMessage;
+
+            lock (LogLock)
+            {
+                if (logWriter != null)
+                {
+                    logWriter.WriteLine($"Finished {DateTime.UtcNow:u} with exit code {code}.");
+                    logWriter.Dispose();
+                    logWriter = null;
+                }
+            }
+
+            EditorApplication.Exit(code);
         }
 
         /// <summary>

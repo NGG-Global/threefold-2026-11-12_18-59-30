@@ -157,7 +157,8 @@ touch any other scene. The script itself has not been run.
 3. Download the APK from the run's artifacts, on the tablet.
 
 Route B is the one that fits tablet-first development, because every later build is one tap.
-It depends on your approval of the cost and on the licence check in `Docs/DevelopmentWorkflow.md`.
+It can run on a GitHub runner or on a runner installed on the laptop. `Docs/CloudBuild.md` covers
+both, with the licensing position, the secrets and the cost.
 
 ## Android test checklist
 
