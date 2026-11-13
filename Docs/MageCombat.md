@@ -127,7 +127,7 @@ These need a run in the Editor.
 
 - Not compiled in Unity or played. Feel (speed, shake, aim assist) is set by judgement and will
   need tuning once it can be seen.
-- Nothing damages the Mage yet, so the health bar stays full. The health rules are tested.
+- Until Sprint 8 nothing damaged the Mage. Enemies now do; see `Docs/EnemyAI.md`.
 - The generated glow material sets URP shader properties from code. If it does not look
   additive, correct it in the Inspector or report it.
 - Damage numbers use Unity's built-in font and fall back to a device font. If neither is

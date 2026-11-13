@@ -31,6 +31,10 @@ namespace Threefold.Combat
         [Tooltip("Start point measured from this object's position, used when no cast point is set.")]
         [SerializeField] private Vector3 castOffset = new Vector3(0f, 1.25f, 0f);
 
+        [Tooltip("Multiplies the damage of every ability used. Enemies use it for difficulty.")]
+        [Min(0f)]
+        [SerializeField] private float damageMultiplier = 1f;
+
         private readonly List<float> cooldowns = new List<float>();
 
         /// <summary>Raised when an ability was used.</summary>
@@ -40,6 +44,20 @@ namespace Threefold.Combat
         public event Action<AbilityDefinition, CastResult> CastFailed;
 
         public IReadOnlyList<AbilityDefinition> Abilities => abilities;
+
+        public Transform CastPoint => castPoint;
+
+        public float DamageMultiplier
+        {
+            get => damageMultiplier;
+            set => damageMultiplier = Mathf.Max(0f, value);
+        }
+
+        /// <summary>Sets where abilities start from. Called by the setup tooling.</summary>
+        public void SetCastPoint(Transform point)
+        {
+            castPoint = point;
+        }
 
         /// <summary>Connects the caster's dependencies. Called by the setup tooling and by tests.</summary>
         public void Bind(Mana manaSource, Health healthSource, AimProvider aim)
@@ -149,11 +167,11 @@ namespace Threefold.Combat
             if (aimProvider != null)
             {
                 AimSolution aim = aimProvider.GetAim(origin);
-                return new AbilityContext(gameObject, origin, aim.Point, aim.Direction);
+                return new AbilityContext(gameObject, origin, aim.Point, aim.Direction, damageMultiplier);
             }
 
             Vector3 forward = transform.forward;
-            return new AbilityContext(gameObject, origin, origin + forward * 50f, forward);
+            return new AbilityContext(gameObject, origin, origin + forward * 50f, forward, damageMultiplier);
         }
     }
 }

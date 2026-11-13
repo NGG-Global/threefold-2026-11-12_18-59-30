@@ -22,6 +22,8 @@ namespace Threefold.EditorTools
     /// Running it again rebuilds only the generated environment (the object marked with
     /// <see cref="GeneratedEnvironment"/>). The Mage, the camera, the HUD, the touch controls, the
     /// training dummies and anything added by hand are left alone.
+    ///
+    /// The arch at the south gate is a portal to the combat arena (Threefold > Setup > Combat Arena).
     /// </summary>
     public static class FantasyPlaygroundSetup
     {
@@ -106,7 +108,7 @@ namespace Threefold.EditorTools
                 return;
             }
 
-            if (FindEnvironmentRoot(scene) != null && !EditorUtility.DisplayDialog(DialogTitle,
+            if (FindEnvironmentRoot(scene, GeneratorName) != null && !EditorUtility.DisplayDialog(DialogTitle,
                     "This scene already contains the generated environment.\n\n" +
                     "Rebuild it? Only the generated environment is replaced. The Mage, camera, HUD, touch " +
                     "controls, training targets and anything you added yourself are kept.", "Rebuild", "Cancel"))
@@ -160,7 +162,7 @@ namespace Threefold.EditorTools
         {
             EnvironmentAssets assets = EnvironmentAssets.Ensure(rebuildAssets, report);
 
-            GameObject oldRoot = FindEnvironmentRoot(scene);
+            GameObject oldRoot = FindEnvironmentRoot(scene, GeneratorName);
             if (oldRoot != null)
             {
                 Undo.DestroyObjectImmediate(oldRoot);
@@ -188,6 +190,7 @@ namespace Threefold.EditorTools
             BuildBounds(gameplay);
             BuildLighting(assets, lighting, report);
             ManaFont font = BuildFocalPoint(assets, gameplay);
+            ScenePortal portal = BuildArenaPortal(gameplay);
             report.AppendLine("Built the courtyard, terrace, ruins, jump course, forest, background and lighting.");
 
             GameObject mage = MagePrototypeSetup.EnsureCharacterRig(scene, SpawnPosition, Quaternion.identity,
@@ -199,8 +202,10 @@ namespace Threefold.EditorTools
                 font.Bind(mana, 4.5f, 16f);
             }
 
+            portal.Bind(CombatArenaSetup.SceneName, mage.transform, portal.transform.GetChild(0).gameObject);
+
             EnablePostProcessing(scene, report);
-            AddToBuildSettings(report);
+            AddToBuildSettings(ScenePath, true, report);
             MagePrototypeSetup.AppendValidation(scene, report);
 
             AssetDatabase.SaveAssets();
@@ -242,11 +247,12 @@ namespace Threefold.EditorTools
             return true;
         }
 
-        private static GameObject FindEnvironmentRoot(Scene scene)
+        /// <summary>The root object made by the named generator, or null.</summary>
+        internal static GameObject FindEnvironmentRoot(Scene scene, string generator)
         {
             foreach (GameObject candidate in scene.GetRootGameObjects())
             {
-                if (candidate.TryGetComponent(out GeneratedEnvironment marker) && marker.Generator == GeneratorName)
+                if (candidate.TryGetComponent(out GeneratedEnvironment marker) && marker.Generator == generator)
                 {
                     return candidate;
                 }
@@ -255,21 +261,31 @@ namespace Threefold.EditorTools
             return null;
         }
 
-        private static void AddToBuildSettings(StringBuilder report)
+        /// <param name="first">Put the scene first, so a device build starts in it; otherwise add it at the end.</param>
+        internal static void AddToBuildSettings(string scenePath, bool first, StringBuilder report)
         {
             var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
             foreach (EditorBuildSettingsScene entry in scenes)
             {
-                if (entry.path == ScenePath)
+                if (entry.path == scenePath)
                 {
                     return;
                 }
             }
 
-            // First in the list, so a device build starts in this level.
-            scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
+            if (first)
+            {
+                scenes.Insert(0, new EditorBuildSettingsScene(scenePath, true));
+            }
+            else
+            {
+                scenes.Add(new EditorBuildSettingsScene(scenePath, true));
+            }
+
             EditorBuildSettings.scenes = scenes.ToArray();
-            report.AppendLine("Added the scene to Build Settings as the first scene.");
+            report.AppendLine(first
+                ? $"Added '{scenePath}' to Build Settings as the first scene."
+                : $"Added '{scenePath}' to Build Settings.");
         }
 
         // --------------------------------------------------------- architecture
@@ -592,7 +608,7 @@ namespace Threefold.EditorTools
         // ----------------------------------------------------------- background
 
         /// <summary>Mountains in a ring far outside the level, and a ruined spire on the axis of the great arch.</summary>
-        private static void BuildBackground(EnvironmentAssets assets, Transform parent)
+        internal static void BuildBackground(EnvironmentAssets assets, Transform parent)
         {
             var random = new Random(31337);
             const int count = 10;
@@ -649,6 +665,56 @@ namespace Threefold.EditorTools
             wall.isStatic = true;
         }
 
+        /// <summary>
+        /// The south gate leads to the combat arena: a veil of light fills the arch behind the
+        /// starting point, and walking through it loads the arena.
+        /// </summary>
+        private static ScenePortal BuildArenaPortal(Transform parent)
+        {
+            return BuildPortal(parent, "ArenaPortal", new Vector3(0f, 0f, -17.2f), 0f);
+        }
+
+        /// <summary>A veil of light in an arch's opening, with the portal behaviour. Its first child is the veil.</summary>
+        internal static ScenePortal BuildPortal(Transform parent, string name, Vector3 position, float yaw)
+        {
+            var portalObject = new GameObject(name);
+            portalObject.transform.SetParent(parent, false);
+            portalObject.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+
+            Material veil = PortalMaterial();
+            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Veil";
+            Object.DestroyImmediate(quad.GetComponent<Collider>());
+            quad.transform.SetParent(portalObject.transform, false);
+            quad.transform.localPosition = new Vector3(0f, 2.2f, 0f);
+            quad.transform.localScale = new Vector3(3.8f, 4.4f, 1f);
+            MeshRenderer veilRenderer = quad.GetComponent<MeshRenderer>();
+            veilRenderer.sharedMaterial = veil;
+            veilRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            veilRenderer.receiveShadows = false;
+
+            return portalObject.AddComponent<ScenePortal>();
+        }
+
+        /// <summary>The combat glow material tinted for the veil, generated once next to the other combat assets.</summary>
+        private static Material PortalMaterial()
+        {
+            const string path = "Assets/Threefold/Generated/Combat/PortalVeil.mat";
+            Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var report = new StringBuilder();
+            CombatSetup.SharedAssets shared = CombatSetup.EnsureSharedAssets(report);
+            var material = new Material(shared.Glow);
+            material.color = new Color(0.55f, 0.75f, 1.2f, 0.9f);
+            CombatSetup.SetFloatIfPresent(material, "_Cull", 0f);
+            AssetDatabase.CreateAsset(material, path);
+            return material;
+        }
+
         /// <summary>The floating crystal over the dais. Standing near it restores mana.</summary>
         private static ManaFont BuildFocalPoint(EnvironmentAssets assets, Transform parent)
         {
@@ -690,7 +756,7 @@ namespace Threefold.EditorTools
         /// Late-afternoon light: one warm directional light with shadows, cool three-colour ambient
         /// light, distance fog, and a generated sky. Nothing is baked.
         /// </summary>
-        private static void BuildLighting(EnvironmentAssets assets, Transform parent, StringBuilder report)
+        internal static void BuildLighting(EnvironmentAssets assets, Transform parent, StringBuilder report)
         {
             var sunObject = new GameObject("Sun");
             sunObject.transform.SetParent(parent, false);
@@ -737,7 +803,7 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>Lets the camera show the bloom and tone mapping of the global volume.</summary>
-        private static void EnablePostProcessing(Scene scene, StringBuilder report)
+        internal static void EnablePostProcessing(Scene scene, StringBuilder report)
         {
             ThirdPersonCamera rig = FindInScene<ThirdPersonCamera>(scene);
             if (rig == null || !rig.TryGetComponent(out Camera viewCamera))
@@ -756,14 +822,14 @@ namespace Threefold.EditorTools
 
         // -------------------------------------------------------------- helpers
 
-        private static Transform CreateGroup(Transform parent, string name)
+        internal static Transform CreateGroup(Transform parent, string name)
         {
             var group = new GameObject(name);
             group.transform.SetParent(parent, false);
             return group.transform;
         }
 
-        private static GameObject Place(GameObject prefab, Transform parent, Vector3 position, float yaw, float scale = 1f)
+        internal static GameObject Place(GameObject prefab, Transform parent, Vector3 position, float yaw, float scale = 1f)
         {
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
             instance.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
@@ -772,13 +838,13 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>A plain stone block. <paramref name="baseCentre"/> is the centre of its underside.</summary>
-        private static void PlaceBlock(EnvironmentAssets assets, Transform parent, string name, Vector3 size,
+        internal static void PlaceBlock(EnvironmentAssets assets, Transform parent, string name, Vector3 size,
             Vector3 baseCentre, Material material)
         {
             CreateMeshObject(parent, name, assets.EnsureBlockMesh(size), material, baseCentre, true);
         }
 
-        private static GameObject CreateMeshObject(Transform parent, string name, Mesh mesh, Material material,
+        internal static GameObject CreateMeshObject(Transform parent, string name, Mesh mesh, Material material,
             Vector3 position, bool collide)
         {
             var instance = new GameObject(name);

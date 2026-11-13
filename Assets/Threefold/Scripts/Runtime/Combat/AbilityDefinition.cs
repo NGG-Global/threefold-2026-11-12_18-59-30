@@ -27,12 +27,16 @@ namespace Threefold.Combat
         /// <summary>Normalised direction from the origin towards the aim point.</summary>
         public readonly Vector3 Direction;
 
-        public AbilityContext(GameObject caster, Vector3 origin, Vector3 aimPoint, Vector3 direction)
+        /// <summary>Multiplies the ability's damage. 1 for the player; enemies use it for difficulty.</summary>
+        public readonly float DamageScale;
+
+        public AbilityContext(GameObject caster, Vector3 origin, Vector3 aimPoint, Vector3 direction, float damageScale = 1f)
         {
             Caster = caster;
             Origin = origin;
             AimPoint = aimPoint;
             Direction = direction;
+            DamageScale = damageScale;
         }
     }
 

@@ -19,6 +19,16 @@ namespace Threefold.EditorTools
     /// </summary>
     internal static class ObjectiveSetup
     {
+        /// <summary>What the objective asks of the player, for levels other than the training courtyard.</summary>
+        internal sealed class ObjectiveOptions
+        {
+            public string Title = "Defeat the training constructs";
+            public string CompletionHeading = "Training complete";
+
+            /// <summary>What must be defeated. Null means the training constructs.</summary>
+            public Health[] Targets;
+        }
+
         private const string DialogTitle = "Objective Setup";
         private const string SessionName = "PrototypeSession";
         private const string SafeAreaName = "SafeArea";
@@ -28,9 +38,17 @@ namespace Threefold.EditorTools
         private static readonly Color PendingColor = new Color(1f, 0.96f, 0.86f, 0.3f);
         private static readonly Color PanelColor = new Color(0.04f, 0.05f, 0.08f, 0.74f);
         private static readonly Color ButtonColor = new Color(1f, 0.96f, 0.86f, 0.22f);
+        private static readonly Color DefeatColor = new Color(1f, 0.5f, 0.42f, 1f);
 
         internal static void Ensure(Scene scene, GameObject mage, StringBuilder report)
         {
+            Ensure(scene, mage, report, null);
+        }
+
+        internal static void Ensure(Scene scene, GameObject mage, StringBuilder report, ObjectiveOptions options)
+        {
+            options = options ?? new ObjectiveOptions();
+
             DefeatTargetsObjective objective = FindInScene<DefeatTargetsObjective>(scene);
             PrototypeSession session = FindInScene<PrototypeSession>(scene);
 
@@ -43,7 +61,9 @@ namespace Threefold.EditorTools
                 }
 
                 objective = Undo.AddComponent<DefeatTargetsObjective>(host);
-                report.AppendLine("Added the objective: defeat the training constructs.");
+                objective.SetTitle(options.Title);
+                MarkChanged(objective);
+                report.AppendLine($"Added the objective: {options.Title}.");
             }
 
             if (session == null)
@@ -55,30 +75,49 @@ namespace Threefold.EditorTools
                 report.AppendLine("Added the session that restarts the level (R key, Start button, or the restart button).");
             }
 
-            if (objective.TotalCount == 0)
+            // Targets are (re)assigned when there are none, or when some were deleted, for example
+            // after the arena's enemies were removed to be generated again.
+            if (objective.TotalCount == 0 || HasMissingTargets(objective))
             {
-                GameObject constructs = FindByName(scene, CombatSetup.ConstructsName);
-                Health[] targets = constructs != null ? constructs.GetComponentsInChildren<Health>(true) : new Health[0];
+                Health[] targets = options.Targets;
+                if (targets == null)
+                {
+                    GameObject constructs = FindByName(scene, CombatSetup.ConstructsName);
+                    targets = constructs != null ? constructs.GetComponentsInChildren<Health>(true) : new Health[0];
+                }
 
                 if (targets.Length > 0)
                 {
                     Undo.RecordObject(objective, DialogTitle);
                     objective.SetTargets(targets);
                     MarkChanged(objective);
-                    report.AppendLine($"Assigned {targets.Length} training constructs as the objective's targets.");
+                    report.AppendLine($"Assigned {targets.Length} target(s) to the objective.");
                 }
                 else
                 {
-                    report.AppendLine($"WARNING: no training constructs were found under '{CombatSetup.ConstructsName}', " +
-                                      "so the objective has no targets and cannot be completed.");
+                    report.AppendLine("WARNING: no targets were found for the objective, so it cannot be completed.");
                 }
             }
 
-            EnsureHud(scene, objective, session, report);
+            EnsureHud(scene, objective, session, options.CompletionHeading, report);
+            EnsureDefeatPanel(scene, session, report);
+        }
+
+        private static bool HasMissingTargets(DefeatTargetsObjective objective)
+        {
+            foreach (Health target in objective.Targets)
+            {
+                if (target == null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void EnsureHud(Scene scene, DefeatTargetsObjective objective, PrototypeSession session,
-            StringBuilder report)
+            string completionHeading, StringBuilder report)
         {
             if (FindInScene<ObjectiveHud>(scene) != null)
             {
@@ -126,7 +165,7 @@ namespace Threefold.EditorTools
             background.color = PanelColor;
             background.raycastTarget = false;
 
-            Text heading = CreateText("Heading", panel, "Training complete", 26, AccentColor);
+            Text heading = CreateText("Heading", panel, completionHeading, 26, AccentColor);
             Anchor(heading.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -30f), new Vector2(310f, 34f));
 
             Text time = CreateText("Time", panel, "Time", 16, TextColor);
@@ -150,6 +189,58 @@ namespace Threefold.EditorTools
             hud.Bind(objective, session, title, markers, panel.gameObject, time, restart, hint.gameObject);
             MarkChanged(hud);
             report.AppendLine("Added the objective display and the completion panel to the HUD.");
+        }
+
+        /// <summary>
+        /// A panel shown while the player is defeated, with a restart button. Added to a HUD that
+        /// lacks one, including HUDs created before enemies existed.
+        /// </summary>
+        private static void EnsureDefeatPanel(Scene scene, PrototypeSession session, StringBuilder report)
+        {
+            ObjectiveHud hud = FindInScene<ObjectiveHud>(scene);
+            if (hud == null || hud.HasDefeatPanel)
+            {
+                return;
+            }
+
+            RectTransform panel = TouchControlsSetup.CreateRect("DefeatPanel", hud.transform);
+            Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0f, 76f), new Vector2(330f, 176f));
+            Undo.RegisterCreatedObjectUndo(panel.gameObject, DialogTitle);
+
+            Image background = panel.gameObject.AddComponent<Image>();
+            background.color = PanelColor;
+            background.raycastTarget = false;
+
+            Text heading = CreateText("Heading", panel, "Defeated", 26, DefeatColor);
+            Anchor(heading.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -30f), new Vector2(310f, 34f));
+
+            Text advice = CreateText("Advice", panel, "Watch for the glow before each attack", 15, TextColor);
+            Anchor(advice.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -66f), new Vector2(310f, 22f));
+
+            RectTransform button = TouchControlsSetup.CreateRect("RestartButton", panel);
+            Anchor(button, new Vector2(0.5f, 0f), new Vector2(0f, 56f), new Vector2(160f, 44f));
+            Image buttonImage = button.gameObject.AddComponent<Image>();
+            buttonImage.color = ButtonColor;
+            buttonImage.raycastTarget = false;
+            TapButton restart = button.gameObject.AddComponent<TapButton>();
+            Text buttonLabel = CreateText("Label", button, "Try again", 18, TextColor);
+            TouchControlsSetup.Stretch(buttonLabel.rectTransform);
+
+            Text hint = CreateText("KeyboardHint", panel, "Press R to restart", 13, TextColor);
+            Anchor(hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(310f, 18f));
+
+            panel.gameObject.SetActive(false);
+
+            Undo.RecordObject(hud, DialogTitle);
+            hud.BindDefeat(panel.gameObject, restart, hint.gameObject);
+            MarkChanged(hud);
+
+            if (session == null)
+            {
+                report.AppendLine("WARNING: there is no session, so the defeat panel cannot restart the level.");
+            }
+
+            report.AppendLine("Added the defeat panel to the HUD.");
         }
 
         private static Text CreateText(string name, Transform parent, string content, int size, Color color)

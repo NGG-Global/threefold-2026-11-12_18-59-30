@@ -54,6 +54,7 @@ spire on the horizon.
 | Sealed Gateway | South-east corner, with its lookout near the south gate | The example puzzle: climb the lookout, strike the crystal with Arcane Bolt, reach the plate in time. See `Docs/Puzzles.md` |
 | Ruined wall and arches | West | A passage about 3.5 m wide behind the ruins, to exercise the camera in a confined space |
 | Hillside | Outside the walls | About 8 m of walkable slope with trees and rocks, then an invisible wall |
+| South gate | Behind the starting point | A portal to the Combat Arena (Sprint 8, `Docs/EnemyAI.md`). Hidden if the arena is not in Build Settings |
 
 Seven training dummies stand at ground level, on the terrace, on the high platform, in the west
 passage and out on the hillside, so shots are tested near, far, uphill and past cover.

@@ -40,6 +40,12 @@ namespace Threefold.Objectives
         /// <summary>Seconds spent on the current attempt. Stops when the objective is complete.</summary>
         public float ElapsedSeconds => elapsedSeconds;
 
+        /// <summary>Sets the title shown to the player. Called by the setup tooling.</summary>
+        public void SetTitle(string objectiveTitle)
+        {
+            title = objectiveTitle;
+        }
+
         /// <summary>Replaces the list of targets. Called by the setup tooling and by tests.</summary>
         public void SetTargets(IEnumerable<Health> newTargets)
         {
