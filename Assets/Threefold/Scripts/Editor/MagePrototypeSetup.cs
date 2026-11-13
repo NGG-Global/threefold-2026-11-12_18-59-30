@@ -78,6 +78,13 @@ namespace Threefold.EditorTools
         internal static GameObject EnsureCharacterRig(Scene scene, Vector3 spawnPosition, Quaternion spawnRotation,
             CombatSetup.DummyPlacement[] dummies, StringBuilder report)
         {
+            return EnsureCharacterRig(scene, spawnPosition, spawnRotation, dummies, report, null);
+        }
+
+        /// <param name="objective">What the level's objective asks for, or null for the training constructs.</param>
+        internal static GameObject EnsureCharacterRig(Scene scene, Vector3 spawnPosition, Quaternion spawnRotation,
+            CombatSetup.DummyPlacement[] dummies, StringBuilder report, ObjectiveSetup.ObjectiveOptions objective)
+        {
             GameObject mage = EnsureMage(scene, spawnPosition, spawnRotation, report);
             ThirdPersonMotor motor = EnsureComponent<ThirdPersonMotor>(mage, report);
             EnsureComponent<TraversalController>(mage, report);
@@ -88,7 +95,7 @@ namespace Threefold.EditorTools
             TouchControlsSetup.Ensure(scene, mage, report);
             CombatSetup.Ensure(scene, mage, report, dummies);
             MageCharacterSetup.Ensure(scene, mage, report);
-            ObjectiveSetup.Ensure(scene, mage, report);
+            ObjectiveSetup.Ensure(scene, mage, report, objective);
             return mage;
         }
 

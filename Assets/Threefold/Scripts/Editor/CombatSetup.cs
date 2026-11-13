@@ -56,9 +56,9 @@ namespace Threefold.EditorTools
         private const string HudName = "CombatHud";
         private const int UiLayer = 5;
 
-        private const string LitShader = "Universal Render Pipeline/Lit";
-        private const string UnlitShader = "Universal Render Pipeline/Unlit";
-        private const string ParticleShader = "Universal Render Pipeline/Particles/Unlit";
+        internal const string LitShader = "Universal Render Pipeline/Lit";
+        internal const string UnlitShader = "Universal Render Pipeline/Unlit";
+        internal const string ParticleShader = "Universal Render Pipeline/Particles/Unlit";
 
         private static readonly Color ArcaneColor = new Color(0.55f, 0.75f, 1f, 1f);
         private static readonly Color ArcaneCoreColor = new Color(0.82f, 0.93f, 1f, 1f);
@@ -142,20 +142,41 @@ namespace Threefold.EditorTools
             Ensure(scene, mage, report, null);
         }
 
-        /// <param name="dummies">Where to place training dummies, or null for the default positions.</param>
-        internal static void Ensure(Scene scene, GameObject mage, StringBuilder report, DummyPlacement[] dummies)
+        /// <summary>Assets that other generators reuse: the soft glow and the world health bar materials.</summary>
+        internal sealed class SharedAssets
+        {
+            public Texture2D GlowTexture;
+            public Material Glow;
+            public Material BarBack;
+            public Material BarFill;
+        }
+
+        /// <summary>Creates the shared glow texture and the materials other generators reuse.</summary>
+        internal static SharedAssets EnsureSharedAssets(StringBuilder report)
         {
             EnsureFolder(Folder);
 
-            Texture2D glow = EnsureGlowTexture(report);
-            Material glowMaterial = EnsureMaterial(GlowMaterialPath, () => CreateGlowMaterial(glow), report);
+            var shared = new SharedAssets();
+            shared.GlowTexture = EnsureGlowTexture(report);
+            Texture2D glow = shared.GlowTexture;
+            shared.Glow = EnsureMaterial(GlowMaterialPath, () => CreateGlowMaterial(glow), report);
+            shared.BarBack = EnsureMaterial(BarBackMaterialPath,
+                () => CreateColorMaterial(UnlitShader, new Color(0.06f, 0.06f, 0.07f, 1f)), report);
+            shared.BarFill = EnsureMaterial(BarFillMaterialPath,
+                () => CreateColorMaterial(UnlitShader, new Color(0.88f, 0.24f, 0.2f, 1f)), report);
+            return shared;
+        }
+
+        /// <param name="dummies">Where to place training dummies, or null for the default positions.</param>
+        internal static void Ensure(Scene scene, GameObject mage, StringBuilder report, DummyPlacement[] dummies)
+        {
+            SharedAssets shared = EnsureSharedAssets(report);
+            Material glowMaterial = shared.Glow;
+            Material barBackMaterial = shared.BarBack;
+            Material barFillMaterial = shared.BarFill;
             Material coreMaterial = EnsureMaterial(CoreMaterialPath, () => CreateColorMaterial(UnlitShader, ArcaneCoreColor), report);
             Material bodyMaterial = EnsureMaterial(DummyBodyMaterialPath, () => CreateColorMaterial(LitShader, StrawColor), report);
             Material postMaterial = EnsureMaterial(DummyPostMaterialPath, () => CreateColorMaterial(LitShader, WoodColor), report);
-            Material barBackMaterial = EnsureMaterial(BarBackMaterialPath,
-                () => CreateColorMaterial(UnlitShader, new Color(0.06f, 0.06f, 0.07f, 1f)), report);
-            Material barFillMaterial = EnsureMaterial(BarFillMaterialPath,
-                () => CreateColorMaterial(UnlitShader, new Color(0.88f, 0.24f, 0.2f, 1f)), report);
 
             PooledObject impact = EnsureEffectPrefab(ImpactPrefabPath, "ArcaneImpact", glowMaterial, ArcaneColor, 14, 0.7f, report);
             PooledObject burst = EnsureEffectPrefab(DefeatPrefabPath, "DummyBurst", glowMaterial,
@@ -185,7 +206,7 @@ namespace Threefold.EditorTools
 
         // --------------------------------------------------------------- assets
 
-        private static void EnsureFolder(string path)
+        internal static void EnsureFolder(string path)
         {
             if (AssetDatabase.IsValidFolder(path))
             {
@@ -239,7 +260,7 @@ namespace Threefold.EditorTools
             return AssetDatabase.LoadAssetAtPath<Texture2D>(GlowTexturePath);
         }
 
-        private static Material EnsureMaterial(string path, System.Func<Material> create, StringBuilder report)
+        internal static Material EnsureMaterial(string path, System.Func<Material> create, StringBuilder report)
         {
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (existing != null)
@@ -253,7 +274,7 @@ namespace Threefold.EditorTools
             return material;
         }
 
-        private static Shader FindShader(string shaderName)
+        internal static Shader FindShader(string shaderName)
         {
             Shader shader = Shader.Find(shaderName);
             if (shader == null)
@@ -266,7 +287,7 @@ namespace Threefold.EditorTools
             return shader;
         }
 
-        private static Material CreateColorMaterial(string shaderName, Color color)
+        internal static Material CreateColorMaterial(string shaderName, Color color)
         {
             var material = new Material(FindShader(shaderName));
             material.color = color;
@@ -292,7 +313,7 @@ namespace Threefold.EditorTools
             return material;
         }
 
-        private static void SetFloatIfPresent(Material material, string property, float value)
+        internal static void SetFloatIfPresent(Material material, string property, float value)
         {
             if (material.HasProperty(property))
             {
@@ -300,7 +321,7 @@ namespace Threefold.EditorTools
             }
         }
 
-        private static PooledObject EnsureEffectPrefab(string path, string prefabName, Material material, Color color,
+        internal static PooledObject EnsureEffectPrefab(string path, string prefabName, Material material, Color color,
             int particleCount, float lifetime, StringBuilder report)
         {
             GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -497,7 +518,7 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>A primitive mesh used purely as a visual: its collider is removed and it casts no shadow.</summary>
-        private static GameObject CreatePart(PrimitiveType type, string name, Transform parent, Vector3 localPosition,
+        internal static GameObject CreatePart(PrimitiveType type, string name, Transform parent, Vector3 localPosition,
             Vector3 localScale, Material material)
         {
             GameObject part = GameObject.CreatePrimitive(type);
@@ -528,6 +549,15 @@ namespace Threefold.EditorTools
                 health.Configure(100f, new Vector3(0f, 1.1f, 0f));
                 MarkChanged(health);
                 report.AppendLine("Added Health to the Mage (100).");
+            }
+
+            // Enemies' projectiles and strikes pass over their own allies; the Mage must be on the other side.
+            if (health.Team == CombatTeam.Neutral)
+            {
+                Undo.RecordObject(health, DialogTitle);
+                health.Team = CombatTeam.Player;
+                MarkChanged(health);
+                report.AppendLine("Put the Mage on the Player team.");
             }
 
             if (!mage.TryGetComponent(out Mana mana))
@@ -617,6 +647,18 @@ namespace Threefold.EditorTools
             if (FindByName(scene, groupName) != null)
             {
                 report.AppendLine($"Kept existing '{groupName}'.");
+                return;
+            }
+
+            bool any = false;
+            for (int i = 0; i < placements.Length && !any; i++)
+            {
+                any = placements[i].Construct == constructs;
+            }
+
+            // A level without targets of this kind, such as the combat arena, gets no empty group.
+            if (!any)
+            {
                 return;
             }
 

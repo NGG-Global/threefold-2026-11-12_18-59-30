@@ -3,12 +3,15 @@ using Threefold.Cameras;
 using Threefold.Characters;
 using Threefold.Combat;
 using Threefold.CombatFeedback;
+using Threefold.Enemies;
 using Threefold.InputHandling;
 using Threefold.Objectives;
 using Threefold.Pooling;
 using Threefold.TouchControls;
+using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using static Threefold.EditorTools.SceneSetupUtility;
 
@@ -189,9 +192,102 @@ namespace Threefold.EditorTools
             }
 
             if (FindInScene<PrototypeSession>(scene) == null) Problem("There is no session, so the level cannot be restarted.");
-            if (FindInScene<ObjectiveHud>(scene) == null) Problem("The objective is not shown on screen.");
 
+            ObjectiveHud objectiveHud = FindInScene<ObjectiveHud>(scene);
+            if (objectiveHud == null)
+            {
+                Problem("The objective is not shown on screen.");
+            }
+            else if (!objectiveHud.HasDefeatPanel)
+            {
+                Problem("The HUD has no defeat panel, so a defeated player cannot restart by touch.");
+            }
+
+            ValidateEnemies(scene, mage, Problem);
             return count;
+        }
+
+        /// <summary>Checks the enemies, if the scene has any: their parts, the director, and navigation.</summary>
+        private static void ValidateEnemies(Scene scene, GameObject mage, System.Action<string> problem)
+        {
+            var enemies = new System.Collections.Generic.List<EnemyController>();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                enemies.AddRange(root.GetComponentsInChildren<EnemyController>(true));
+            }
+
+            if (enemies.Count == 0)
+            {
+                return;
+            }
+
+            if (mage.TryGetComponent(out Health mageHealth) && mageHealth.Team != CombatTeam.Player)
+            {
+                problem("The Mage is not on the Player team.");
+            }
+
+            EnemyDirector director = FindInScene<EnemyDirector>(scene);
+            if (director == null)
+            {
+                problem("There are enemies but no enemy director, so their attacks are not coordinated.");
+            }
+            else
+            {
+                if (!director.HasPlayer) problem("The enemy director has no player assigned.");
+                if (director.Difficulty == null) problem("The enemy director has no difficulty assigned.");
+                if (!director.HasSession) problem("The enemy director has no session, so enemies do not return on restart.");
+            }
+
+            NavMeshSurface surface = FindInScene<NavMeshSurface>(scene);
+            bool navigation = surface != null && surface.navMeshData != null;
+            if (!navigation)
+            {
+                problem("There is no baked navigation mesh, so enemies cannot move.");
+            }
+
+            foreach (EnemyController enemy in enemies)
+            {
+                string label = $"Enemy '{enemy.name}'";
+                if (!enemy.HasDefinition)
+                {
+                    problem($"{label} has no Enemy Definition.");
+                    continue;
+                }
+
+                if (enemy.GetComponent<NavMeshAgent>() == null) problem($"{label} has no NavMeshAgent.");
+                if (!enemy.HasTelegraph) problem($"{label} has no telegraph, so its attacks give no warning.");
+                if (enemy.Health.Team != CombatTeam.Enemy) problem($"{label} is not on the Enemy team.");
+
+                if (!enemy.HasCaster)
+                {
+                    problem($"{label} has no Ability Caster.");
+                }
+                else
+                {
+                    foreach (EnemyAttackProfile attack in enemy.Definition.Tuning.attacks)
+                    {
+                        if (attack == null)
+                        {
+                            continue;
+                        }
+
+                        AbilityDefinition ability = enemy.Caster.GetAbility(attack.abilitySlot);
+                        if (ability == null)
+                        {
+                            problem($"{label} has no ability in slot {attack.abilitySlot} for its attack '{attack.name}'.");
+                        }
+                        else if (ability is ProjectileSpellDefinition spell && spell.ProjectilePrefab == null)
+                        {
+                            problem($"{label}: the ability '{spell.name}' has no projectile prefab.");
+                        }
+                    }
+                }
+
+                if (navigation && !NavMesh.SamplePosition(enemy.transform.position, out NavMeshHit _, 1.5f, NavMesh.AllAreas))
+                {
+                    problem($"{label} does not stand on the navigation mesh.");
+                }
+            }
         }
     }
 }

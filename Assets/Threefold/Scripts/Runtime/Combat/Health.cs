@@ -21,6 +21,9 @@ namespace Threefold.Combat
         [Tooltip("Point that attacks aim at, measured from this object's position.")]
         [SerializeField] private Vector3 aimPointOffset = new Vector3(0f, 1f, 0f);
 
+        [Tooltip("Which side this belongs to. Projectiles and strikes pass over allies. Neutral objects can be hit by anyone.")]
+        [SerializeField] private CombatTeam team = CombatTeam.Neutral;
+
         private bool defeated;
 
         /// <summary>Raised after damage was applied. The amount is what was actually removed.</summary>
@@ -49,6 +52,12 @@ namespace Threefold.Combat
             set => invulnerable = value;
         }
 
+        public CombatTeam Team
+        {
+            get => team;
+            set => team = value;
+        }
+
         /// <summary>World position that attacks should aim at.</summary>
         public Vector3 AimPoint => transform.TransformPoint(aimPointOffset);
 
@@ -57,6 +66,19 @@ namespace Threefold.Combat
         {
             pool.SetMaximum(maximum, true);
             aimPointOffset = aimOffset;
+        }
+
+        /// <summary>Changes the maximum without changing the aim point. Used when difficulty scales an enemy.</summary>
+        public void SetMaximum(float maximum, bool refill)
+        {
+            pool.SetMaximum(maximum, refill);
+            Changed?.Invoke();
+        }
+
+        /// <summary>True when the other object is on the same side, so attacks between them are not applied.</summary>
+        public bool IsAlliedWith(Health other)
+        {
+            return other != null && CombatTeams.AreAllied(team, other.team);
         }
 
         public void ApplyDamage(in DamageInfo damage)

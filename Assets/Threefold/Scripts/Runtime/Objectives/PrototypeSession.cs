@@ -12,6 +12,9 @@ namespace Threefold.Objectives
     /// returns the player to the starting point and clears the objective. Nothing is reloaded, so
     /// a restart is instant, also on a phone.
     ///
+    /// It also handles the player's defeat: movement and attacks stop until the next restart, and
+    /// <see cref="PlayerDefeated"/> lets the display offer a restart.
+    ///
     /// On desktop the R key (or Start on a gamepad) restarts at any time. On touch devices the
     /// completion screen has a restart button.
     /// </summary>
@@ -30,9 +33,16 @@ namespace Threefold.Objectives
         private Vector3 startPosition;
         private Quaternion startRotation = Quaternion.identity;
         private bool startKnown;
+        private PlayerAbilityInput playerAbilityInput;
 
         /// <summary>Raised after the level has been restarted.</summary>
         public event Action Restarted;
+
+        /// <summary>Raised when the player is defeated.</summary>
+        public event Action PlayerDefeated;
+
+        /// <summary>True from the player's defeat until the next restart.</summary>
+        public bool IsPlayerDefeated { get; private set; }
 
         public DefeatTargetsObjective Objective => objective;
 
@@ -61,10 +71,10 @@ namespace Threefold.Objectives
                         continue;
                     }
 
-                    // A dummy also has to bring its body and collider back, not only its health.
-                    if (target.TryGetComponent(out TrainingDummy dummy))
+                    // A dummy or an enemy also has to bring back its body, colliders and position.
+                    if (target.TryGetComponent(out IRestorable restorable))
                     {
-                        dummy.Restore();
+                        restorable.Restore();
                     }
                     else
                     {
@@ -99,6 +109,58 @@ namespace Threefold.Objectives
             }
 
             Restarted?.Invoke();
+        }
+
+        private void Awake()
+        {
+            if (playerHealth != null)
+            {
+                playerAbilityInput = playerHealth.GetComponent<PlayerAbilityInput>();
+            }
+        }
+
+        private void OnEnable()
+        {
+            if (playerHealth != null)
+            {
+                playerHealth.Defeated += HandlePlayerDefeated;
+                playerHealth.Revived += HandlePlayerRevived;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (playerHealth != null)
+            {
+                playerHealth.Defeated -= HandlePlayerDefeated;
+                playerHealth.Revived -= HandlePlayerRevived;
+            }
+        }
+
+        private void HandlePlayerDefeated()
+        {
+            IsPlayerDefeated = true;
+            SetPlayerControl(false);
+            PlayerDefeated?.Invoke();
+        }
+
+        private void HandlePlayerRevived()
+        {
+            IsPlayerDefeated = false;
+            SetPlayerControl(true);
+        }
+
+        private void SetPlayerControl(bool on)
+        {
+            if (playerMotor != null)
+            {
+                playerMotor.MovementInputEnabled = on;
+            }
+
+            if (playerAbilityInput != null)
+            {
+                playerAbilityInput.enabled = on;
+            }
         }
 
         private void Start()

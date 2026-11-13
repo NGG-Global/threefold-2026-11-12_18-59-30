@@ -5,9 +5,10 @@ using UnityEngine.UI;
 namespace Threefold.Objectives
 {
     /// <summary>
-    /// Shows the objective: a title, one marker per target that lights up as targets fall, and a
-    /// completion panel with the time taken and a restart button. The markers carry the
-    /// information on their own, so the display still works if no font is available.
+    /// Shows the objective: a title, one marker per target that lights up as targets fall, a
+    /// completion panel with the time taken and a restart button, and a defeat panel with a
+    /// restart button when the player falls. The markers carry the information on their own, so
+    /// the display still works if no font is available.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class ObjectiveHud : MonoBehaviour
@@ -38,6 +39,16 @@ namespace Threefold.Objectives
         [Tooltip("Optional. A hint for keyboard users. Hidden on phones and tablets.")]
         [SerializeField] private GameObject keyboardHint;
 
+        [Header("Defeat")]
+        [Tooltip("Optional. Shown while the player is defeated.")]
+        [SerializeField] private GameObject defeatPanel;
+
+        [Tooltip("Optional. Restarts the level when tapped.")]
+        [SerializeField] private TapButton defeatRestartButton;
+
+        [Tooltip("Optional. A hint for keyboard users on the defeat panel. Hidden on phones and tablets.")]
+        [SerializeField] private GameObject defeatKeyboardHint;
+
         private const float PunchSeconds = 0.25f;
         private const float PunchScale = 0.6f;
 
@@ -58,8 +69,43 @@ namespace Threefold.Objectives
             keyboardHint = hint;
         }
 
+        public bool HasDefeatPanel => defeatPanel != null;
+
+        /// <summary>Connects the defeat panel. Called by the setup tooling.</summary>
+        public void BindDefeat(GameObject panel, TapButton restart, GameObject hint)
+        {
+            defeatKeyboardHint = hint;
+
+            bool listening = isActiveAndEnabled;
+            if (listening && defeatRestartButton != null)
+            {
+                defeatRestartButton.Pressed -= HandleRestartPressed;
+            }
+
+            defeatPanel = panel;
+            defeatRestartButton = restart;
+
+            if (listening && defeatRestartButton != null)
+            {
+                defeatRestartButton.Pressed += HandleRestartPressed;
+            }
+        }
+
         private void OnEnable()
         {
+            if (session != null)
+            {
+                session.PlayerDefeated += RefreshDefeat;
+                session.Restarted += RefreshDefeat;
+            }
+
+            if (defeatRestartButton != null)
+            {
+                defeatRestartButton.Pressed += HandleRestartPressed;
+            }
+
+            RefreshDefeat();
+
             if (objective != null)
             {
                 objective.Progressed += HandleProgressed;
@@ -77,11 +123,27 @@ namespace Threefold.Objectives
                 keyboardHint.SetActive(!Application.isMobilePlatform);
             }
 
+            if (defeatKeyboardHint != null)
+            {
+                defeatKeyboardHint.SetActive(!Application.isMobilePlatform);
+            }
+
             Refresh();
         }
 
         private void OnDisable()
         {
+            if (session != null)
+            {
+                session.PlayerDefeated -= RefreshDefeat;
+                session.Restarted -= RefreshDefeat;
+            }
+
+            if (defeatRestartButton != null)
+            {
+                defeatRestartButton.Pressed -= HandleRestartPressed;
+            }
+
             if (objective != null)
             {
                 objective.Progressed -= HandleProgressed;
@@ -124,6 +186,15 @@ namespace Threefold.Objectives
             if (session != null)
             {
                 session.Restart();
+            }
+        }
+
+        private void RefreshDefeat()
+        {
+            bool show = session != null && session.IsPlayerDefeated;
+            if (defeatPanel != null && defeatPanel.activeSelf != show)
+            {
+                defeatPanel.SetActive(show);
             }
         }
 

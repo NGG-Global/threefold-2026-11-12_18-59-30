@@ -3,6 +3,7 @@
     "rootNamespace": "Threefold.EditorTools",
     "references": [
         "Threefold.Runtime",
+        "Unity.AI.Navigation",
         "Unity.InputSystem",
         "UnityEngine.UI",
         "Unity.RenderPipelines.Core.Runtime",
