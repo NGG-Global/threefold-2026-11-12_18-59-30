@@ -56,6 +56,18 @@ namespace Threefold.Characters
         [Min(0.01f)]
         [SerializeField] private float gravity = 28f;
 
+        [Tooltip("Gravity is multiplied by this while falling, so jumps rise smoothly and come down with weight.")]
+        [Min(1f)]
+        [SerializeField] private float fallGravityMultiplier = 1.35f;
+
+        [Tooltip("Gravity is multiplied by this near the top of a jump while jump is held, for a moment of control.")]
+        [Range(0.2f, 1f)]
+        [SerializeField] private float apexGravityMultiplier = 0.6f;
+
+        [Tooltip("Vertical speed, in metres per second, below which the character counts as near the top of a jump.")]
+        [Min(0f)]
+        [SerializeField] private float apexSpeedThreshold = 1.6f;
+
         [Tooltip("Maximum falling speed, in metres per second.")]
         [Min(0f)]
         [SerializeField] private float terminalFallSpeed = 45f;
@@ -71,6 +83,19 @@ namespace Threefold.Characters
         [Tooltip("Upward speed kept when jump is released early. 1 disables variable jump height.")]
         [Range(0f, 1f)]
         [SerializeField] private float jumpCutMultiplier = 0.5f;
+
+        [Header("Landing")]
+        [Tooltip("Landing faster than this, in metres per second, counts as a hard landing.")]
+        [Min(0f)]
+        [SerializeField] private float hardLandingSpeed = 13f;
+
+        [Tooltip("After a hard landing, top speed is reduced for this many seconds.")]
+        [Min(0f)]
+        [SerializeField] private float hardLandingRecovery = 0.25f;
+
+        [Tooltip("Share of top speed available during hard-landing recovery.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float hardLandingSpeedFactor = 0.35f;
 
         [Header("Ground detection")]
         [Tooltip("Layers that count as ground.")]
@@ -101,6 +126,9 @@ namespace Threefold.Characters
         private bool isSprinting;
         private bool risingFromJump;
         private bool groundStateKnown;
+        private bool externalControl;
+        private float landingRecoveryRemaining;
+        private Vector3 blockedDirection;
         private bool missingCameraWarned;
         private bool missingInputWarned;
 
@@ -135,6 +163,30 @@ namespace Threefold.Characters
 
         public float WalkSpeed => walkSpeed;
         public float SprintSpeed => sprintSpeed;
+
+        public float HardLandingSpeed => hardLandingSpeed;
+
+        /// <summary>Downward acceleration while rising, in metres per second squared.</summary>
+        public float Gravity => gravity;
+
+        /// <summary>
+        /// True while another component, such as traversal, moves the character. The motor then
+        /// neither moves it nor applies gravity, and its collider is switched off.
+        /// </summary>
+        public bool IsExternallyControlled => externalControl;
+
+        public CharacterController Controller
+        {
+            get
+            {
+                if (controller == null)
+                {
+                    controller = GetComponent<CharacterController>();
+                }
+
+                return controller;
+            }
+        }
 
         /// <summary>
         /// When false the character ignores movement and jump input but still decelerates and falls.
@@ -184,9 +236,15 @@ namespace Threefold.Characters
         private void Update()
         {
             float deltaTime = Time.deltaTime;
-            if (deltaTime <= 0f)
+            if (deltaTime <= 0f || externalControl)
             {
+                blockedDirection = Vector3.zero;
                 return;
+            }
+
+            if (landingRecoveryRemaining > 0f)
+            {
+                landingRecoveryRemaining -= deltaTime;
             }
 
             UpdateGroundedState(deltaTime);
@@ -223,6 +281,68 @@ namespace Threefold.Characters
 
             facingOverrideYaw = Mathf.Atan2(worldDirection.x, worldDirection.z) * Mathf.Rad2Deg;
             facingOverrideTime = holdSeconds;
+        }
+
+        /// <summary>
+        /// Converts stick or keyboard input into a world direction on the ground, relative to the
+        /// camera. Length 0 to 1.
+        /// </summary>
+        public Vector3 GetCameraRelativeMoveDirection(Vector2 moveInput)
+        {
+            return GetCameraRelativeDirection(moveInput);
+        }
+
+        /// <summary>
+        /// Stops movement in a direction for the current frame only, for example at the edge of a
+        /// high drop. Call it before the motor updates.
+        /// </summary>
+        public void BlockMovementThisFrame(Vector3 worldDirection)
+        {
+            worldDirection.y = 0f;
+            blockedDirection = worldDirection.sqrMagnitude > 0.0001f ? worldDirection.normalized : Vector3.zero;
+        }
+
+        /// <summary>
+        /// Hands the character over to another component, which then positions it with
+        /// <see cref="SetExternalPose"/>. The collider is switched off and momentum cleared.
+        /// </summary>
+        public void BeginExternalControl()
+        {
+            externalControl = true;
+            horizontalVelocity = Vector3.zero;
+            verticalSpeed = 0f;
+            yawVelocity = 0f;
+            risingFromJump = false;
+            Controller.enabled = false;
+        }
+
+        /// <summary>Places the character during external control.</summary>
+        public void SetExternalPose(Vector3 position, Quaternion rotation)
+        {
+            transform.SetPositionAndRotation(position, rotation);
+        }
+
+        /// <summary>
+        /// Gives control back to the motor with the given velocity. A character that ends on the
+        /// ground can jump at once; one that ends in the air gets no extra coyote-time jump.
+        /// </summary>
+        public void EndExternalControl(Vector3 velocity, bool grounded)
+        {
+            Controller.enabled = true;
+            externalControl = false;
+            horizontalVelocity = new Vector3(velocity.x, 0f, velocity.z);
+            verticalSpeed = grounded ? -groundedStickSpeed : velocity.y;
+            isGrounded = grounded;
+            timeSinceGrounded = grounded ? 0f : TimerExpired;
+            timeSinceJumpPressed = TimerExpired;
+            risingFromJump = false;
+        }
+
+        /// <summary>Starts a jump with a given velocity, for jumps that begin from traversal.</summary>
+        public void Launch(Vector3 velocity)
+        {
+            EndExternalControl(velocity, false);
+            Jumped?.Invoke();
         }
 
         /// <summary>Moves the character instantly and clears its momentum.</summary>
@@ -275,7 +395,13 @@ namespace Threefold.Characters
                 // The first evaluation only establishes the starting state; it is not a landing.
                 if (!wasGrounded && groundStateKnown)
                 {
-                    Landed?.Invoke(Mathf.Max(0f, -verticalSpeed));
+                    float impact = Mathf.Max(0f, -verticalSpeed);
+                    if (impact >= hardLandingSpeed)
+                    {
+                        landingRecoveryRemaining = hardLandingRecovery;
+                    }
+
+                    Landed?.Invoke(impact);
                 }
             }
             else
@@ -349,7 +475,30 @@ namespace Threefold.Characters
             isSprinting = hasMoveInput && sprintHeld;
 
             float topSpeed = isSprinting ? sprintSpeed : walkSpeed;
+            if (landingRecoveryRemaining > 0f)
+            {
+                topSpeed *= hardLandingSpeedFactor;
+            }
+
             Vector3 targetVelocity = moveDirection * topSpeed;
+
+            // A blocked direction (the edge of a drop) cannot be moved into this frame.
+            if (blockedDirection != Vector3.zero)
+            {
+                float into = Vector3.Dot(targetVelocity, blockedDirection);
+                if (into > 0f)
+                {
+                    targetVelocity -= blockedDirection * into;
+                }
+
+                float current = Vector3.Dot(horizontalVelocity, blockedDirection);
+                if (current > 0f)
+                {
+                    horizontalVelocity -= blockedDirection * current;
+                }
+
+                blockedDirection = Vector3.zero;
+            }
 
             float rate = hasMoveInput ? acceleration : deceleration;
             if (!isGrounded)
@@ -429,7 +578,23 @@ namespace Threefold.Characters
                 risingFromJump = false;
             }
 
-            verticalSpeed = Mathf.Max(verticalSpeed - gravity * deltaTime, -terminalFallSpeed);
+            float appliedGravity = gravity;
+            if (verticalSpeed < 0f)
+            {
+                appliedGravity *= fallGravityMultiplier;
+            }
+            else if (risingFromJump && verticalSpeed < apexSpeedThreshold && readInput && inputSource.JumpHeld)
+            {
+                appliedGravity *= apexGravityMultiplier;
+            }
+
+            // Near the top of a held jump, falling also starts gently.
+            if (verticalSpeed < 0f && verticalSpeed > -apexSpeedThreshold && readInput && inputSource.JumpHeld)
+            {
+                appliedGravity = gravity * apexGravityMultiplier;
+            }
+
+            verticalSpeed = Mathf.Max(verticalSpeed - appliedGravity * deltaTime, -terminalFallSpeed);
         }
     }
 }

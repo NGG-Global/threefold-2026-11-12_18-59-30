@@ -10,7 +10,8 @@ namespace Threefold.Characters
     ///
     /// The Animator Controller is expected to use these parameters; any that it lacks are skipped:
     /// Speed (float, metres per second), Grounded (bool), VerticalSpeed (float), Jump (trigger),
-    /// Cast (trigger).
+    /// Cast (trigger), LandImpact (float, metres per second), Hanging (bool), Shimmy (float, -1 to 1),
+    /// Climb (trigger, climbing up or onto something) and Vault (trigger).
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(100)] // After the motor has moved the character this frame.
@@ -21,12 +22,22 @@ namespace Threefold.Characters
         public const string VerticalSpeedParameter = "VerticalSpeed";
         public const string JumpParameter = "Jump";
         public const string CastParameter = "Cast";
+        public const string LandImpactParameter = "LandImpact";
+        public const string HangingParameter = "Hanging";
+        public const string ShimmyParameter = "Shimmy";
+        public const string ClimbParameter = "Climb";
+        public const string VaultParameter = "Vault";
 
         private static readonly int SpeedId = Animator.StringToHash(SpeedParameter);
         private static readonly int GroundedId = Animator.StringToHash(GroundedParameter);
         private static readonly int VerticalSpeedId = Animator.StringToHash(VerticalSpeedParameter);
         private static readonly int JumpId = Animator.StringToHash(JumpParameter);
         private static readonly int CastId = Animator.StringToHash(CastParameter);
+        private static readonly int LandImpactId = Animator.StringToHash(LandImpactParameter);
+        private static readonly int HangingId = Animator.StringToHash(HangingParameter);
+        private static readonly int ShimmyId = Animator.StringToHash(ShimmyParameter);
+        private static readonly int ClimbId = Animator.StringToHash(ClimbParameter);
+        private static readonly int VaultId = Animator.StringToHash(VaultParameter);
 
         [SerializeField] private ThirdPersonMotor motor;
 
@@ -35,6 +46,9 @@ namespace Threefold.Characters
 
         [Tooltip("Optional. Plays the cast animation whenever an ability is used.")]
         [SerializeField] private AbilityCaster caster;
+
+        [Tooltip("Optional. Plays climbing, hanging and vaulting.")]
+        [SerializeField] private TraversalController traversal;
 
         [Tooltip("Smoothing of the speed sent to the Animator, in seconds. Avoids flicker between walk and run.")]
         [Min(0f)]
@@ -46,6 +60,11 @@ namespace Threefold.Characters
         private bool hasVerticalSpeed;
         private bool hasJump;
         private bool hasCast;
+        private bool hasLandImpact;
+        private bool hasHanging;
+        private bool hasShimmy;
+        private bool hasClimb;
+        private bool hasVault;
         private bool subscribed;
 
         public Animator Animator => animator;
@@ -82,6 +101,11 @@ namespace Threefold.Characters
                 caster = GetComponent<AbilityCaster>();
             }
 
+            if (traversal == null)
+            {
+                traversal = GetComponent<TraversalController>();
+            }
+
             Subscribe();
         }
 
@@ -111,6 +135,19 @@ namespace Threefold.Characters
             {
                 animator.SetFloat(VerticalSpeedId, motor.VerticalSpeed);
             }
+
+            if (traversal != null)
+            {
+                if (hasHanging)
+                {
+                    animator.SetBool(HangingId, traversal.IsHanging);
+                }
+
+                if (hasShimmy)
+                {
+                    animator.SetFloat(ShimmyId, traversal.ShimmyAmount, speedDampTime, Time.deltaTime);
+                }
+            }
         }
 
         private void Subscribe()
@@ -123,11 +160,17 @@ namespace Threefold.Characters
             if (motor != null)
             {
                 motor.Jumped += HandleJumped;
+                motor.Landed += HandleLanded;
             }
 
             if (caster != null)
             {
                 caster.CastSucceeded += HandleCastSucceeded;
+            }
+
+            if (traversal != null)
+            {
+                traversal.MoveStarted += HandleTraversal;
             }
 
             subscribed = true;
@@ -143,11 +186,17 @@ namespace Threefold.Characters
             if (motor != null)
             {
                 motor.Jumped -= HandleJumped;
+                motor.Landed -= HandleLanded;
             }
 
             if (caster != null)
             {
                 caster.CastSucceeded -= HandleCastSucceeded;
+            }
+
+            if (traversal != null)
+            {
+                traversal.MoveStarted -= HandleTraversal;
             }
 
             subscribed = false;
@@ -158,6 +207,51 @@ namespace Threefold.Characters
             if (IsAnimatorReady() && hasJump)
             {
                 animator.SetTrigger(JumpId);
+            }
+        }
+
+        private void HandleLanded(float impactSpeed)
+        {
+            if (IsAnimatorReady() && hasLandImpact)
+            {
+                animator.SetFloat(LandImpactId, impactSpeed);
+            }
+        }
+
+        private void HandleTraversal(TraversalMove move)
+        {
+            if (!IsAnimatorReady())
+            {
+                return;
+            }
+
+            switch (move)
+            {
+                case TraversalMove.ClimbUp:
+                case TraversalMove.Mantle:
+                    if (hasClimb)
+                    {
+                        animator.SetTrigger(ClimbId);
+                    }
+
+                    break;
+
+                case TraversalMove.Vault:
+                    if (hasVault)
+                    {
+                        animator.SetTrigger(VaultId);
+                    }
+
+                    break;
+
+                case TraversalMove.Grab:
+                case TraversalMove.DropToHang:
+                    if (hasHanging)
+                    {
+                        animator.SetBool(HangingId, true);
+                    }
+
+                    break;
             }
         }
 
@@ -184,6 +278,7 @@ namespace Threefold.Characters
             {
                 parametersKnown = true;
                 hasSpeed = hasGrounded = hasVerticalSpeed = hasJump = hasCast = false;
+                hasLandImpact = hasHanging = hasShimmy = hasClimb = hasVault = false;
 
                 foreach (AnimatorControllerParameter parameter in animator.parameters)
                 {
@@ -193,6 +288,11 @@ namespace Threefold.Characters
                     hasVerticalSpeed |= id == VerticalSpeedId && parameter.type == AnimatorControllerParameterType.Float;
                     hasJump |= id == JumpId && parameter.type == AnimatorControllerParameterType.Trigger;
                     hasCast |= id == CastId && parameter.type == AnimatorControllerParameterType.Trigger;
+                    hasLandImpact |= id == LandImpactId && parameter.type == AnimatorControllerParameterType.Float;
+                    hasHanging |= id == HangingId && parameter.type == AnimatorControllerParameterType.Bool;
+                    hasShimmy |= id == ShimmyId && parameter.type == AnimatorControllerParameterType.Float;
+                    hasClimb |= id == ClimbId && parameter.type == AnimatorControllerParameterType.Trigger;
+                    hasVault |= id == VaultId && parameter.type == AnimatorControllerParameterType.Trigger;
                 }
             }
 

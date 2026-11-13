@@ -80,6 +80,7 @@ namespace Threefold.EditorTools
         {
             GameObject mage = EnsureMage(scene, spawnPosition, spawnRotation, report);
             ThirdPersonMotor motor = EnsureComponent<ThirdPersonMotor>(mage, report);
+            EnsureComponent<TraversalController>(mage, report);
             CharacterInputSource input = EnsureInput(mage, motor, report);
             ThirdPersonCamera cameraRig = EnsureCamera(scene, report);
 

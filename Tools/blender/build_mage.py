@@ -3,7 +3,7 @@
 Run headless with Blender 4.x:
 
     blender -b --factory-startup --python Tools/blender/build_mage.py -- \
-        <path to UAL1_Standard.fbx> <output .fbx> [<folder for preview renders>]
+        <path to UAL1_Standard.fbx> <path to UAL2_Standard.fbx> <output .fbx> [<folder for preview renders>]
 
 What it does, all from code so it can be repeated and changed:
 
@@ -13,7 +13,8 @@ What it does, all from code so it can be repeated and changed:
 3. Adds clothing and gear as extra geometry bound to the skeleton: a hood, a shoulder mantle, a
    short back cloak, a belt with buckle and pouches, a clasp with a glowing crystal and a rune band
    on the left wrist.
-4. Keeps only the animations the game uses and gives them plain names.
+4. Keeps only the animations the game uses and gives them plain names. The climbing clip comes
+   from the second library file, and a hanging pose that neither library has is posed in code.
 5. Exports one FBX containing mesh, skeleton and animations, ready for Unity's Humanoid import.
 6. Optionally renders preview images, so the result can be reviewed without opening Unity.
 
@@ -43,6 +44,14 @@ ANIMATIONS = {
     "Jump_Land": "JumpLand",
     "Spell_Simple_Shoot": "SpellShoot",
 }
+
+# Animations taken from the second library file (same rig).
+ANIMATIONS_2 = {
+    "ClimbUp_1m": "ClimbUp",
+}
+
+# Animations made in this script.
+GENERATED_ANIMATIONS = ("Hang",)
 
 # Palette from the art bible's provisional families, as sRGB. Unity uses the same values.
 PALETTE = {
@@ -402,9 +411,30 @@ def build_accessories(body, armature, materials):
     return parts
 
 
-def keep_animations(armature):
+def import_second_library(path):
+    """Imports the second library file and returns its actions; its armature and mesh are removed."""
+    before_objects = set(bpy.data.objects)
+    before_actions = set(bpy.data.actions)
+    bpy.ops.import_scene.fbx(filepath=path)
+    added = [a for a in bpy.data.actions if a not in before_actions]
+    for obj in [o for o in bpy.data.objects if o not in before_objects]:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+    actions = {}
+    for action in added:
+        short = action.name.split("|")[-1].split(".")[0]
+        if short in ANIMATIONS_2:
+            actions[ANIMATIONS_2[short]] = action
+        else:
+            bpy.data.actions.remove(action)
+    return actions
+
+
+def keep_animations(armature, extra):
     kept = {}
     for action in list(bpy.data.actions):
+        if action in extra.values():
+            continue
         short = action.name.split("|")[-1]
         if short in ANIMATIONS:
             action.name = ANIMATIONS[short]
@@ -412,13 +442,68 @@ def keep_animations(armature):
             kept[action.name] = action
         else:
             bpy.data.actions.remove(action)
-    missing = set(ANIMATIONS.values()) - set(kept)
+    for name, action in extra.items():
+        action.name = name
+        action.use_fake_user = True
+        kept[name] = action
+    missing = (set(ANIMATIONS.values()) | set(ANIMATIONS_2.values())) - set(kept)
     if missing:
         raise RuntimeError(f"Animations missing from the source file: {sorted(missing)}")
     if armature.animation_data is None:
         armature.animation_data_create()
     armature.animation_data.action = kept["Idle"]
     return kept
+
+
+def key_pose(armature, frame):
+    for bone in armature.pose.bones:
+        bone.keyframe_insert("location", frame=frame)
+        if bone.rotation_mode == "QUATERNION":
+            bone.keyframe_insert("rotation_quaternion", frame=frame)
+        else:
+            bone.keyframe_insert("rotation_euler", frame=frame)
+
+
+def aim_bone(armature, bone_name, direction):
+    """Turns a pose bone about its head so that it points along a direction in armature space."""
+    bone = armature.pose.bones[bone_name]
+    current = bone.matrix.copy()
+    head = current.to_translation()
+    pointing = current.col[1].to_3d().normalized()
+    rotation = pointing.rotation_difference(direction.normalized()).to_matrix().to_4x4()
+    bone.matrix = Matrix.Translation(head) @ rotation @ Matrix.Translation(-head) @ current
+    bpy.context.view_layer.update()
+
+
+def create_hang_pose(armature, idle):
+    """
+    A hanging pose: both arms straight up and slightly forward, as if holding a ledge above the
+    head, legs relaxed. Neither library has one, so it is posed here from the idle pose.
+    """
+    action = bpy.data.actions.new("Hang")
+    action.use_fake_user = True
+
+    armature.animation_data.action = idle
+    bpy.context.scene.frame_set(1)
+    bpy.context.view_layer.update()
+    armature.animation_data.action = action
+
+    # Armature space: the armature object is turned 180 degrees, so the character's forward is -Y here.
+    forward = Vector((0.0, -1.0, 0.0))
+    for side in ("l", "r"):
+        shoulder_x = armature.pose.bones[f"upperarm_{side}"].head.x
+        outward = Vector((math.copysign(1.0, shoulder_x), 0.0, 0.0))
+        reach = (Vector((0.0, 0.0, 1.0)) + forward * 0.22 + outward * 0.12).normalized()
+        aim_bone(armature, f"upperarm_{side}", reach)
+        aim_bone(armature, f"lowerarm_{side}", reach)
+        aim_bone(armature, f"hand_{side}", (reach + forward * 0.4).normalized())
+    for side in ("l", "r"):
+        knee = (Vector((0.0, 0.0, -1.0)) + forward * 0.12).normalized()
+        aim_bone(armature, f"calf_{side}", knee)
+
+    key_pose(armature, 1)
+    key_pose(armature, 30)
+    return action
 
 
 # ------------------------------------------------------------------------------------ preview
@@ -468,16 +553,18 @@ def render_previews(armature, actions, folder):
     shoot("mage-three-quarter", "Idle", 20, 35)
     shoot("mage-jog", "Jog", 8, 60)
     shoot("mage-spell", "SpellShoot", 8, 30)
+    shoot("mage-hang", "Hang", 1, 160)
+    shoot("mage-climb", "ClimbUp", 8, 90)
 
 
 # --------------------------------------------------------------------------------------- main
 
 def main():
     arguments = sys.argv[sys.argv.index("--") + 1:]
-    if len(arguments) < 2:
-        raise SystemExit("Usage: build_mage.py <UAL1_Standard.fbx> <output.fbx> [preview folder]")
-    source, output = arguments[0], arguments[1]
-    previews = arguments[2] if len(arguments) > 2 else None
+    if len(arguments) < 3:
+        raise SystemExit("Usage: build_mage.py <UAL1_Standard.fbx> <UAL2_Standard.fbx> <output.fbx> [preview folder]")
+    source, second_source, output = arguments[0], arguments[1], arguments[2]
+    previews = arguments[3] if len(arguments) > 3 else None
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.fbx(filepath=source)
@@ -507,9 +594,12 @@ def main():
         if material.users == 0:
             bpy.data.materials.remove(material)
 
-    actions = keep_animations(armature)
+    extra = import_second_library(second_source)
+    actions = keep_animations(armature, extra)
     armature.data.pose_position = "POSE"
     bpy.context.view_layer.update()
+    actions["Hang"] = create_hang_pose(armature, actions["Idle"])
+    armature.animation_data.action = actions["Idle"]
 
     triangles = sum(len(p.vertices) - 2 for p in body.data.polygons)
     print(f"[build_mage] mesh: {len(body.data.vertices)} vertices, {triangles} triangles, "

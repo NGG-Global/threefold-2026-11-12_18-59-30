@@ -64,6 +64,15 @@ namespace Threefold.Cameras
         [Min(0f)]
         [SerializeField] private float followSmoothTime = 0.06f;
 
+        [Tooltip("Approximate time for the camera to follow the target up and down, in seconds. Higher than the " +
+                 "sideways value, so jumps, steps and climbs do not jolt the view.")]
+        [Min(0f)]
+        [SerializeField] private float verticalFollowSmoothTime = 0.18f;
+
+        [Tooltip("The camera never trails the target vertically by more than this, in metres, so long falls stay in view.")]
+        [Min(0f)]
+        [SerializeField] private float maxVerticalLag = 1.2f;
+
         [Tooltip("Approximate time for the camera to catch up with look input, in seconds. 0 is instant.")]
         [Min(0f)]
         [SerializeField] private float rotationSmoothTime = 0.04f;
@@ -103,7 +112,8 @@ namespace Threefold.Cameras
         private Vector3 pivot;
         private Vector3 framingPivot;
         private float trauma;
-        private Vector3 pivotVelocity;
+        private Vector2 pivotVelocityXZ;
+        private float pivotVelocityY;
         private float targetYaw;
         private float targetPitch;
         private float yaw;
@@ -174,9 +184,7 @@ namespace Threefold.Cameras
             }
 
             Vector3 desiredPivot = target.position + targetOffset;
-            pivot = followSmoothTime > 0f
-                ? Vector3.SmoothDamp(pivot, desiredPivot, ref pivotVelocity, followSmoothTime, Mathf.Infinity, deltaTime)
-                : desiredPivot;
+            pivot = FollowPivot(pivot, desiredPivot, deltaTime);
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
             framingPivot = GetFramingPivot(rotation);
@@ -189,6 +197,28 @@ namespace Threefold.Cameras
                 : Mathf.MoveTowards(currentDistance, allowedDistance, distanceRecoverSpeed * deltaTime);
 
             ApplyTransform(rotation);
+        }
+
+        /// <summary>
+        /// Follows the target sideways closely and vertically more softly, within a maximum lag.
+        /// </summary>
+        private Vector3 FollowPivot(Vector3 current, Vector3 desired, float deltaTime)
+        {
+            Vector2 flat = followSmoothTime > 0f
+                ? Vector2.SmoothDamp(new Vector2(current.x, current.z), new Vector2(desired.x, desired.z), ref pivotVelocityXZ,
+                    followSmoothTime, Mathf.Infinity, deltaTime)
+                : new Vector2(desired.x, desired.z);
+
+            float height = verticalFollowSmoothTime > 0f
+                ? Mathf.SmoothDamp(current.y, desired.y, ref pivotVelocityY, verticalFollowSmoothTime, Mathf.Infinity, deltaTime)
+                : desired.y;
+
+            if (maxVerticalLag > 0f)
+            {
+                height = Mathf.Clamp(height, desired.y - maxVerticalLag, desired.y + maxVerticalLag);
+            }
+
+            return new Vector3(flat.x, height, flat.y);
         }
 
         /// <summary>Places the camera directly behind the target, without smoothing.</summary>
@@ -207,7 +237,8 @@ namespace Threefold.Cameras
             pitchVelocity = 0f;
 
             pivot = target.position + targetOffset;
-            pivotVelocity = Vector3.zero;
+            pivotVelocityXZ = Vector2.zero;
+            pivotVelocityY = 0f;
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
             framingPivot = GetFramingPivot(rotation);

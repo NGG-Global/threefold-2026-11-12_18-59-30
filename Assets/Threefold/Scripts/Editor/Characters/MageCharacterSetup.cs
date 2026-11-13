@@ -34,6 +34,10 @@ namespace Threefold.EditorTools
         private const string MaterialPrefix = "MAGE_";
         private const float ExpectedHeight = 1.8f;
 
+        // Raised whenever the controller's layout changes, so existing controllers are rebuilt.
+        private const string ControllerVersion = "threefold-mage-controller-2";
+        private const float HardLandingSpeed = 13f;
+
         private const string LitShader = "Universal Render Pipeline/Lit";
 
         // Same palette as Tools/blender/build_mage.py, as sRGB.
@@ -190,7 +194,7 @@ namespace Threefold.EditorTools
         private static AnimatorController EnsureController(StringBuilder report)
         {
             AnimatorController existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
-            if (existing != null)
+            if (existing != null && GetVersion(ControllerPath) == ControllerVersion)
             {
                 return existing;
             }
@@ -214,12 +218,30 @@ namespace Threefold.EditorTools
                 return clip;
             }
 
-            AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            AnimatorController controller;
+            if (existing == null)
+            {
+                controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            }
+            else
+            {
+                // Rebuilt in place, so the prefab and scenes that use it keep their reference.
+                controller = existing;
+                ClearController(controller);
+                controller.AddLayer("Base Layer");
+                report.AppendLine("Rebuilt the Mage's Animator Controller with the new layout.");
+            }
+
             controller.AddParameter(CharacterAnimationDriver.SpeedParameter, AnimatorControllerParameterType.Float);
             controller.AddParameter(CharacterAnimationDriver.GroundedParameter, AnimatorControllerParameterType.Bool);
             controller.AddParameter(CharacterAnimationDriver.VerticalSpeedParameter, AnimatorControllerParameterType.Float);
             controller.AddParameter(CharacterAnimationDriver.JumpParameter, AnimatorControllerParameterType.Trigger);
             controller.AddParameter(CharacterAnimationDriver.CastParameter, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(CharacterAnimationDriver.LandImpactParameter, AnimatorControllerParameterType.Float);
+            controller.AddParameter(CharacterAnimationDriver.HangingParameter, AnimatorControllerParameterType.Bool);
+            controller.AddParameter(CharacterAnimationDriver.ShimmyParameter, AnimatorControllerParameterType.Float);
+            controller.AddParameter(CharacterAnimationDriver.ClimbParameter, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(CharacterAnimationDriver.VaultParameter, AnimatorControllerParameterType.Trigger);
 
             // Grounded starts true so the first frame does not play a fall.
             AnimatorControllerParameter[] parameters = controller.parameters;
@@ -252,6 +274,38 @@ namespace Threefold.EditorTools
             AnimatorState fall = AddState(machine, "Fall", Clip("JumpLoop"));
             AnimatorState land = AddState(machine, "Land", Clip("JumpLand"));
 
+            // ---- traversal: hanging, climbing up or onto, vaulting
+            AnimatorState hang = AddState(machine, "Hang", Clip("Hang"));
+            AnimatorState climb = AddState(machine, "Climb", Clip("ClimbUp"));
+            climb.speed = 1.2f;
+            AnimatorState vault = AddState(machine, "Vault", Clip("ClimbUp"));
+            vault.speed = 1.9f;
+
+            AnimatorStateTransition toHang = machine.AddAnyStateTransition(hang);
+            toHang.AddCondition(AnimatorConditionMode.If, 0f, CharacterAnimationDriver.HangingParameter);
+            toHang.canTransitionToSelf = false;
+            Configure(toHang, false, 0f, 0.1f);
+
+            AnimatorStateTransition toClimb = machine.AddAnyStateTransition(climb);
+            toClimb.AddCondition(AnimatorConditionMode.If, 0f, CharacterAnimationDriver.ClimbParameter);
+            toClimb.canTransitionToSelf = false;
+            Configure(toClimb, false, 0f, 0.08f);
+
+            AnimatorStateTransition toVault = machine.AddAnyStateTransition(vault);
+            toVault.AddCondition(AnimatorConditionMode.If, 0f, CharacterAnimationDriver.VaultParameter);
+            toVault.canTransitionToSelf = false;
+            Configure(toVault, false, 0f, 0.05f);
+
+            AnimatorStateTransition letGo = hang.AddTransition(fall);
+            letGo.AddCondition(AnimatorConditionMode.IfNot, 0f, CharacterAnimationDriver.HangingParameter);
+            Configure(letGo, false, 0f, 0.1f);
+
+            AnimatorStateTransition climbDone = climb.AddTransition(locomotion);
+            Configure(climbDone, true, 0.92f, 0.12f);
+
+            AnimatorStateTransition vaultDone = vault.AddTransition(locomotion);
+            Configure(vaultDone, true, 0.9f, 0.1f);
+
             AnimatorStateTransition toJump = machine.AddAnyStateTransition(jumpStart);
             toJump.AddCondition(AnimatorConditionMode.If, 0f, CharacterAnimationDriver.JumpParameter);
             Configure(toJump, false, 0f, 0.05f);
@@ -275,8 +329,10 @@ namespace Threefold.EditorTools
             Configure(fallToLand, false, 0f, 0.05f);
 
             // Keep running out of a landing; otherwise let the landing play.
+            // A hard landing always plays out; a normal one can be run out of.
             AnimatorStateTransition landMoving = land.AddTransition(locomotion);
             landMoving.AddCondition(AnimatorConditionMode.Greater, 1f, CharacterAnimationDriver.SpeedParameter);
+            landMoving.AddCondition(AnimatorConditionMode.Less, HardLandingSpeed, CharacterAnimationDriver.LandImpactParameter);
             Configure(landMoving, false, 0f, 0.1f);
 
             AnimatorStateTransition landDone = land.AddTransition(locomotion);
@@ -305,8 +361,40 @@ namespace Threefold.EditorTools
             Configure(castDone, true, 0.85f, 0.15f);
 
             EditorUtility.SetDirty(controller);
-            report.AppendLine("Generated the Mage's Animator Controller (locomotion, jump, fall, land and an upper-body cast layer).");
+            SetVersion(ControllerPath, ControllerVersion);
+            report.AppendLine("Generated the Mage's Animator Controller (locomotion, jump, fall, land, hang, climb, " +
+                              "vault and an upper-body cast layer).");
             return controller;
+        }
+
+        private static void ClearController(AnimatorController controller)
+        {
+            while (controller.layers.Length > 0)
+            {
+                controller.RemoveLayer(controller.layers.Length - 1);
+            }
+
+            while (controller.parameters.Length > 0)
+            {
+                controller.RemoveParameter(0);
+            }
+        }
+
+        private static string GetVersion(string path)
+        {
+            AssetImporter importer = AssetImporter.GetAtPath(path);
+            return importer != null ? importer.userData : null;
+        }
+
+        private static void SetVersion(string path, string version)
+        {
+            AssetImporter importer = AssetImporter.GetAtPath(path);
+            if (importer != null && importer.userData != version)
+            {
+                importer.userData = version;
+                EditorUtility.SetDirty(importer);
+                AssetDatabase.WriteImportSettingsIfDirty(path);
+            }
         }
 
         private static AvatarMask EnsureUpperBodyMask()
