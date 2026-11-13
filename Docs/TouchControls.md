@@ -14,6 +14,7 @@ compiled in Unity and has not run on an Android device.
 | Camera | Right 58% of the screen | Drag to orbit. No visuals |
 | Jump | Bottom right | Hold for a full jump, tap for a short one |
 | Sprint | Left of Jump | Tap to start sprinting; tap again or release the joystick to stop |
+| Interact | Above Sprint, left of Attack | Shown only while something can be used, labelled with what it does ("Open"). Tap to use it. See `Docs/Puzzles.md` |
 
 Sprint is a toggle so that the right thumb stays free for the camera while sprinting. It can be
 changed to hold-to-sprint on the `TouchControls` object (Sprint Mode).

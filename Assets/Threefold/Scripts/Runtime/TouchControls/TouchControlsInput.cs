@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
 using UnityEngine.InputSystem.Utilities;
+using UnityEngine.UI;
 using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 
@@ -10,7 +11,8 @@ namespace Threefold.TouchControls
 {
     /// <summary>
     /// Character input from on-screen touch controls: a floating joystick, a camera look area,
-    /// and jump and sprint buttons.
+    /// jump, sprint and attack buttons, and an interact button that appears only while there is
+    /// something to interact with.
     ///
     /// Each finger is assigned to the control it first touched and stays with it until lifted,
     /// so the joystick, the camera and the buttons can all be used at the same time. Touches are
@@ -37,6 +39,12 @@ namespace Threefold.TouchControls
         [SerializeField] private TouchButton sprintButton;
         [SerializeField] private TouchButton attackButton;
 
+        [Tooltip("Optional. Shown only while there is something to interact with.")]
+        [SerializeField] private TouchButton interactButton;
+
+        [Tooltip("Optional. Shows what the interact button will do, such as 'Open'.")]
+        [SerializeField] private Text interactLabel;
+
         [Tooltip("Optional. Used to show and hide all touch controls together.")]
         [SerializeField] private CanvasGroup canvasGroup;
 
@@ -58,7 +66,7 @@ namespace Threefold.TouchControls
 
         private const float ReferenceScreenHeight = 1080f;
         private const int MousePointerId = int.MinValue + 1;
-        private const int MaxRegions = 5;
+        private const int MaxRegions = 6;
 
         private readonly TouchRegion[] regions = new TouchRegion[MaxRegions];
         private readonly bool[] regionSeen = new bool[MaxRegions];
@@ -72,6 +80,7 @@ namespace Threefold.TouchControls
         private bool jumpPressedThisFrame;
         private bool attackHeld;
         private bool attackPressedThisFrame;
+        private bool interactPressedThisFrame;
         private bool visible = true;
         private bool enhancedTouchEnabledHere;
 
@@ -82,11 +91,13 @@ namespace Threefold.TouchControls
         public override bool JumpPressedThisFrame => jumpPressedThisFrame;
         public override bool AttackHeld => attackHeld;
         public override bool AttackPressedThisFrame => attackPressedThisFrame;
+        public override bool InteractPressedThisFrame => interactPressedThisFrame;
 
         public VirtualJoystick Joystick => joystick;
         public TouchButton JumpButton => jumpButton;
         public TouchButton SprintButton => sprintButton;
         public TouchButton AttackButton => attackButton;
+        public TouchButton InteractButton => interactButton;
 
         /// <summary>Whether the controls are shown and respond to touch.</summary>
         public bool Visible => visible;
@@ -120,6 +131,36 @@ namespace Threefold.TouchControls
         {
             attackButton = attack;
             CollectRegions();
+        }
+
+        /// <summary>Connects the interact button and its label. Called by the setup tooling.</summary>
+        public void BindInteractButton(TouchButton interact, Text label)
+        {
+            interactButton = interact;
+            interactLabel = label;
+            CollectRegions();
+        }
+
+        /// <summary>
+        /// Shows the interact button, labelled with what it will do, while there is something to
+        /// interact with, and hides it otherwise. Called every frame by the interaction prompt.
+        /// </summary>
+        public void SetInteractAvailable(bool available, string verb)
+        {
+            if (interactButton == null)
+            {
+                return;
+            }
+
+            if (available && interactLabel != null && interactLabel.text != verb)
+            {
+                interactLabel.text = verb;
+            }
+
+            if (interactButton.gameObject.activeSelf != available)
+            {
+                interactButton.gameObject.SetActive(available);
+            }
         }
 
         /// <summary>Shows or hides the controls. Hidden controls ignore touches and report no input.</summary>
@@ -330,6 +371,9 @@ namespace Threefold.TouchControls
             attackHeld = attackButton != null && attackButton.IsHeld;
             attackPressedThisFrame = attackButton != null && attackButton.WasPressedThisFrame;
 
+            interactPressedThisFrame = interactButton != null && interactButton.isActiveAndEnabled
+                                       && interactButton.WasPressedThisFrame;
+
             sprintHeld = ReadSprint();
         }
 
@@ -370,6 +414,7 @@ namespace Threefold.TouchControls
 
             // Priority order: buttons first, then the joystick, then the look area.
             AddRegion(attackButton);
+            AddRegion(interactButton);
             AddRegion(jumpButton);
             AddRegion(sprintButton);
             AddRegion(joystick);
@@ -407,6 +452,7 @@ namespace Threefold.TouchControls
             jumpPressedThisFrame = false;
             attackHeld = false;
             attackPressedThisFrame = false;
+            interactPressedThisFrame = false;
 
             if (sprintButton != null)
             {

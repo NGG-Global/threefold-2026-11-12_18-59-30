@@ -23,6 +23,13 @@ namespace Threefold.InputHandling
         [SerializeField] private string jumpActionName = "Jump";
         [SerializeField] private string sprintActionName = "Sprint";
         [SerializeField] private string attackActionName = "Attack";
+        [SerializeField] private string interactActionName = "Interact";
+
+        [Tooltip("Binding group of the keyboard and mouse in the actions asset. Used to name the interact key in prompts.")]
+        [SerializeField] private string keyboardBindingGroup = "Keyboard&Mouse";
+
+        [Tooltip("Binding group of the gamepad in the actions asset. Used to name the interact button in prompts.")]
+        [SerializeField] private string gamepadBindingGroup = "Gamepad";
 
         [Header("Look")]
         [Tooltip("Look units per second produced by a gamepad stick at full deflection.")]
@@ -33,13 +40,14 @@ namespace Threefold.InputHandling
                  "Mouse movement turns the camera only while the mouse is captured.")]
         [SerializeField] private bool lockCursorForMouseLook = true;
 
-        private readonly List<InputAction> actionsEnabledHere = new List<InputAction>(4);
+        private readonly List<InputAction> actionsEnabledHere = new List<InputAction>(6);
 
         private InputAction moveAction;
         private InputAction lookAction;
         private InputAction jumpAction;
         private InputAction sprintAction;
         private InputAction attackAction;
+        private InputAction interactAction;
 
         private Vector2 move;
         private Vector2 lookDelta;
@@ -48,6 +56,10 @@ namespace Threefold.InputHandling
         private bool jumpPressedThisFrame;
         private bool attackHeld;
         private bool attackPressedThisFrame;
+        private bool interactPressedThisFrame;
+        private bool usingGamepad;
+        private string keyboardInteractLabel;
+        private string gamepadInteractLabel;
         private bool suppressAttackUntilRelease;
         private bool cursorLockedHere;
         private bool mouseCaptureEnabled = true;
@@ -59,6 +71,38 @@ namespace Threefold.InputHandling
         public override bool JumpPressedThisFrame => jumpPressedThisFrame;
         public override bool AttackHeld => attackHeld;
         public override bool AttackPressedThisFrame => attackPressedThisFrame;
+        public override bool InteractPressedThisFrame => interactPressedThisFrame;
+
+        /// <summary>True if a gamepad was used more recently than the keyboard and mouse.</summary>
+        public bool UsingGamepad => usingGamepad;
+
+        /// <summary>
+        /// The name of the key or button that interacts, for whichever of keyboard or gamepad was used
+        /// last, such as "E". Empty if the actions asset has no interact action.
+        /// </summary>
+        public string InteractBindingLabel
+        {
+            get
+            {
+                if (interactAction == null)
+                {
+                    return string.Empty;
+                }
+
+                // Display strings allocate, so each is built once. The game reacts to the press itself,
+                // so a Hold interaction is not mentioned.
+                if (usingGamepad)
+                {
+                    return gamepadInteractLabel ?? (gamepadInteractLabel =
+                        interactAction.GetBindingDisplayString(InputBinding.MaskByGroup(gamepadBindingGroup),
+                        InputBinding.DisplayStringOptions.DontIncludeInteractions));
+                }
+
+                return keyboardInteractLabel ?? (keyboardInteractLabel =
+                    interactAction.GetBindingDisplayString(InputBinding.MaskByGroup(keyboardBindingGroup),
+                        InputBinding.DisplayStringOptions.DontIncludeInteractions));
+            }
+        }
 
         /// <summary>Actions asset this component reads. Change it only while the component is disabled.</summary>
         public InputActionAsset ActionsAsset
@@ -102,6 +146,11 @@ namespace Threefold.InputHandling
             {
                 EnableIfNeeded(attackAction);
             }
+
+            if (interactAction != null)
+            {
+                EnableIfNeeded(interactAction);
+            }
         }
 
         private void OnDisable()
@@ -126,6 +175,55 @@ namespace Threefold.InputHandling
             jumpPressedThisFrame = jumpAction.WasPressedThisFrame();
             lookDelta = ReadLook();
             ReadAttack();
+            ReadInteract();
+            TrackDeviceKind();
+        }
+
+        private void ReadInteract()
+        {
+            interactPressedThisFrame = false;
+
+            // WasPressedThisFrame follows the button itself, so the Hold interaction on this action
+            // in the default actions asset does not delay it.
+            if (interactAction == null || !interactAction.WasPressedThisFrame())
+            {
+                return;
+            }
+
+            // Touch has its own interact button.
+            InputControl control = interactAction.activeControl;
+            if (control != null && control.device is Touchscreen)
+            {
+                return;
+            }
+
+            interactPressedThisFrame = true;
+        }
+
+        /// <summary>Remembers whether the gamepad or the keyboard and mouse was used last, for prompts.</summary>
+        private void TrackDeviceKind()
+        {
+            InputDevice device = ActiveDevice(moveAction) ?? ActiveDevice(jumpAction) ?? ActiveDevice(interactAction)
+                                 ?? ActiveDevice(attackAction);
+            if (device is Gamepad)
+            {
+                usingGamepad = true;
+            }
+            else if (device is Keyboard || device is Mouse)
+            {
+                usingGamepad = false;
+            }
+        }
+
+        private static InputDevice ActiveDevice(InputAction action)
+        {
+            if (action == null || !action.IsPressed())
+            {
+                return null;
+            }
+
+            InputControl control = action.activeControl;
+            return control != null ? control.device : null;
         }
 
         private void ReadAttack()
@@ -271,6 +369,18 @@ namespace Threefold.InputHandling
                     $"action map '{map.name}'. Attacking from keyboard, mouse and gamepad is unavailable.", this);
             }
 
+            // Interact is optional too.
+            interactAction = map.FindAction(interactActionName, false);
+            if (interactAction == null)
+            {
+                Debug.LogWarning(
+                    $"{nameof(InputSystemCharacterInput)} on '{name}': action '{interactActionName}' was not found in " +
+                    $"action map '{map.name}'. Interacting from keyboard and gamepad is unavailable.", this);
+            }
+
+            keyboardInteractLabel = null;
+            gamepadInteractLabel = null;
+
             return moveAction != null && lookAction != null && jumpAction != null && sprintAction != null;
         }
 
@@ -307,6 +417,7 @@ namespace Threefold.InputHandling
             jumpPressedThisFrame = false;
             attackHeld = false;
             attackPressedThisFrame = false;
+            interactPressedThisFrame = false;
             suppressAttackUntilRelease = false;
         }
     }

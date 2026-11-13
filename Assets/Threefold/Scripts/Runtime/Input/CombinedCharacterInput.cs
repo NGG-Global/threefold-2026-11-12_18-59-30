@@ -131,6 +131,22 @@ namespace Threefold.InputHandling
             }
         }
 
+        public override bool InteractPressedThisFrame
+        {
+            get
+            {
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (IsUsable(sources[i]) && sources[i].InteractPressedThisFrame)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         /// <summary>Adds a source unless it is missing, already listed, or this component itself.</summary>
         /// <returns>True if the source was added.</returns>
         public bool AddSource(CharacterInputSource source)

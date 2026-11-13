@@ -126,6 +126,8 @@ namespace Threefold.EditorTools
 
             if (FindInScene<ControlSchemeSelector>(scene) == null) Problem("Nothing selects between touch and desktop controls.");
 
+            PuzzleValidator.Validate(scene, mage, Problem);
+
             if (mage.GetComponent<Health>() == null) Problem("The Mage has no Health.");
             if (mage.GetComponent<Mana>() == null) Problem("The Mage has no Mana.");
             if (mage.GetComponent<PlayerAbilityInput>() == null) Problem("The Mage's attack input is not connected.");
