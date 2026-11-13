@@ -135,6 +135,31 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void WithDragToChargeOffAQuickDragIsNeitherATapNorACharge()
+        {
+            settings.dragStartsCharge = false;
+            Frame(0f, () => attack.Press(0f, Vector2.zero));
+            Frame(0.08f, () => attack.Move(0.08f, new Vector2(60f, 0f), false));
+            Frame(0.15f, () => attack.Release(0.15f, false));
+
+            Assert.IsFalse(attack.Tapped);
+            Assert.IsFalse(attack.ChargeReleased);
+            Assert.IsTrue(attack.Cancelled);
+        }
+
+        [Test]
+        public void WithDragToChargeOffADragHeldPastTheThresholdStillCharges()
+        {
+            settings.dragStartsCharge = false;
+            Frame(0f, () => attack.Press(0f, Vector2.zero));
+            Frame(0.08f, () => attack.Move(0.08f, new Vector2(60f, 0f), false));
+            Frame(0.3f);
+            Frame(0.4f, () => attack.Release(0.4f, false));
+
+            Assert.IsTrue(attack.ChargeReleased);
+        }
+
+        [Test]
         public void DraggingWhileChargingAims()
         {
             Frame(0f, () => attack.Press(0f, new Vector2(100f, 100f)));

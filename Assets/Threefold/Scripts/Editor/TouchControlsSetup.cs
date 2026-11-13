@@ -37,6 +37,8 @@ namespace Threefold.EditorTools
 
         // The first layout (Sprint 2 and 3), used to recognise controls that were never moved by hand.
         private const float OldMoveZoneWidth = 0.42f;
+        private static readonly Vector2 OldJoystickPosition = new Vector2(125f, 120f);
+        private const float OldJoystickSize = 150f;
         private static readonly Vector2 OldJumpPosition = new Vector2(-82f, 82f);
         private const float OldJumpSize = 84f;
         private static readonly Vector2 OldAttackPosition = new Vector2(-90f, 194f);
@@ -602,6 +604,15 @@ namespace Threefold.EditorTools
             if (touch.Joystick != null)
             {
                 report.AppendLine("- The joystick is now fixed: it no longer jumps to the thumb, and touches away from it do nothing.");
+
+                SerializedProperty stickBase = new SerializedObject(touch.Joystick).FindProperty("baseRect");
+                if (stickBase != null && stickBase.objectReferenceValue is RectTransform baseRect &&
+                    IsAt(baseRect, OldJoystickPosition, OldJoystickSize))
+                {
+                    Undo.RecordObject(baseRect, DialogTitle);
+                    baseRect.anchoredPosition = Layout.Joystick.Position;
+                    report.AppendLine("- Moved the joystick to the new layout position.");
+                }
             }
 
             TouchButton jump = touch.JumpButton;

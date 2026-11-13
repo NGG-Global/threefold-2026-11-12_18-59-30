@@ -433,17 +433,22 @@ namespace Threefold.TouchControls
 
             Vector2 position = mouse.position.ReadValue();
 
-            if (mouse.leftButton.wasPressedThisFrame)
+            bool pressed = mouse.leftButton.wasPressedThisFrame;
+            bool released = mouse.leftButton.wasReleasedThisFrame;
+
+            // A quick click can go down and up within one frame: begin and end it in the same frame.
+            if (pressed)
             {
                 router.Begin(MousePointerId, position);
             }
-            else if (mouse.leftButton.isPressed)
-            {
-                router.Move(MousePointerId, position);
-            }
-            else if (mouse.leftButton.wasReleasedThisFrame)
+
+            if (released)
             {
                 router.End(MousePointerId, position, false);
+            }
+            else if (!pressed && mouse.leftButton.isPressed)
+            {
+                router.Move(MousePointerId, position);
             }
         }
 
@@ -548,7 +553,7 @@ namespace Threefold.TouchControls
             bool wasActive = attackHeld;
             attackFrame = recognizer.Snapshot();
             attackHeld = recognizer.IsActive;
-            attackPressedThisFrame = attackHeld && (!wasActive || attackFrame.Tapped || attackFrame.ChargeReleased);
+            attackPressedThisFrame = attackHeld && !wasActive;
         }
 
         private bool ReadSprint()

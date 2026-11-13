@@ -153,7 +153,8 @@ namespace Threefold.InputHandling
     /// the touch and desktop input sources.
     ///
     /// Rules:
-    /// - A release before the hold threshold, without dragging past the tap slop, is a tap.
+    /// - A release before the hold threshold, without dragging past the tap slop, is a tap. Dragging
+    ///   past the slop starts the charge at once, or, if that is switched off, makes a short press a cancel.
     /// - Holding past the threshold starts a charge. A charge never produces a tap.
     /// - Dragging during a charge aims. Releasing fires the charged attack, unless the release is
     ///   over the cancel zone, the control was cancelled by the system, or <see cref="Cancel"/> was called.
@@ -171,6 +172,7 @@ namespace Threefold.InputHandling
         private Vector2 aim;
         private bool cancelArmed;
         private float releasedProgress;
+        private bool slopExceeded;
 
         public AttackGestureRecognizer(AttackGestureSettings settings)
         {
@@ -246,6 +248,7 @@ namespace Threefold.InputHandling
             aim = Vector2.zero;
             cancelArmed = false;
             releasedProgress = 0f;
+            slopExceeded = false;
             LastRelease = AttackReleaseKind.None;
             Phase = AttackGesturePhase.Pressed;
             return true;
@@ -264,8 +267,15 @@ namespace Threefold.InputHandling
 
             if (Phase == AttackGesturePhase.Pressed)
             {
-                if (!settings.dragStartsCharge || offset.magnitude <= settings.tapSlop)
+                if (offset.magnitude <= settings.tapSlop)
                 {
+                    return;
+                }
+
+                if (!settings.dragStartsCharge)
+                {
+                    // Too far to be a tap; the hold threshold decides whether it becomes a charge.
+                    slopExceeded = true;
                     return;
                 }
 
@@ -302,6 +312,13 @@ namespace Threefold.InputHandling
             {
                 if (now - pressTime < settings.holdThreshold)
                 {
+                    // A short press that dragged too far is neither a tap nor a charge.
+                    if (slopExceeded)
+                    {
+                        Cancel();
+                        return;
+                    }
+
                     Phase = AttackGesturePhase.Released;
                     LastRelease = AttackReleaseKind.Tap;
                     Tapped = true;

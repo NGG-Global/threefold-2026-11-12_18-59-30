@@ -35,6 +35,10 @@ namespace Threefold.Combat
     ///   event, a placeholder fires the ability in the charged slot (Arcane Bolt), steered sideways by the aim.
     /// - A cancelled press or charge raises <see cref="AttackCancelled"/> and fires nothing.
     ///
+    /// Every <see cref="ChargeStarted"/> is followed by exactly one <see cref="ChargedAttackReleased"/>
+    /// or <see cref="AttackCancelled"/>, even when the charge ends without an event from the input
+    /// (the controls were hidden or disabled, the app lost focus) or while the hands are busy climbing.
+    ///
     /// Spells turn the character to face their aim; a melee strike follows the body's facing.
     /// </summary>
     [DisallowMultipleComponent]
@@ -78,6 +82,7 @@ namespace Threefold.Combat
 
         private TraversalController traversal;
         private float bufferedUntil = -1f;
+        private bool chargeOpen;
 
         /// <summary>Raised when a charge begins, with the discipline selected at that moment.</summary>
         public event Action<MagicDiscipline> ChargeStarted;
@@ -136,6 +141,11 @@ namespace Threefold.Combat
             {
                 caster.CastSucceeded -= HandleCastSucceeded;
             }
+
+            if (chargeOpen)
+            {
+                CloseChargeAsCancelled();
+            }
         }
 
         private void Update()
@@ -145,28 +155,43 @@ namespace Threefold.Combat
                 return;
             }
 
-            // Hands are busy while hanging, climbing or vaulting.
+            AttackGestureFrame gesture = inputSource.AttackGesture;
+
+            // Hands are busy while hanging, climbing or vaulting: nothing fires, and a charge that ends
+            // now is reported as cancelled so that listeners are never left in the charging state.
             if (traversal != null && (traversal.IsHanging || traversal.IsMoving))
             {
                 bufferedUntil = -1f;
+                if (chargeOpen && (gesture.ChargeReleased || gesture.Cancelled || !gesture.IsCharging))
+                {
+                    CloseChargeAsCancelled();
+                }
+
                 return;
             }
 
-            AttackGestureFrame gesture = inputSource.AttackGesture;
-
-            if (gesture.ChargeStarted)
+            // A charge that began while the hands were busy is opened as soon as they are free.
+            bool charging = gesture.ChargeStarted || gesture.IsCharging || gesture.ChargeReleased;
+            if (charging && !chargeOpen)
             {
+                chargeOpen = true;
                 ChargeStarted?.Invoke(CurrentDiscipline);
-            }
-
-            if (gesture.Cancelled)
-            {
-                AttackCancelled?.Invoke();
             }
 
             if (gesture.ChargeReleased)
             {
+                chargeOpen = false;
                 ReleaseCharge(gesture);
+            }
+            else if (gesture.Cancelled)
+            {
+                chargeOpen = false;
+                AttackCancelled?.Invoke();
+            }
+            else if (chargeOpen && !gesture.IsCharging)
+            {
+                // The charge ended without an event, for example because the touch controls were hidden.
+                CloseChargeAsCancelled();
             }
 
             if (gesture.Tapped)
@@ -188,6 +213,12 @@ namespace Threefold.Combat
 
             bufferedUntil = -1f;
             caster.TryCast(slot);
+        }
+
+        private void CloseChargeAsCancelled()
+        {
+            chargeOpen = false;
+            AttackCancelled?.Invoke();
         }
 
         /// <summary>The melee slot, or the charged slot if the character has no melee ability yet.</summary>

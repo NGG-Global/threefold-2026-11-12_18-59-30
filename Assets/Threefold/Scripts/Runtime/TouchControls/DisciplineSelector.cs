@@ -54,6 +54,7 @@ namespace Threefold.TouchControls
         [SerializeField] private Color slotColor = new Color(0.12f, 0.11f, 0.1f, 0.55f);
 
         private readonly DisciplineSelectorModel model = new DisciplineSelectorModel();
+        private Vector2[] slotOffsets = new Vector2[0];
         private Vector2 lastScreenPosition;
         private int current;
         private bool slotsDirty = true;
@@ -265,22 +266,27 @@ namespace Threefold.TouchControls
             model.IndicatorRadius = Mathf.Min(rect.width, rect.height) * 0.5f + hitPadding;
             model.OpenTimeout = openTimeout;
 
+            // Reused between calls: this runs on the input path whenever a touch starts near the selector.
+            if (slotOffsets.Length != slots.Length)
+            {
+                slotOffsets = new Vector2[slots.Length];
+            }
+
             float slotRadius = 0f;
-            var offsets = new Vector2[slots.Length];
             for (int i = 0; i < slots.Length; i++)
             {
                 if (slots[i] == null)
                 {
-                    offsets[i] = new Vector2(1e6f, 1e6f);
+                    slotOffsets[i] = new Vector2(1e6f, 1e6f);
                     continue;
                 }
 
                 // Slots scale when highlighted but never move, so their pivot is a stable reference.
-                offsets[i] = (Vector2)Region.InverseTransformPoint(slots[i].position) - rect.center;
+                slotOffsets[i] = (Vector2)Region.InverseTransformPoint(slots[i].position) - rect.center;
                 slotRadius = Mathf.Max(slotRadius, Mathf.Min(slots[i].rect.width, slots[i].rect.height) * 0.5f);
             }
 
-            model.SetSlots(offsets);
+            model.SetSlots(slotOffsets);
             model.SlotRadius = slotRadius + slotHitPadding;
         }
     }

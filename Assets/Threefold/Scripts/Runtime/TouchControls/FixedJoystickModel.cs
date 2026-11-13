@@ -74,6 +74,8 @@ namespace Threefold.TouchControls
 
         public bool Sprinting { get; private set; }
 
+        private bool sprintArmed;
+
         public bool CanActivate(Vector2 position)
         {
             return (position - Centre).sqrMagnitude <= activationRadius * activationRadius;
@@ -89,6 +91,7 @@ namespace Threefold.TouchControls
 
             IsActive = true;
             Sprinting = false;
+            sprintArmed = false;
             Move(position);
             return true;
         }
@@ -106,11 +109,19 @@ namespace Threefold.TouchControls
             KnobOffset = Vector2.ClampMagnitude(offset, radius);
             Value = JoystickMath.Process(offset / radius, deadZone, responseExponent);
 
+            // Sprinting starts only when the thumb crosses the sprint ring outward. A touch that lands
+            // beyond it (the activation area is larger) must first come inside, or it would sprint at once.
+            float sprintDistance = radius * sprintThreshold;
+            if (distance < sprintDistance)
+            {
+                sprintArmed = true;
+            }
+
             if (sprintThreshold <= 0f)
             {
                 Sprinting = false;
             }
-            else if (distance >= radius * sprintThreshold)
+            else if (sprintArmed && distance >= sprintDistance)
             {
                 Sprinting = true;
             }
@@ -124,6 +135,7 @@ namespace Threefold.TouchControls
         public void End()
         {
             IsActive = false;
+            sprintArmed = false;
             Value = Vector2.zero;
             KnobOffset = Vector2.zero;
             Sprinting = false;

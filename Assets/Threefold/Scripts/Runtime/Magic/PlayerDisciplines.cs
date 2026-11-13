@@ -10,6 +10,7 @@ namespace Threefold.Magic
     /// the current discipline from here. The rules are in <see cref="DisciplineLoadout"/>.
     /// </summary>
     [DisallowMultipleComponent]
+    [DefaultExecutionOrder(-50)] // After the input sources (-100), before the attack that reads the discipline (0).
     public sealed class PlayerDisciplines : MonoBehaviour
     {
         [SerializeField] private CharacterInputSource inputSource;

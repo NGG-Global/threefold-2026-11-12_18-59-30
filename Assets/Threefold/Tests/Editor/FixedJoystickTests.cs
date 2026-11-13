@@ -143,6 +143,22 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void ATouchLandingBeyondTheSprintRingDoesNotSprintAtOnce()
+        {
+            // The activation area (105 dp) is wider than the sprint ring (about 80 dp).
+            Assert.IsTrue(stick.Begin(stick.Centre + new Vector2(95f, 0f)));
+            Assert.IsFalse(stick.Sprinting);
+            Assert.AreEqual(1f, stick.Value.magnitude, 0.0001f, "It still runs at full speed.");
+
+            stick.Move(stick.Centre + new Vector2(100f, 0f));
+            Assert.IsFalse(stick.Sprinting, "Only crossing the ring outward starts a sprint.");
+
+            stick.Move(stick.Centre + new Vector2(50f, 0f));
+            stick.Move(stick.Centre + new Vector2(90f, 0f));
+            Assert.IsTrue(stick.Sprinting);
+        }
+
+        [Test]
         public void SprintCanBeSwitchedOff()
         {
             stick.SprintThreshold = 0f;

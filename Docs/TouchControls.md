@@ -5,7 +5,7 @@ for simultaneous movement, camera, melee, blocking, jumping, discipline selectio
 attacks. Keyboard, mouse and gamepad provide the same actions for testing.
 
 **Status:** the code compiles against the Unity 6000.6.0f1 assemblies, and the input rules pass
-99 automated tests that run outside Unity (see Tests). Nothing has been run inside the Unity
+102 automated tests that run outside Unity (see Tests). Nothing has been run inside the Unity
 Editor or on an Android device. Feel values (thresholds, radii, sensitivities) are first
 estimates and need tuning on a device.
 
@@ -19,7 +19,7 @@ diagrams, not screenshots.
 
 | Control | Where | Behaviour |
 | --- | --- | --- |
-| Joystick | Fixed, bottom left | Takes a touch only within 105 dp of its centre; touches elsewhere never move or activate it. Analogue movement with a dead zone. Push past the ring to sprint; easing below 60% travel or lifting the thumb ends the sprint |
+| Joystick | Fixed, bottom left | Takes a touch only within 105 dp of its centre; touches elsewhere never move or activate it. Analogue movement with a dead zone. Push outward past the ring to sprint (a thumb that lands beyond the ring runs, and sprints only after crossing it outward); easing below 60% travel or lifting the thumb ends the sprint |
 | Camera | Any free part of the screen | Drag to orbit horizontally and vertically. A drag that starts on a button never turns the camera |
 | ATTACK | Bottom right, largest | Tap: standard melee strike. Hold about 0.22 s: charge (a ring fills). Drag while charging: aim. Release: fire the charged attack. Release over the red cancel zone that appears above the thumb: cancel |
 | Discipline indicator | On the upper-right rim of ATTACK | Shows the selected discipline. Press and drag onto Arcane, Flame or Aegis, then lift; or tap it and then tap a slot. The selected discipline is also shown on ATTACK |
@@ -47,7 +47,8 @@ choosing.
   ends another finger's action.
 - A tap (released before the threshold, without dragging more than 14 dp) is never a charge. Once
   a charge has started, releasing it is never a tap. Dragging further than 14 dp before the
-  threshold starts the charge at once, so a quick drag to aim is not mistaken for a tap.
+  threshold starts the charge at once, so a quick drag to aim is not mistaken for a tap. (If
+  that option is switched off, a short press that drags too far does nothing.)
 - A touch cancelled by the system (a call, the notification shade, losing focus) cancels the
   charge. It never fires it.
 - Block wins over attack: pressing BLOCK cancels an attack in progress, and a new ATTACK press is
@@ -168,6 +169,10 @@ abilities:
 | `ChargedAttackReleased` | `ChargedAttackRequest`: discipline at release, aim (length 0 to 1, screen X right and Y up; zero means the camera's aim) and charge progress (0 to 1) |
 | `AttackCancelled` | None |
 
+Every `ChargeStarted` is followed by exactly one `ChargedAttackReleased` or `AttackCancelled`,
+including when the charge ends because the touch controls were hidden, the app lost focus, or the
+Mage grabbed a ledge (a charge released while hanging or climbing is reported as cancelled).
+
 Until LM-02 handles `ChargedAttackReleased`, a placeholder fires the ability in the charged slot
 (Arcane Bolt), turned sideways by up to 35 degrees by the aim. This keeps the existing spell
 puzzles playable. Turn off **Placeholder Charged Attack** on `PlayerAbilityInput` when the real
@@ -181,8 +186,8 @@ job is enabled:
 
 | Test class | Covers |
 | --- | --- |
-| `FixedJoystickTests` (14) | Activation radius, fixed centre, dead zone, analogue range, release, sprint ring and its hysteresis |
-| `AttackGestureTests` (30) | Tap versus hold, jitter tolerance, drag-to-charge, aim dead zone, sensitivity and limits, charge progress, cancel zone, system cancel, block priority, mouse-button path, merging two sources |
+| `FixedJoystickTests` (15) | Activation radius, fixed centre, dead zone, analogue range, release, sprint ring, its hysteresis, and no sprint for a thumb that lands beyond the ring |
+| `AttackGestureTests` (32) | Tap versus hold, jitter tolerance, drag-to-charge, aim dead zone, sensitivity and limits, charge progress, cancel zone, system cancel, block priority, mouse-button path, merging two sources |
 | `MultiTouchRoutingTests` (24) | Joystick and camera together, camera touches never resetting movement, drags that start on buttons, two- and three-finger use, release order, vanished fingers, focus loss, discipline selection while moving, the fan not intercepting other touches |
 | `DisciplineSelectionTests` (17) | Drag-select, tap-open, every cancellation path, timeout, nearest slot; loadout selection and cycling |
 | `MobileControlsLayoutTests` (14) | The layout on ten safe-area sizes from a small 16:9 phone to a 12.9" tablet: inside the safe area, no overlaps, 48 dp touch areas, ATTACK largest, cancel zone out of aim reach; that the validator catches broken layouts; safe-area insets; desktop bindings for every action |
