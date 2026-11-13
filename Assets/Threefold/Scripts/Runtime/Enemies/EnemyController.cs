@@ -18,7 +18,7 @@ namespace Threefold.Enemies
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Health))]
     [RequireComponent(typeof(NavMeshAgent))]
-    public sealed class EnemyController : MonoBehaviour, IEnemyBody, IRestorable
+    public sealed class EnemyController : MonoBehaviour, IEnemyBody, IRestorable, IHeatReceiver, IForceReceiver
     {
         private const float NavMeshSearchRadius = 2f;
         private const float StandPointSearchRadius = 1.5f;
@@ -86,6 +86,7 @@ namespace Threefold.Enemies
         private Vector3 lookPoint;
         private Vector3 knockbackVelocity;
         private float knockbackRemaining;
+        private HeatCarrier heat;
         private bool restoring;
         private int id;
 
@@ -294,6 +295,9 @@ namespace Threefold.Enemies
             TryPlaceOnNavMesh();
             PrepareTelegraph();
 
+            heat = new HeatCarrier(tuning.heat);
+            heat.Bind(health);
+
             brain = new EnemyBrain(this, tuning, tokens, id);
             brain.Alerted += HandleBrainAlerted;
             brain.StateChanged += HandleBrainStateChanged;
@@ -332,6 +336,7 @@ namespace Threefold.Enemies
             }
 
             ownTokens?.Update(deltaTime);
+            heat?.Tick(deltaTime);
             brain.HealthFraction = Health.Fraction;
             brain.Tick(deltaTime, observation);
 
@@ -558,6 +563,39 @@ namespace Threefold.Enemies
             knockbackRemaining = KnockbackSeconds;
         }
 
+        // ------------------------------------------------------ status effects
+
+        public float HeatFraction => heat != null ? heat.Meter.Fraction : 0f;
+
+        public bool IsBurning => heat != null && heat.Meter.IsBurning;
+
+        /// <summary>Heat from a flame attack. Enemies whose tuning makes them immune refuse it.</summary>
+        public bool ReceiveHeat(float amount, GameObject source)
+        {
+            return heat != null && heat.Receive(amount, source);
+        }
+
+        /// <summary>
+        /// A force push: the enemy slides along its navigation surface, as with a stagger, by the
+        /// distance its resistance leaves. It never leaves the walkable area and needs no Rigidbody.
+        /// </summary>
+        public void ReceiveForce(in ForceImpulse impulse)
+        {
+            if (brain == null || brain.IsDefeated || tuning == null)
+            {
+                return;
+            }
+
+            float distance = impulse.Distance * (1f - Mathf.Clamp01(tuning.pushResistance));
+            if (distance <= 0.01f)
+            {
+                return;
+            }
+
+            Knockback(impulse.Direction, distance);
+            CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.Pushed, health.AimPoint, KnockbackSeconds));
+        }
+
         public bool TryFindStandPoint(Vector3 targetPosition, float minDistance, float maxDistance, bool needsSight,
             out Vector3 point)
         {
@@ -696,7 +734,7 @@ namespace Threefold.Enemies
 
             bool sourceKnown = damage.Source != null;
             Vector3 sourcePosition = sourceKnown ? damage.Source.transform.position : Vector3.zero;
-            brain.TakeDamage(damage.Amount, damage.Direction, sourceKnown, sourcePosition);
+            brain.TakeDamage(damage.Amount, damage.PoiseDamage, damage.Direction, sourceKnown, sourcePosition);
         }
 
         private void HandleDefeated()
@@ -847,6 +885,7 @@ namespace Threefold.Enemies
         private void ResetToHome()
         {
             knockbackRemaining = 0f;
+            heat?.Clear();
             hasLook = false;
             SetCollidersEnabled(true);
 

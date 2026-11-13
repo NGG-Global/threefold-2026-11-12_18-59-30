@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using Threefold.Enemies;
+using Threefold.Magic;
 using UnityEngine;
 
 namespace Threefold.Tests
@@ -301,6 +302,62 @@ namespace Threefold.Tests
 
             RunUntil(() => brain.State != EnemyStateId.Stagger, 2f, Seen(player));
             brain.TakeDamage(60f, Vector3.forward, true, player);
+            Assert.AreNotEqual(EnemyStateId.Stagger, brain.State);
+        }
+
+        [Test]
+        public void AForcefulHitStaggersWithLittleDamage()
+        {
+            // An Aegis strike: 14 damage but 30 stagger. Two of them break the guardian's poise (55).
+            var player = new Vector3(0f, 0f, 2f);
+            EngageGuardianAtCloseRange(player);
+
+            brain.TakeDamage(14f, 30f, Vector3.forward, true, player);
+            Assert.AreNotEqual(EnemyStateId.Stagger, brain.State);
+
+            brain.TakeDamage(14f, 30f, Vector3.forward, true, player);
+            Assert.AreEqual(EnemyStateId.Stagger, brain.State);
+        }
+
+        [Test]
+        public void APreciseHitDoesDamageWithoutStaggering()
+        {
+            // Arcane strikes: the same number of hits with low stagger leave the guardian standing.
+            var player = new Vector3(0f, 0f, 2f);
+            EngageGuardianAtCloseRange(player);
+
+            for (int i = 0; i < 4; i++)
+            {
+                brain.TakeDamage(10f, 6f, Vector3.forward, true, player);
+            }
+
+            Assert.AreNotEqual(EnemyStateId.Stagger, brain.State);
+        }
+
+        [Test]
+        public void AFullForcePulseStaggersAGuardianAtOnce()
+        {
+            var player = new Vector3(0f, 0f, 2f);
+            EngageGuardianAtCloseRange(player);
+
+            ChargedAttackDefaults pulse = DisciplineDefaults.Charged(MagicDiscipline.Aegis);
+            brain.TakeDamage(pulse.Charge.damageMax, pulse.Charge.staggerMax, Vector3.forward, true, player);
+
+            Assert.AreEqual(EnemyStateId.Stagger, brain.State);
+            Assert.AreEqual(1, body.KnockbackCount);
+        }
+
+        [Test]
+        public void BurnDamageWithoutStaggerNeverStaggers()
+        {
+            var player = new Vector3(0f, 0f, 2f);
+            EngageGuardianAtCloseRange(player);
+
+            for (int i = 0; i < 30; i++)
+            {
+                brain.TakeDamage(3f, 0f, Vector3.zero, false, Vector3.zero);
+            }
+
             Assert.AreNotEqual(EnemyStateId.Stagger, brain.State);
         }
 

@@ -1,4 +1,5 @@
 using System;
+using Threefold.Combat;
 using UnityEngine;
 
 namespace Threefold.Enemies
@@ -196,6 +197,14 @@ namespace Threefold.Enemies
         [Tooltip("How far a stagger pushes the enemy back, in metres.")]
         [Min(0f)]
         public float knockbackDistance = 0.5f;
+
+        [Tooltip("Share of a force push (such as the Force Pulse) that this enemy resists. 0 is moved the full " +
+                 "distance; 1 cannot be moved.")]
+        [Range(0f, 1f)]
+        public float pushResistance;
+
+        [Tooltip("How this enemy responds to heat from flame attacks. Set susceptibility to 0 for an enemy that cannot burn.")]
+        public HeatSettings heat = new HeatSettings();
 
         [Header("Attacks")]
         [Tooltip("In order of preference: the first one whose conditions are met is used.")]

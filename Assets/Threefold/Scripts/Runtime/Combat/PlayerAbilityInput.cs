@@ -27,7 +27,10 @@ namespace Threefold.Combat
     }
 
     /// <summary>
-    /// Connects the player's attack gesture to an <see cref="AbilityCaster"/>:
+    /// Announces the player's attack gesture as events and, on a character without disciplines,
+    /// connects it to the slots of an <see cref="AbilityCaster"/>. On the Mage the disciplines'
+    /// attacks are performed by <see cref="Threefold.Magic.DisciplineCombat"/>, which switches the
+    /// slot attacks below off (<see cref="SlotAttacksSuppressed"/>); the events keep working.
     ///
     /// - A tap performs the standard melee attack (the melee slot).
     /// - A charge raises <see cref="ChargeStarted"/>; releasing it raises <see cref="ChargedAttackReleased"/>
@@ -95,6 +98,14 @@ namespace Threefold.Combat
 
         /// <summary>True while the player holds a charge.</summary>
         public bool IsCharging => inputSource != null && inputSource.AttackGesture.IsCharging;
+
+        /// <summary>
+        /// While true, this component only announces the attack gesture through its events and casts
+        /// nothing itself: neither the tap attack from the melee slot nor the placeholder charged
+        /// attack. Set by <see cref="Threefold.Magic.DisciplineCombat"/>, which performs the
+        /// disciplines' attacks instead.
+        /// </summary>
+        public bool SlotAttacksSuppressed { get; set; }
 
         public bool PlaceholderChargedAttack
         {
@@ -194,6 +205,12 @@ namespace Threefold.Combat
                 CloseChargeAsCancelled();
             }
 
+            if (SlotAttacksSuppressed)
+            {
+                bufferedUntil = -1f;
+                return;
+            }
+
             if (gesture.Tapped)
             {
                 bufferedUntil = Time.time + pressBufferSeconds;
@@ -231,7 +248,7 @@ namespace Threefold.Combat
             var request = new ChargedAttackRequest(CurrentDiscipline, gesture.Aim, gesture.ChargeProgress);
             ChargedAttackReleased?.Invoke(request);
 
-            if (placeholderChargedAttack)
+            if (placeholderChargedAttack && !SlotAttacksSuppressed)
             {
                 caster.TryCast(chargedSlot, gesture.Aim.x * maxAimYawDegrees);
             }

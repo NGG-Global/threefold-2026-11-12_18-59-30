@@ -55,6 +55,7 @@ namespace Threefold.Characters
         [SerializeField] private float speedDampTime = 0.08f;
 
         private bool parametersKnown;
+        private System.Collections.Generic.HashSet<int> triggerIds;
         private bool hasSpeed;
         private bool hasGrounded;
         private bool hasVerticalSpeed;
@@ -82,6 +83,7 @@ namespace Threefold.Characters
             animator = visualAnimator;
             caster = abilityCaster;
             parametersKnown = false;
+            triggerIds = null;
 
             if (resubscribe)
             {
@@ -253,6 +255,40 @@ namespace Threefold.Characters
 
                     break;
             }
+        }
+
+        /// <summary>
+        /// Sets a trigger by name if the Animator has it. Used for attack animations named in data:
+        /// a controller without the trigger is simply left alone, with no warning.
+        /// </summary>
+        /// <returns>True if the trigger exists and was set.</returns>
+        public bool TrySetTrigger(string triggerName)
+        {
+            if (string.IsNullOrEmpty(triggerName) || !IsAnimatorReady())
+            {
+                return false;
+            }
+
+            int id = Animator.StringToHash(triggerName);
+            if (triggerIds == null)
+            {
+                triggerIds = new System.Collections.Generic.HashSet<int>();
+                foreach (AnimatorControllerParameter parameter in animator.parameters)
+                {
+                    if (parameter.type == AnimatorControllerParameterType.Trigger)
+                    {
+                        triggerIds.Add(parameter.nameHash);
+                    }
+                }
+            }
+
+            if (!triggerIds.Contains(id))
+            {
+                return false;
+            }
+
+            animator.SetTrigger(id);
+            return true;
         }
 
         private void HandleCastSucceeded(AbilityDefinition ability, AbilityContext context)

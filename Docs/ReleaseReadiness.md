@@ -180,8 +180,14 @@ Install the APK, then check in this order. Stop at the first failure and report 
 - [ ] No control is hidden by a notch or a rounded corner.
 
 **Combat**
-- [ ] A charged attack fires a bolt towards the crosshair; a tap swings the staff.
-- [ ] Bolts hit dummies: flash, number, health bar.
+- [ ] Arcane: taps give three quick strikes at one target; hold and release fires an arrow at the ring.
+- [ ] Flame: wide swings hit several dummies; after a few hits a dummy burns; hold and release sends a wave along the ground.
+- [ ] Aegis: two slow, heavy strikes; hold and release shoves and staggers enemies in the Combat Arena.
+- [ ] The ring (Arcane) or the ground outline (Flame, Aegis) shows where a charged attack will go and follows the drag.
+- [ ] Releasing on the red zone, pressing BLOCK or being hit hard cancels a charge; no mana is spent.
+- [ ] Holding BLOCK shows the guard arc; a hit from the front does far less damage, one from behind does not.
+- [ ] Switching discipline (indicator, or keys 1 to 3) changes the next swing and the charged attack.
+- [ ] Hits on dummies show a flash, a number and a health bar.
 - [ ] Mana falls when attacking and returns when not; with too little, the bar flashes red.
 - [ ] Standing near the crystal restores mana quickly.
 

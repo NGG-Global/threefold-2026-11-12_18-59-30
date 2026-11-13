@@ -24,6 +24,7 @@ namespace Threefold.Combat
         [Tooltip("Which side this belongs to. Projectiles and strikes pass over allies. Neutral objects can be hit by anyone.")]
         [SerializeField] private CombatTeam team = CombatTeam.Neutral;
 
+        private readonly List<IDamageModifier> modifiers = new List<IDamageModifier>(2);
         private bool defeated;
 
         /// <summary>Raised after damage was applied. The amount is what was actually removed.</summary>
@@ -81,6 +82,23 @@ namespace Threefold.Combat
             return other != null && CombatTeams.AreAllied(team, other.team);
         }
 
+        /// <summary>
+        /// Registers something that changes incoming damage, such as a raised guard. Modifiers are
+        /// applied in the order they were added.
+        /// </summary>
+        public void AddModifier(IDamageModifier modifier)
+        {
+            if (modifier != null && !modifiers.Contains(modifier))
+            {
+                modifiers.Add(modifier);
+            }
+        }
+
+        public void RemoveModifier(IDamageModifier modifier)
+        {
+            modifiers.Remove(modifier);
+        }
+
         public void ApplyDamage(in DamageInfo damage)
         {
             if (defeated || invulnerable || damage.Amount <= 0f)
@@ -88,7 +106,18 @@ namespace Threefold.Combat
                 return;
             }
 
-            float removed = pool.Remove(damage.Amount);
+            float amount = damage.Amount;
+            for (int i = 0; i < modifiers.Count && amount > 0f; i++)
+            {
+                amount = modifiers[i].ModifyIncomingDamage(damage, amount);
+            }
+
+            if (amount <= 0f)
+            {
+                return;
+            }
+
+            float removed = pool.Remove(amount);
             if (removed <= 0f)
             {
                 return;
@@ -97,7 +126,7 @@ namespace Threefold.Combat
             bool nowDefeated = pool.IsEmpty;
             defeated = nowDefeated;
 
-            var applied = new DamageInfo(removed, damage.Point, damage.Direction, damage.Source);
+            DamageInfo applied = damage.WithAmount(removed);
             Damaged?.Invoke(applied);
             Changed?.Invoke();
             CombatEvents.RaiseDamageDealt(new DamageEvent(gameObject, damage.Source, removed, damage.Point, nowDefeated));

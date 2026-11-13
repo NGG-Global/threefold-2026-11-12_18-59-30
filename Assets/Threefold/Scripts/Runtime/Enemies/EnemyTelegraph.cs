@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Threefold.Combat;
+using Threefold.CombatFeedback;
 using UnityEngine;
 
 namespace Threefold.Enemies
@@ -22,7 +23,6 @@ namespace Threefold.Enemies
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         private const float StrikeFlashSeconds = 0.15f;
-        private const float SegmentDegrees = 10f;
 
         [Header("Ground area (melee)")]
         [Tooltip("Shows the whole area that will be struck.")]
@@ -112,7 +112,7 @@ namespace Threefold.Enemies
                 Destroy(areaMeshes[attackIndex]);
             }
 
-            areaMeshes[attackIndex] = BuildSector(reach, arcDegrees);
+            areaMeshes[attackIndex] = AimShapes.BuildSector(reach, arcDegrees, "TelegraphArea");
         }
 
         public void Begin(int attackIndex, AttackKind attackKind, float windupSeconds)
@@ -338,44 +338,6 @@ namespace Threefold.Enemies
             {
                 target.enabled = visible;
             }
-        }
-
-        /// <summary>A flat fan facing up, centred on the enemy, pointing forward (+Z).</summary>
-        private static Mesh BuildSector(float reach, float arcDegrees)
-        {
-            arcDegrees = Mathf.Clamp(arcDegrees, 10f, 360f);
-            int segments = Mathf.Max(3, Mathf.CeilToInt(arcDegrees / SegmentDegrees));
-            var vertices = new Vector3[segments + 2];
-            var uvs = new Vector2[segments + 2];
-            var triangles = new int[segments * 3];
-
-            vertices[0] = Vector3.zero;
-            uvs[0] = new Vector2(0.5f, 0.5f);
-            float start = -arcDegrees * 0.5f;
-
-            for (int i = 0; i <= segments; i++)
-            {
-                float radians = (start + arcDegrees * i / segments) * Mathf.Deg2Rad;
-                var direction = new Vector3(Mathf.Sin(radians), 0f, Mathf.Cos(radians));
-                vertices[i + 1] = direction * reach;
-                uvs[i + 1] = new Vector2(0.5f + direction.x * 0.5f, 0.5f + direction.z * 0.5f);
-            }
-
-            // Angles increase clockwise seen from above, so this winding faces upwards.
-            for (int i = 0; i < segments; i++)
-            {
-                triangles[i * 3] = 0;
-                triangles[i * 3 + 1] = i + 1;
-                triangles[i * 3 + 2] = i + 2;
-            }
-
-            var mesh = new Mesh { name = "TelegraphArea" };
-            mesh.vertices = vertices;
-            mesh.uv = uvs;
-            mesh.triangles = triangles;
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
         }
     }
 }

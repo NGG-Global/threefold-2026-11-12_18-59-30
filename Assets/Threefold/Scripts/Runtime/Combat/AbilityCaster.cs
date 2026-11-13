@@ -4,6 +4,48 @@ using UnityEngine;
 
 namespace Threefold.Combat
 {
+    /// <summary>How one use of an ability is aimed and how far it was charged.</summary>
+    public readonly struct CastOptions
+    {
+        /// <summary>How far a charged ability was charged, 0 to 1.</summary>
+        public readonly float Charge;
+
+        /// <summary>Degrees the aim is turned about the vertical axis; positive turns right.</summary>
+        public readonly float AimYawOffset;
+
+        /// <summary>Degrees the aim is raised; negative lowers it.</summary>
+        public readonly float AimPitchOffset;
+
+        /// <summary>True when <see cref="Direction"/> replaces the character's usual aim.</summary>
+        public readonly bool HasDirection;
+
+        public readonly Vector3 Direction;
+
+        private CastOptions(float charge, float yaw, float pitch, bool hasDirection, Vector3 direction)
+        {
+            Charge = charge;
+            AimYawOffset = yaw;
+            AimPitchOffset = pitch;
+            HasDirection = hasDirection;
+            Direction = direction;
+        }
+
+        /// <summary>The character's usual aim, fully charged.</summary>
+        public static CastOptions Default => new CastOptions(1f, 0f, 0f, false, Vector3.zero);
+
+        /// <summary>The character's usual aim, turned and raised by the given angles.</summary>
+        public static CastOptions Aimed(float charge, float yawOffsetDegrees, float pitchOffsetDegrees)
+        {
+            return new CastOptions(charge, yawOffsetDegrees, pitchOffsetDegrees, false, Vector3.zero);
+        }
+
+        /// <summary>A fixed direction, for attacks aimed along the ground.</summary>
+        public static CastOptions Directed(float charge, Vector3 direction)
+        {
+            return new CastOptions(charge, 0f, 0f, true, direction);
+        }
+    }
+
     /// <summary>
     /// Uses abilities on behalf of a character and enforces the shared rules: cooldown, mana cost,
     /// and no casting when defeated. It does not know what any ability does, where input comes
@@ -35,7 +77,9 @@ namespace Threefold.Combat
         [Min(0f)]
         [SerializeField] private float damageMultiplier = 1f;
 
-        private readonly List<float> cooldowns = new List<float>();
+        // Cooldowns are kept per ability, so an ability used directly and from a slot shares one.
+        private readonly List<AbilityDefinition> coolingAbilities = new List<AbilityDefinition>(4);
+        private readonly List<float> coolingRemaining = new List<float>(4);
 
         /// <summary>Raised when an ability was used.</summary>
         public event Action<AbilityDefinition, AbilityContext> CastSucceeded;
@@ -91,7 +135,14 @@ namespace Threefold.Combat
         /// <summary>Seconds until the ability in the slot can be used again.</summary>
         public float GetCooldownRemaining(int slot)
         {
-            return slot >= 0 && slot < cooldowns.Count ? Mathf.Max(0f, cooldowns[slot]) : 0f;
+            return GetCooldownRemaining(GetAbility(slot));
+        }
+
+        /// <summary>Seconds until the ability can be used again.</summary>
+        public float GetCooldownRemaining(AbilityDefinition ability)
+        {
+            int index = ability != null ? coolingAbilities.IndexOf(ability) : -1;
+            return index >= 0 ? Mathf.Max(0f, coolingRemaining[index]) : 0f;
         }
 
         /// <summary>True if the ability in the slot is off cooldown, whatever its mana cost.</summary>
@@ -103,7 +154,7 @@ namespace Threefold.Combat
         /// <summary>Tries to use the ability in the given slot.</summary>
         public CastResult TryCast(int slot)
         {
-            return TryCast(slot, 0f);
+            return TryCast(GetAbility(slot), CastOptions.Default);
         }
 
         /// <summary>
@@ -112,7 +163,39 @@ namespace Threefold.Combat
         /// </summary>
         public CastResult TryCast(int slot, float aimYawOffsetDegrees)
         {
-            AbilityDefinition ability = GetAbility(slot);
+            return TryCast(GetAbility(slot), CastOptions.Aimed(1f, aimYawOffsetDegrees, 0f));
+        }
+
+        /// <summary>
+        /// Whether the ability could be used right now, without using it and without any feedback:
+        /// the caster is alive, the ability is off cooldown and its mana cost can be paid.
+        /// </summary>
+        public CastResult CheckCast(AbilityDefinition ability)
+        {
+            if (ability == null)
+            {
+                return CastResult.NoAbility;
+            }
+
+            if (health != null && !health.IsAlive)
+            {
+                return CastResult.CasterDefeated;
+            }
+
+            if (GetCooldownRemaining(ability) > 0f)
+            {
+                return CastResult.OnCooldown;
+            }
+
+            return mana != null && !mana.CanAfford(ability.ManaCost) ? CastResult.NotEnoughMana : CastResult.Success;
+        }
+
+        /// <summary>
+        /// Tries to use an ability that need not be in a slot, such as the charged attack of the
+        /// selected discipline. The same rules apply: alive, off cooldown, mana paid.
+        /// </summary>
+        public CastResult TryCast(AbilityDefinition ability, in CastOptions options)
+        {
             if (ability == null)
             {
                 return CastResult.NoAbility;
@@ -123,7 +206,7 @@ namespace Threefold.Combat
                 return Fail(ability, CastResult.CasterDefeated);
             }
 
-            if (GetCooldownRemaining(slot) > 0f)
+            if (GetCooldownRemaining(ability) > 0f)
             {
                 return Fail(ability, CastResult.OnCooldown);
             }
@@ -133,29 +216,64 @@ namespace Threefold.Combat
                 return Fail(ability, CastResult.NotEnoughMana);
             }
 
-            AbilityContext context = BuildContext(aimYawOffsetDegrees);
+            AbilityContext context = BuildContext(options);
             ability.Execute(context);
-
-            while (cooldowns.Count <= slot)
-            {
-                cooldowns.Add(0f);
-            }
-
-            cooldowns[slot] = ability.Cooldown;
+            StartCooldown(ability);
             CastSucceeded?.Invoke(ability, context);
             return CastResult.Success;
+        }
+
+        /// <summary>
+        /// Where a use of an ability with these options would start and go, without using it. Used to
+        /// show the aim while a charge is held.
+        /// </summary>
+        public AbilityContext PreviewContext(in CastOptions options)
+        {
+            return BuildContext(options);
+        }
+
+        /// <summary>
+        /// Announces that an ability was refused before it was even tried, for example a charge that
+        /// cannot be paid for, so the same feedback plays as for a failed cast.
+        /// </summary>
+        public void ReportRefusal(AbilityDefinition ability, CastResult reason)
+        {
+            if (reason != CastResult.Success)
+            {
+                CastFailed?.Invoke(ability, reason);
+            }
         }
 
         /// <summary>Advances cooldowns by the given time. Called every frame; public so it can be tested.</summary>
         public void Tick(float deltaTime)
         {
-            for (int i = 0; i < cooldowns.Count; i++)
+            for (int i = coolingRemaining.Count - 1; i >= 0; i--)
             {
-                if (cooldowns[i] > 0f)
+                coolingRemaining[i] -= deltaTime;
+                if (coolingRemaining[i] <= 0f)
                 {
-                    cooldowns[i] -= deltaTime;
+                    coolingAbilities.RemoveAt(i);
+                    coolingRemaining.RemoveAt(i);
                 }
             }
+        }
+
+        private void StartCooldown(AbilityDefinition ability)
+        {
+            if (ability.Cooldown <= 0f)
+            {
+                return;
+            }
+
+            int index = coolingAbilities.IndexOf(ability);
+            if (index >= 0)
+            {
+                coolingRemaining[index] = ability.Cooldown;
+                return;
+            }
+
+            coolingAbilities.Add(ability);
+            coolingRemaining.Add(ability.Cooldown);
         }
 
         private void Update()
@@ -169,9 +287,16 @@ namespace Threefold.Combat
             return reason;
         }
 
-        private AbilityContext BuildContext(float yawOffsetDegrees)
+        private AbilityContext BuildContext(in CastOptions options)
         {
             Vector3 origin = castPoint != null ? castPoint.position : transform.TransformPoint(castOffset);
+
+            if (options.HasDirection && options.Direction.sqrMagnitude > 0.0001f)
+            {
+                Vector3 fixedDirection = options.Direction.normalized;
+                return new AbilityContext(gameObject, origin, origin + fixedDirection * 50f, fixedDirection,
+                    damageMultiplier, options.Charge);
+            }
 
             Vector3 point;
             Vector3 direction;
@@ -187,16 +312,15 @@ namespace Threefold.Combat
                 point = origin + direction * 50f;
             }
 
-            if (Mathf.Abs(yawOffsetDegrees) > 0.01f)
+            if (Mathf.Abs(options.AimYawOffset) > 0.01f || Mathf.Abs(options.AimPitchOffset) > 0.01f)
             {
                 // Turning about the origin keeps the distance to the aim point.
-                Quaternion turn = Quaternion.AngleAxis(yawOffsetDegrees, Vector3.up);
                 float distance = Vector3.Distance(origin, point);
-                direction = turn * direction;
+                direction = ChargedAim.ApplyOffsets(direction, options.AimYawOffset, options.AimPitchOffset);
                 point = origin + direction * distance;
             }
 
-            return new AbilityContext(gameObject, origin, point, direction, damageMultiplier);
+            return new AbilityContext(gameObject, origin, point, direction, damageMultiplier, options.Charge);
         }
     }
 }

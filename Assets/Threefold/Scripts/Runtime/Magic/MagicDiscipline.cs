@@ -34,14 +34,15 @@ namespace Threefold.Magic
     /// The disciplines and their presentation. Three entries today; the selector and the loadout
     /// work with any count, so a fourth is added here without changing them.
     ///
-    /// The colours are a proposal drawn from the Art Bible's palette families (slate blue,
-    /// weathered terracotta and amber, gold accent); they are not approved swatches.
+    /// The colours are a proposal drawn from the Art Bible's palette families (a cool blue-violet
+    /// for Arcane, weathered terracotta and amber for Flame, a gold accent for Aegis); they are not
+    /// approved swatches. Discipline assets, once generated, carry their own colour and icon.
     /// </summary>
     public static class DisciplineCatalog
     {
         private static readonly DisciplineInfo[] Entries =
         {
-            new DisciplineInfo("Arcane", new Color(0.58f, 0.72f, 1f, 1f), ProceduralShape.Star),
+            new DisciplineInfo("Arcane", new Color(0.62f, 0.64f, 1f, 1f), ProceduralShape.Star),
             new DisciplineInfo("Flame", new Color(1f, 0.56f, 0.27f, 1f), ProceduralShape.Flame),
             new DisciplineInfo("Aegis", new Color(0.96f, 0.84f, 0.46f, 1f), ProceduralShape.Hexagon),
         };

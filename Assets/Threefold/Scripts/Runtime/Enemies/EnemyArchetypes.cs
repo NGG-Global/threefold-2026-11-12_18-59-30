@@ -1,3 +1,5 @@
+using Threefold.Combat;
+
 namespace Threefold.Enemies
 {
     /// <summary>
@@ -51,6 +53,10 @@ namespace Threefold.Enemies
                 staggerSeconds = 1.3f,
                 staggerImmunitySeconds = 2.5f,
                 knockbackDistance = 0.4f,
+
+                // Heavy stone: hard to shove, slow to heat.
+                pushResistance = 0.6f,
+                heat = new HeatSettings { susceptibility = 0.6f },
                 attacks = new[]
                 {
                     new EnemyAttackProfile
@@ -123,6 +129,10 @@ namespace Threefold.Enemies
                 staggerSeconds = 0.45f,
                 staggerImmunitySeconds = 1f,
                 knockbackDistance = 1.2f,
+
+                // Light and airborne: thrown the full distance, and quick to catch fire.
+                pushResistance = 0f,
+                heat = new HeatSettings { susceptibility = 1.3f },
                 attacks = new[]
                 {
                     new EnemyAttackProfile

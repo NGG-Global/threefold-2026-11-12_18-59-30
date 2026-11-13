@@ -53,7 +53,11 @@ The Mage has 100 health: five Slams, or nine Motes.
 8. **Hit reactions.** Every hit flashes the enemy and shows a number. Enough damage in quick
    succession staggers it (Guardian: 55 within a short time; Wisp: any hit): it is pushed back, its
    attack is cancelled, and for a short time it cannot be staggered again, so it cannot be locked
-   in place by constant fire.
+   in place by constant fire. Since Sprint LM-02 a hit carries a stagger value apart from its
+   damage, so the Mage's Aegis strikes stagger far sooner than their damage suggests. Enemies can
+   also be heated and set alight by Flame, and pushed by the Force Pulse along their navigation
+   surface (Guardian: resists 60% of a push and heats slowly; Wisp: thrown the full distance and
+   heats quickly). See `Docs/Disciplines.md`.
 9. **Defeat.** The enemy stops, stops blocking movement and shots, bursts, and sinks (Guardian) or
    fades (Wisp). It stays down until the level restarts.
 

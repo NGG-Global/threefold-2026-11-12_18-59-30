@@ -5,8 +5,8 @@ namespace Threefold.Combat
 {
     /// <summary>
     /// The kind of magic a spell carries. World objects such as magical activators respond only to
-    /// the kinds they are tuned to. Arcane is the only kind any spell uses today; the others are
-    /// reserved for later spells and can be selected on activators already.
+    /// the kinds they are tuned to. The three disciplines use Arcane, Fire and Force; Frost is
+    /// reserved for a later spell and can be selected on activators already.
     /// </summary>
     [Flags]
     public enum SpellElement
@@ -15,6 +15,9 @@ namespace Threefold.Combat
         Arcane = 1 << 0,
         Fire = 1 << 1,
         Frost = 1 << 2,
+
+        /// <summary>Raw force: the Aegis discipline's pulse.</summary>
+        Force = 1 << 3,
     }
 
     public static class SpellElements

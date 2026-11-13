@@ -199,6 +199,16 @@ namespace Threefold.Enemies
         /// <param name="sourcePosition">The attacker's position, if known.</param>
         public void TakeDamage(float amount, Vector3 direction, bool sourceKnown, Vector3 sourcePosition)
         {
+            TakeDamage(amount, amount, direction, sourceKnown, sourcePosition);
+        }
+
+        /// <summary>
+        /// Damage was taken, with its stagger given apart from the amount: a forceful hit can break an
+        /// enemy's poise while doing little damage, and a precise one the other way round.
+        /// </summary>
+        /// <param name="poiseDamage">How hard the hit pushes towards a stagger.</param>
+        public void TakeDamage(float amount, float poiseDamage, Vector3 direction, bool sourceKnown, Vector3 sourcePosition)
+        {
             if (IsDefeated)
             {
                 return;
@@ -223,7 +233,7 @@ namespace Threefold.Enemies
             bool wasEngaged = IsEngaged;
             Awareness.Fill();
 
-            if (Poise.Absorb(amount))
+            if (Poise.Absorb(poiseDamage))
             {
                 StaggerDirection = direction;
                 if (!wasEngaged)

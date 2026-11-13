@@ -173,11 +173,12 @@ Every `ChargeStarted` is followed by exactly one `ChargedAttackReleased` or `Att
 including when the charge ends because the touch controls were hidden, the app lost focus, or the
 Mage grabbed a ledge (a charge released while hanging or climbing is reported as cancelled).
 
-Until LM-02 handles `ChargedAttackReleased`, a placeholder fires the ability in the charged slot
-(Arcane Bolt), turned sideways by up to 35 degrees by the aim. This keeps the existing spell
-puzzles playable. Turn off **Placeholder Charged Attack** on `PlayerAbilityInput` when the real
-abilities are connected. `PlayerGuard` raises `BlockStarted` and `BlockEnded` for the Aegis or
-block behaviour.
+Sprint LM-02 connected the disciplines (`Docs/Disciplines.md`). On a Mage that has
+`DisciplineCombat`, taps and charged releases are performed by the selected discipline, and the
+Staff Strike and the placeholder bolt of this sprint are switched off; the events above still
+fire. In a scene where the discipline setup has not been run, the placeholder remains: a tap is
+the Staff Strike and a charged release fires the Arcane Bolt, turned sideways by up to 35 degrees
+by the aim.
 
 ## Tests
 
@@ -204,12 +205,9 @@ runs), and feel.
 
 - Not yet compiled by Unity, run in the Editor, or played on a device. Device testing has not
   been done.
-- Block has input semantics and events only. It does not reduce damage or slow movement yet.
-- The charged attack is a placeholder (Arcane Bolt) whatever the discipline. Aim turns it sideways
-  only; the vertical aim component is reported but unused.
-- The Staff Strike lands where the Mage's body faces. There is no melee target snapping yet.
-- Holding the attack control no longer fires repeatedly; holding now charges. This changes how the
-  Arcane Bolt is used on every device.
+- What the attacks and the block do is described in `Docs/Disciplines.md` (Sprint LM-02). The
+  charge ring on ATTACK fills in the time the selected discipline's charged attack needs.
+- Holding the attack control no longer fires repeatedly; holding now charges.
 - A tap is recognised when the finger lifts, so the melee strike starts as the finger lifts rather
   than when it lands. This is what keeps taps and charges apart.
 - The selector can still be opened with a third finger during a charge; the fan and the cancel

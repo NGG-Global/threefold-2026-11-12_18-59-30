@@ -10,9 +10,11 @@ of Sprint 2, which are in the same unverified state.
 ## What the player can do
 
 - Attack with the **left mouse button** (after the click that captures the mouse), the gamepad's
-  west button, or the on-screen **attack button**. Since Sprint LM-01 a tap is a melee Staff
-  Strike and Arcane Bolt is fired by holding to charge and releasing; holding no longer fires
-  repeatedly. See `Docs/TouchControls.md`.
+  west button, or the on-screen **attack button**. Since Sprint LM-02 a tap swings the selected
+  discipline's melee combo, and holding and releasing fires its charged attack (Arcane Arrow,
+  Flame Wave or Force Pulse). See `Docs/Disciplines.md`. The Arcane Bolt described below is no
+  longer the Mage's attack once the disciplines are set up; its systems (health, mana, the
+  caster, projectiles, the HUD and the feedback) are what the disciplines are built on.
 - Aim with the camera. The bolt goes to whatever is under the crosshair in the middle of the
   screen. A target close to the crosshair is aimed at automatically, which makes aiming with a
   thumb forgiving.
