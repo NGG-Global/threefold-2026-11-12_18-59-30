@@ -24,7 +24,7 @@ namespace Threefold.EditorTools
     {
         public const string Folder = "Assets/Threefold/Generated/Environment";
         private const string MeshFolder = Folder + "/Meshes";
-        private const string MaterialFolder = Folder + "/Materials";
+        internal const string MaterialFolder = Folder + "/Materials";
         private const string TextureFolder = Folder + "/Textures";
         private const string PrefabFolder = Folder + "/Prefabs";
 

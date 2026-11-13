@@ -37,14 +37,21 @@ separates approved decisions from proposals; do not present a proposal as decide
 - Every new file and folder under `Assets/` needs a `.meta` file with a new unique GUID, committed
   in the same change. Reuse the existing `.meta` for a folder that another open branch also creates.
 - Avoid namespaces that shadow Unity types: use `Threefold.InputHandling`, `Threefold.Cameras`,
-  `Threefold.Characters`, `Threefold.Enemies`, `Threefold.EditorTools`, not `Threefold.Input`,
-  `.Camera`, `.AI` or `.Editor`.
+  `Threefold.Characters`, `Threefold.Enemies`, `Threefold.VisualStyle`, `Threefold.EditorTools`,
+  not `Threefold.Input`, `.Camera`, `.AI` or `.Editor`.
 - Runtime code goes in a runtime assembly, Editor-only code in an Editor assembly (`.asmdef`).
 - `Assets/Threefold/Generated/` holds assets produced by the setup commands on the laptop (prefabs,
   materials, spell assets). Never author or edit those files here; change the generating code instead.
 - Gameplay code reads input through `CharacterInputSource`, never from a device directly.
 - Enemy decisions live in plain C# (`EnemyBrain`, `EnemyStates`, `EnemyRules`) that never touches a
   Unity object, so they can be tested outside Unity. Keep it that way; see `Docs/EnemyAI.md`.
+- The visual style (`Docs/VisualStyle.md`) is a proposal until the owner has reviewed it in Unity
+  and on a device. Its shader is `Assets/Threefold/Shaders/IllustratedLit.shader`. The shader's
+  arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change
+  both together. Style rules (palette, textures, presets) stay in plain C# with no Unity engine
+  calls, so they can be tested and previewed here (`Tools/visualstyle/render_previews.sh`).
+- Project rendering settings (`Assets/Settings`, `ProjectSettings`) are not changed by tooling
+  without showing the owner what was found and what would change.
 - No paid assets and no new packages without the owner's agreement.
 
 ## Before opening a pull request
@@ -52,6 +59,9 @@ separates approved decisions from proposals; do not present a proposal as decide
 1. Run `python3 Tools/ci/check_unity_repo.py`. It must report no errors.
 2. Run `Tools/ci/compile_check.sh`. It compiles all Threefold assemblies against the real Unity
    assemblies without running Unity (needs the .NET 8 SDK; the first run downloads about 4 GB).
-   It must pass. Passing proves compilation only, never runtime behaviour.
+   It must pass. Passing proves compilation only, never runtime behaviour. Its last step checks
+   the shaders with `Tools/ci/shader_check.py` (needs the `glslang-tools` package; skipped with a
+   notice if it is missing). That check uses a different compiler from Unity's: it finds errors
+   in the shader source, and does not prove that Unity accepts the shader.
 3. Use a separate branch per change and open a pull request against `main`. Do not merge it.
 4. Fill in the pull request template, including the "Laptop actions required" section.

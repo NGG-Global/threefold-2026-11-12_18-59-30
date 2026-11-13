@@ -24,6 +24,9 @@ namespace Threefold.EditorTools
     /// training dummies and anything added by hand are left alone.
     ///
     /// The arch at the south gate is a portal to the combat arena (Threefold > Setup > Combat Arena).
+    ///
+    /// The level is finished in the project's visual style (Threefold > Visual Style), which can be
+    /// removed and applied again from that menu to compare the two looks.
     /// </summary>
     public static class FantasyPlaygroundSetup
     {
@@ -45,6 +48,10 @@ namespace Threefold.EditorTools
         private const float TerraceHeight = 1.6f;
 
         private static readonly Vector3 SpawnPosition = new Vector3(0f, 0f, -12f);
+
+        /// <summary>Where the visual style's wood, cloth and metal props stand: x 4.0 to 11.2, z 9.4 to 10.6.</summary>
+        internal static readonly VisualStyleSetup.PropPlacement StylePropPlacement =
+            new VisualStyleSetup.PropPlacement { Position = new Vector3(7.4f, 0f, 9.9f), Yaw = 0f };
 
         [MenuItem(MenuPath, false, 3)]
         public static void Run()
@@ -206,6 +213,13 @@ namespace Threefold.EditorTools
 
             EnablePostProcessing(scene, report);
             AddToBuildSettings(ScenePath, true, report);
+
+            // The art direction: painted materials, soft lighting and the Mage's contour line. It
+            // is applied last, so the puzzle's stonework is painted as well. The props stand in a
+            // row against the front of the terrace, east of the stair: straight ahead from the
+            // starting point, and clear of the open ground, the jump course and the puzzle.
+            VisualStyleSetup.ApplyDuringSetup(scene, report, StylePropPlacement);
+
             MagePrototypeSetup.AppendValidation(scene, report);
 
             AssetDatabase.SaveAssets();
@@ -764,15 +778,41 @@ namespace Threefold.EditorTools
 
             Light sun = sunObject.AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.color = new Color(1f, 0.87f, 0.7f);
-            sun.intensity = 1.35f;
-            sun.shadows = LightShadows.Soft;
+            ApplyGreyBoxLighting(sun, assets.SkyboxMaterial);
 
-            RenderSettings.sun = sun;
-
-            if (assets.SkyboxMaterial != null)
+            VolumeProfile profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostProcessingProfilePath);
+            if (profile == null)
             {
-                RenderSettings.skybox = assets.SkyboxMaterial;
+                report.AppendLine($"WARNING: '{PostProcessingProfilePath}' was not found, so no post-processing was added.");
+                return;
+            }
+
+            var volumeObject = new GameObject("Global Volume");
+            volumeObject.transform.SetParent(parent, false);
+            Volume volume = volumeObject.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.sharedProfile = profile;
+        }
+
+        /// <summary>
+        /// The lighting the level had before the visual style existed. The style replaces it
+        /// (Threefold > Visual Style), and this puts it back when the style is removed.
+        /// </summary>
+        internal static void ApplyGreyBoxLighting(Light sun, Material skybox)
+        {
+            if (sun != null)
+            {
+                sun.transform.rotation = Quaternion.Euler(36f, -38f, 0f);
+                sun.color = new Color(1f, 0.87f, 0.7f);
+                sun.intensity = 1.35f;
+                sun.shadowStrength = 1f;
+                sun.shadows = LightShadows.Soft;
+                RenderSettings.sun = sun;
+            }
+
+            if (skybox != null)
+            {
+                RenderSettings.skybox = skybox;
             }
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -787,19 +827,6 @@ namespace Threefold.EditorTools
             RenderSettings.fogEndDistance = 390f;
 
             DynamicGI.UpdateEnvironment();
-
-            VolumeProfile profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostProcessingProfilePath);
-            if (profile == null)
-            {
-                report.AppendLine($"WARNING: '{PostProcessingProfilePath}' was not found, so no post-processing was added.");
-                return;
-            }
-
-            var volumeObject = new GameObject("Global Volume");
-            volumeObject.transform.SetParent(parent, false);
-            Volume volume = volumeObject.AddComponent<Volume>();
-            volume.isGlobal = true;
-            volume.sharedProfile = profile;
         }
 
         /// <summary>Lets the camera show the bloom and tone mapping of the global volume.</summary>

@@ -206,6 +206,7 @@ namespace Threefold.EditorTools
             }
 
             ValidateEnemies(scene, mage, Problem);
+            VisualStyleSetup.Validate(scene, Problem);
             return count;
         }
 

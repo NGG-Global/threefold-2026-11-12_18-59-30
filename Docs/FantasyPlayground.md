@@ -24,9 +24,16 @@ saves the scene, and puts it first in Build Settings so a device build starts th
 The command also builds the Sealed Gateway puzzle (`Docs/Puzzles.md`). The puzzle has its own
 root object, `SealedGateway Puzzle`, which is never deleted by a rebuild of the environment.
 
+Since Sprint 11 the command also applies the visual style (`Docs/VisualStyle.md`): painted
+materials in place of the grey-box ones, the style's lighting, the Mage's contour line, a short
+row of props in wood, cloth and metal against the front of the terrace, and a test panel for
+switching quality, lines and lighting. **Threefold > Visual Style > Remove From Open Scene** puts
+the grey-box look back; the description below is of that grey-box level, which the style builds on.
+
 Afterwards, upload the new files from the laptop (see `Docs/DevelopmentWorkflow.md`): the scene,
 `Assets/Threefold/Generated/Environment`, `Assets/Threefold/Generated/Combat`,
-`Assets/Threefold/Generated/Puzzles`, and the changed `ProjectSettings/EditorBuildSettings.asset`.
+`Assets/Threefold/Generated/Puzzles`, `Assets/Threefold/Generated/VisualStyle`, and the changed
+`ProjectSettings/EditorBuildSettings.asset`.
 
 ### Running it again
 
@@ -124,6 +131,9 @@ Estimates from the generating code, not measurements:
 Post-processing (bloom, tone mapping, vignette from the template's `SampleSceneProfile`) is
 switched on for the camera. It has a cost on phones. To compare, untick **Post Processing** on
 the `Main Camera`.
+
+With the visual style applied, post-processing follows the quality level instead: it is off at
+Low and Medium and on at High. The style's own costs are listed in `Docs/VisualStyle.md`.
 
 ## Tests
 

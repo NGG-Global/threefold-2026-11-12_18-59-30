@@ -114,6 +114,9 @@ the Mage, the HUD and anything added by hand are kept. To return to the default 
 delete the `ArenaEnemies` object and run it again. Generated assets are kept once they exist; to
 regenerate them with default values, delete the whole `Generated/Enemies` folder.
 
+Since Sprint 11 the command also applies the visual style to the arena's stonework, ground and
+lighting (`Docs/VisualStyle.md`). The enemies keep their own materials and are not outlined.
+
 The Android build workflow now assembles both scenes and builds them into one APK that starts
 in the playground.
 
