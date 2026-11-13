@@ -31,7 +31,7 @@ namespace Threefold.TouchControls
             lastPosition = screenPosition;
         }
 
-        protected override void OnPointerEnded()
+        protected override void OnPointerEnded(bool cancelled)
         {
             pendingDelta = Vector2.zero;
         }

@@ -27,6 +27,7 @@ namespace Threefold.TouchControls
         [SerializeField] private float hitPadding = 10f;
 
         private int pressedFrame = -1;
+        private int releasedFrame = -1;
         private bool highlighted;
 
         /// <summary>True while a finger holds the button.</summary>
@@ -34,6 +35,16 @@ namespace Threefold.TouchControls
 
         /// <summary>True only during the frame in which the button was pressed.</summary>
         public bool WasPressedThisFrame => pressedFrame == Time.frameCount;
+
+        /// <summary>True only during the frame in which the finger lifted or was cancelled.</summary>
+        public bool WasReleasedThisFrame => releasedFrame == Time.frameCount;
+
+        /// <summary>Extra touchable margin around the button, in canvas units.</summary>
+        public float HitPadding
+        {
+            get => hitPadding;
+            set => hitPadding = Mathf.Max(0f, value);
+        }
 
         /// <summary>Shows the button as switched on, for buttons that act as a toggle.</summary>
         public bool Highlighted
@@ -58,19 +69,10 @@ namespace Threefold.TouchControls
             RefreshVisuals();
         }
 
+        /// <summary>The button is round: it responds within its circle plus the padding.</summary>
         public override bool Contains(Vector2 screenPosition)
         {
-            if (hitPadding <= 0f)
-            {
-                return base.Contains(screenPosition);
-            }
-
-            Rect rect = Region.rect;
-            rect.xMin -= hitPadding;
-            rect.yMin -= hitPadding;
-            rect.xMax += hitPadding;
-            rect.yMax += hitPadding;
-            return rect.Contains(ToLocal(screenPosition));
+            return CircleContains(screenPosition, hitPadding);
         }
 
         private void OnEnable()
@@ -88,8 +90,9 @@ namespace Threefold.TouchControls
         {
         }
 
-        protected override void OnPointerEnded()
+        protected override void OnPointerEnded(bool cancelled)
         {
+            releasedFrame = Time.frameCount;
             RefreshVisuals();
         }
 

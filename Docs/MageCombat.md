@@ -10,7 +10,9 @@ of Sprint 2, which are in the same unverified state.
 ## What the player can do
 
 - Attack with the **left mouse button** (after the click that captures the mouse), the gamepad's
-  west button, or the on-screen **attack button**. Holding the control keeps firing.
+  west button, or the on-screen **attack button**. Since Sprint LM-01 a tap is a melee Staff
+  Strike and Arcane Bolt is fired by holding to charge and releasing; holding no longer fires
+  repeatedly. See `Docs/TouchControls.md`.
 - Aim with the camera. The bolt goes to whatever is under the crosshair in the middle of the
   screen. A target close to the crosshair is aimed at automatically, which makes aiming with a
   thumb forgiving.

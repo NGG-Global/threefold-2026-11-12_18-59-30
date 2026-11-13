@@ -1,110 +1,220 @@
-# Touch controls
+# Mobile controls
 
-Sprint 2 adds an on-screen control scheme for Android: a floating joystick for movement, a
-drag area for the camera, and jump and sprint buttons. Keyboard, mouse and gamepad keep working.
+Sprint LM-01 (Living Magic, part 1) replaces the first touch layout with a control scheme built
+for simultaneous movement, camera, melee, blocking, jumping, discipline selection and charged
+attacks. Keyboard, mouse and gamepad provide the same actions for testing.
 
-**Status:** the code has passed a syntax check and the repository checks only. It has not been
-compiled in Unity and has not run on an Android device.
+**Status:** the code compiles against the Unity 6000.6.0f1 assemblies, and the input rules pass
+102 automated tests that run outside Unity (see Tests). Nothing has been run inside the Unity
+Editor or on an Android device. Feel values (thresholds, radii, sensitivities) are first
+estimates and need tuning on a device.
 
-## Layout
+![Layout on a phone](TouchControls/images/layout_phone.png)
+
+The pictures (also `TouchControls/images/layout_tablet.png`) are drawn by
+`Tools/touchcontrols/render_layout.sh` from the same numbers the setup command uses. They are
+diagrams, not screenshots.
+
+## What the player does
 
 | Control | Where | Behaviour |
 | --- | --- | --- |
-| Joystick | Left 42% of the screen, lower 80% | Appears under the thumb where it first touches. Follows the thumb if it drifts beyond the stick's travel. Returns to its resting place on release |
-| Camera | Right 58% of the screen | Drag to orbit. No visuals |
-| Jump | Bottom right | Hold for a full jump, tap for a short one |
-| Sprint | Left of Jump | Tap to start sprinting; tap again or release the joystick to stop |
-| Interact | Above Sprint, left of Attack | Shown only while something can be used, labelled with what it does ("Open"). Tap to use it. See `Docs/Puzzles.md` |
+| Joystick | Fixed, bottom left | Takes a touch only within 105 dp of its centre; touches elsewhere never move or activate it. Analogue movement with a dead zone. Push outward past the ring to sprint (a thumb that lands beyond the ring runs, and sprints only after crossing it outward); easing below 60% travel or lifting the thumb ends the sprint |
+| Camera | Any free part of the screen | Drag to orbit horizontally and vertically. A drag that starts on a button never turns the camera |
+| ATTACK | Bottom right, largest | Tap: standard melee strike. Hold about 0.22 s: charge (a ring fills). Drag while charging: aim. Release: fire the charged attack. Release over the red cancel zone that appears above the thumb: cancel |
+| Discipline indicator | On the upper-right rim of ATTACK | Shows the selected discipline. Press and drag onto Arcane, Flame or Aegis, then lift; or tap it and then tap a slot. The selected discipline is also shown on ATTACK |
+| BLOCK | Up and left of ATTACK | Press, hold to keep blocking, release. Pressing BLOCK cancels an attack press or charge without firing it |
+| JUMP | Left of ATTACK | Hold for a full jump, tap for a short one, as before |
+| Interact | Above BLOCK | Appears only when something can be used, labelled with what it does |
 
-Sprint is a toggle so that the right thumb stays free for the camera while sprinting. It can be
-changed to hold-to-sprint on the `TouchControls` object (Sprint Mode).
+There is no permanent spell bar: the three disciplines live in a fan that is visible only while
+choosing.
 
-Each finger belongs to the control it first touched until it lifts, so the joystick, the camera
-and a button can be used at the same time.
+### States of the ATTACK button
+
+| State | What the player sees |
+| --- | --- |
+| Pressed | The button shrinks slightly and brightens |
+| Charging | A ring fills around the button in the discipline's colour; the cancel zone appears above the thumb |
+| Aiming | A marker inside a thin aim ring shows the direction and strength of the drag |
+| Cancel armed | The cancel zone turns red and grows; the charge ring greys out |
+| Released | A short flash: white for a tap, the discipline's colour for a charged release |
+| Cancelled | A short red flash |
+
+### Rules that keep inputs from contradicting each other
+
+- Each finger belongs to the control it first touched until it lifts. Lifting one finger never
+  ends another finger's action.
+- A tap (released before the threshold, without dragging more than 14 dp) is never a charge. Once
+  a charge has started, releasing it is never a tap. Dragging further than 14 dp before the
+  threshold starts the charge at once, so a quick drag to aim is not mistaken for a tap. (If
+  that option is switched off, a short press that drags too far does nothing.)
+- A touch cancelled by the system (a call, the notification shade, losing focus) cancels the
+  charge. It never fires it.
+- Block wins over attack: pressing BLOCK cancels an attack in progress, and a new ATTACK press is
+  ignored while BLOCK is held. Jumping and moving are allowed during a charge and a block.
+- The open discipline fan takes a touch only on its slots. A touch elsewhere (camera, buttons)
+  closes it without changing the discipline and still does what it normally does. The joystick
+  thumb is excluded, so a discipline can be chosen while moving.
+
+### Keyboard, mouse and gamepad
+
+| Action | Keyboard and mouse | Gamepad |
+| --- | --- | --- |
+| Move | WASD or arrow keys | Left stick |
+| Camera | Mouse (click the Game view to capture it, Esc to release) | Right stick |
+| Attack | Left click: tap to strike, hold to charge, release to fire; the camera aims | West button |
+| Block | Right mouse button or Q | Left trigger |
+| Jump | Space | South button |
+| Sprint | Left Shift | Left stick press |
+| Disciplines | 1 Arcane, 2 Flame, 3 Aegis | D-pad left and right |
+| Interact | E | North button |
+
+Block and the discipline actions were added to `Assets/InputSystem_Actions.inputactions`. Keys 1
+and 2 were moved from the template's unused Previous and Next actions to the discipline actions,
+so a number key never both selects and steps. If an actions asset lacks these actions, the same
+bindings are created in code.
 
 ## Set up
 
 1. Pull `main` (or the pull request branch) on the laptop and let Unity import. The Console must show no red errors.
-2. Run **Threefold > Setup > Mage Prototype**. It now also creates the touch controls. In a scene that already has the Mage, **Threefold > Setup > Touch Controls** adds only the touch part.
-3. Save the scene.
+2. Open the scene and run **Threefold > Setup > Mage Prototype** (or **Threefold > Setup > Touch Controls** in a scene that already has the Mage). Then run **Threefold > Setup > Combat** if it is not part of the scene command you used, so the Staff Strike is generated.
+3. Read the report. Save the scene.
+4. Upload the new file `Assets/Threefold/Generated/Combat/StaffStrike.asset` with the scene (see `Docs/DevelopmentWorkflow.md`).
 
-The command builds the whole `TouchControls` hierarchy and connects every reference. Nothing
-needs to be created or wired by hand. If touch controls already exist they are left untouched;
-to rebuild them with the default layout, delete the `TouchControls` object and run the command again.
+### Scenes built with the earlier layout
 
-One existing reference is changed on purpose: the Mage's movement script and the camera are
-pointed at a new `CombinedCharacterInput`, which merges the desktop input with the touch input.
+The command upgrades existing touch controls in place, once. It changes a part only if that part
+still has its earlier default, so anything moved by hand is kept and reported:
+
+| Earlier | After the upgrade |
+| --- | --- |
+| Camera area on the right 58% of the screen | Whole screen, under the buttons |
+| Floating joystick | Fixed joystick at its existing position, with a sprint ring |
+| Sprint button | Hidden, not deleted. Sprint is on the joystick ring. Activate `SprintButton` to bring it back; it still works |
+| Plain attack button | Same object, now the ATTACK gesture button, moved and enlarged |
+| Jump and interact buttons | Moved to the new positions |
+| (none) | BLOCK, the discipline indicator and fan, the aim ring and the cancel zone are added |
+
+The Mage gains `PlayerDisciplines` (selected discipline) and `PlayerGuard` (block), and its
+caster gains the Staff Strike in slot 1. Arcane Bolt stays in slot 0.
 
 ## Try it
 
-**In the Editor with the mouse.** Switch on **Threefold > Controls > Preview Touch Controls In
-Editor**, then press Play. The controls stay visible and the left mouse button acts as one
-finger. The keyboard still works. Switch the menu item off to return to normal desktop testing.
-
-**In the Editor with multi-touch.** Open **Window > General > Device Simulator** and choose a
-phone. This also shows notches and rounded corners, so the safe-area handling can be seen.
-
-**On a device.** Build and run for Android from the laptop. The controls appear automatically.
-
-## Which scheme is active
-
-`ControlSchemeSelector` (on the `TouchControls` object) decides:
-
-- On a phone or tablet the game starts with touch controls; elsewhere with desktop controls.
-- After that it follows the device used last. Touching the screen shows the controls. Pressing a
-  key or using a gamepad hides them.
-- While touch controls are shown, clicking does not capture the mouse.
-
-All input sources stay active the whole time, so switching scheme never drops an input. The
-mode can be fixed to Always Touch or Always Desktop in the Inspector.
+- **Editor, mouse as one finger:** switch on **Threefold > Controls > Preview Touch Controls In
+  Editor**, then press Play. Only one finger can be simulated this way.
+- **Editor, several fingers:** **Window > General > Device Simulator**. It also shows notches and
+  rounded corners for the safe area.
+- **Device:** build for Android from the laptop. Two- and three-finger use can only be judged here.
 
 ## Tuning
 
-| Setting | Object | Effect |
+| Setting | Object | Default |
 | --- | --- | --- |
-| Radius | `MoveZone` (Virtual Joystick) | Thumb travel for full speed. Smaller is more sensitive |
-| Dead Zone | `MoveZone` | Share of travel around the centre that is ignored |
-| Response Exponent | `MoveZone` | 1 is linear; higher gives finer control at low speed |
-| Follow Thumb | `MoveZone` | Whether the stick follows a drifting thumb |
-| Look Sensitivity | `TouchControls` (Touch Controls Input) | Camera turn per swipe. Independent of screen resolution |
-| Sprint Mode | `TouchControls` | Toggle or Hold |
-| Scale Multiplier | `TouchControls` (Density Canvas Scaler) | Overall size of all controls |
+| Activation Radius, Radius (travel), Dead Zone, Response Exponent | `MoveZone` (Virtual Joystick) | 105 dp, 55 dp, 0.12, 1.4 |
+| Sprint Threshold, Sprint Release Deflection | `MoveZone` | 1.45 x travel, 0.6 |
+| Look Sensitivity, Horizontal and Vertical Look Scale | `TouchControls` (Touch Controls Input) | 1, 1, 0.8 |
+| Camera sensitivity, pitch limits, smoothing, collision | `Main Camera` (Third Person Camera) | Unchanged from earlier sprints |
+| Hold Threshold, Tap Slop, Full Charge Seconds | `AttackButton` (Attack Gesture Button, Gesture) | 0.22 s, 14 dp, 0.9 s |
+| Aim Radius, Aim Dead Zone, Aim Sensitivity, Max Aim Magnitude | `AttackButton` | 64 dp, 0.2, 1, 1 |
+| Cancel Offset, Cancel Radius | `AttackButton` | 150 dp above the press, 36 dp |
+| Open Timeout | `DisciplineIndicator` (Discipline Selector) | 3 s |
+| Hold threshold for the mouse and gamepad | `Mage` (Input System Character Input, Attack Gesture) | 0.22 s |
+| Melee and charged ability slots, aim turn | `Mage` (Player Ability Input) | 1, 0, 35 degrees |
+| Overall size of all controls | `TouchControls` (Density Canvas Scaler, Scale Multiplier) | 1 |
 
-## How it works
+Sizes are in density-independent pixels (dp, 1/160 inch), so controls have the same physical size
+on a phone and a tablet. Every touch area is at least 48 dp, Android's recommended minimum.
 
-| File (under `Assets/Threefold/Scripts/Runtime`) | Responsibility |
+## Architecture
+
+The decisions live in plain C# classes with the time passed in, so they are tested without Unity.
+The Unity components are thin: they convert screen positions, call the model and draw the result.
+
+| Plain C# (tested outside Unity) | Responsibility |
 | --- | --- |
-| `TouchControls/TouchControlsInput.cs` | Reads touches, assigns each finger to a control, and exposes the result as a `CharacterInputSource` |
-| `TouchControls/TouchRegion.cs` | Base class for an area one finger can hold |
-| `TouchControls/VirtualJoystick.cs`, `JoystickMath.cs` | Floating joystick; dead zone and response curve |
-| `TouchControls/TouchLookArea.cs`, `TouchButton.cs` | Camera drag area; button with pressed and highlighted states |
-| `Input/CombinedCharacterInput.cs` | Merges several input sources into one |
-| `Input/ControlSchemeSelector.cs` | Chooses and applies the touch or desktop scheme |
-| `Interface/SafeAreaFitter.cs` | Keeps the controls clear of notches, cut-outs and rounded corners |
-| `Interface/DensityCanvasScaler.cs` | Sizes the controls by pixel density, so they are the same physical size on a phone and a tablet |
-| `Interface/ProceduralSprites.cs`, `ProceduralImage.cs` | Draw the discs, rings and icons in code. No image files are used |
+| `TouchControls/PointerRouter` | Which control owns which finger; priority order; releasing fingers that vanish |
+| `TouchControls/FixedJoystickModel` | Activation radius, dead zone, response curve, sprint ring |
+| `Input/AttackGesture` (`AttackGestureRecognizer`, `CombatInputRules`) | Idle, Pressed, Charging, Aiming, Released, Cancelled; block priority |
+| `TouchControls/DisciplineSelectorModel` | Drag-select, tap-open, cancellation, timeout |
+| `Magic/DisciplineLoadout`, `Magic/MagicDiscipline` | Selected discipline; the Arcane, Flame and Aegis catalogue |
+| `TouchControls/MobileControlsLayout` | Default positions and sizes, and the rules a layout must meet on every screen |
 
-Design decisions:
+| Unity component | Responsibility |
+| --- | --- |
+| `TouchControls/TouchControlsInput` | Reads touches every frame before gameplay, feeds the router, publishes the result as a `CharacterInputSource` |
+| `TouchControls/VirtualJoystick`, `TouchLookArea`, `TouchButton` | Joystick, camera drag area, BLOCK, JUMP and interact |
+| `TouchControls/AttackGestureButton` | ATTACK: feeds the recognizer, shows each state, places the cancel zone |
+| `TouchControls/DisciplineSelector`, `DisciplineFan` | Indicator and fan |
+| `Input/InputSystemCharacterInput` | Keyboard, mouse and gamepad, through the same recognizer and rules |
+| `Input/CombinedCharacterInput` | Merges touch and desktop into the one source gameplay reads |
+| `Combat/PlayerAbilityInput` | Tap to melee; charge events; the placeholder charged attack |
+| `Combat/PlayerGuard` | Block press, hold and release |
+| `Magic/PlayerDisciplines` | Applies discipline requests from any input |
+| `Editor/TouchControlsSetup` | Builds and upgrades the controls; no Inspector work |
 
-- **Touches are read directly from the Input System**, in the same frame and before the movement
-  and camera scripts run. The UI event system is not involved, so the scene needs no EventSystem.
-- **Movement and camera code is unchanged.** They still read one `CharacterInputSource`.
-- **Sizes are in density-independent pixels** (1/160 inch), the Android convention.
-- **No new packages and no asset files.** The UI uses the already installed `com.unity.ugui`.
+`CharacterInputSource` gained `AttackGesture`, `BlockHeld`, `BlockPressedThisFrame`,
+`BlockReleasedThisFrame`, `DisciplineSlotRequested` and `DisciplineCycleRequested`. They are
+virtual with neutral defaults, so other input sources keep working. Movement, camera and
+traversal code is unchanged.
+
+### Connecting the Living Magic abilities (LM-02)
+
+`PlayerAbilityInput` raises three events. They are the connection points for the discipline
+abilities:
+
+| Event | Payload |
+| --- | --- |
+| `ChargeStarted` | The discipline selected when the charge began |
+| `ChargedAttackReleased` | `ChargedAttackRequest`: discipline at release, aim (length 0 to 1, screen X right and Y up; zero means the camera's aim) and charge progress (0 to 1) |
+| `AttackCancelled` | None |
+
+Every `ChargeStarted` is followed by exactly one `ChargedAttackReleased` or `AttackCancelled`,
+including when the charge ends because the touch controls were hidden, the app lost focus, or the
+Mage grabbed a ledge (a charge released while hanging or climbing is reported as cancelled).
+
+Until LM-02 handles `ChargedAttackReleased`, a placeholder fires the ability in the charged slot
+(Arcane Bolt), turned sideways by up to 35 degrees by the aim. This keeps the existing spell
+puzzles playable. Turn off **Placeholder Charged Attack** on `PlayerAbilityInput` when the real
+abilities are connected. `PlayerGuard` raises `BlockStarted` and `BlockEnded` for the Aegis or
+block behaviour.
 
 ## Tests
 
-Edit Mode tests in `Assets/Threefold/Tests/Editor` cover the joystick dead zone and response
-curve, the merging of input sources, the safe-area calculation and the density scaling. They run
-in CI once the Unity job is enabled, and in the Editor under **Window > General > Test Runner**.
+Run by `Tools/ci/compile_check.sh` outside Unity, and by Unity's Test Runner in CI once the Unity
+job is enabled:
 
-Not covered by automated tests: finger routing, the generated visuals, scheme switching, and
-anything on a real device. These need a run in the Editor or on Android.
+| Test class | Covers |
+| --- | --- |
+| `FixedJoystickTests` (15) | Activation radius, fixed centre, dead zone, analogue range, release, sprint ring, its hysteresis, and no sprint for a thumb that lands beyond the ring |
+| `AttackGestureTests` (32) | Tap versus hold, jitter tolerance, drag-to-charge, aim dead zone, sensitivity and limits, charge progress, cancel zone, system cancel, block priority, mouse-button path, merging two sources |
+| `MultiTouchRoutingTests` (24) | Joystick and camera together, camera touches never resetting movement, drags that start on buttons, two- and three-finger use, release order, vanished fingers, focus loss, discipline selection while moving, the fan not intercepting other touches |
+| `DisciplineSelectionTests` (17) | Drag-select, tap-open, every cancellation path, timeout, nearest slot; loadout selection and cycling |
+| `MobileControlsLayoutTests` (14) | The layout on ten safe-area sizes from a small 16:9 phone to a 12.9" tablet: inside the safe area, no overlaps, 48 dp touch areas, ATTACK largest, cancel zone out of aim reach; that the validator catches broken layouts; safe-area insets; desktop bindings for every action |
+| `MobileControlsSetupTests` (2) | Needs Unity: the assembled scene has the new controls; an earlier-layout scene is upgraded in place and a second run adds nothing |
+
+The routing tests use stand-in controls built on the same models as the real components, on the
+real layout numbers. They do not execute the Unity components themselves.
+
+**Not covered by automated tests:** the Unity components' screen-to-canvas conversion, the
+visuals, the Input System's touch delivery on a device, the setup command (until the Unity job
+runs), and feel.
 
 ## Known limits
 
-- Not yet compiled in Unity or run on a device.
-- An attack button was added in Sprint 3; see `Docs/MageCombat.md`.
+- Not yet compiled by Unity, run in the Editor, or played on a device. Device testing has not
+  been done.
+- Block has input semantics and events only. It does not reduce damage or slow movement yet.
+- The charged attack is a placeholder (Arcane Bolt) whatever the discipline. Aim turns it sideways
+  only; the vertical aim component is reported but unused.
+- The Staff Strike lands where the Mage's body faces. There is no melee target snapping yet.
+- Holding the attack control no longer fires repeatedly; holding now charges. This changes how the
+  Arcane Bolt is used on every device.
+- A tap is recognised when the finger lifts, so the melee strike starts as the finger lifts rather
+  than when it lands. This is what keeps taps and charges apart.
+- The selector can still be opened with a third finger during a charge; the fan and the cancel
+  zone then overlap on screen. They do not interfere, because each belongs to its own finger.
+- The fan arc is tuned for three disciplines. A fourth slot would leave the screen on small phones
+  until the arc is retuned (the layout tests report this).
+- Discipline colours and the procedural icons are a proposal, not approved Art Bible swatches.
 - The layout is for landscape orientation.
-- Existing touch controls are never modified by the setup command, so a layout change in a later
-  version requires deleting `TouchControls` and running the command again.

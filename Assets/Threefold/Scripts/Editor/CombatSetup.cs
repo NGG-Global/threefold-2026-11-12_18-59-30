@@ -6,6 +6,7 @@ using Threefold.Combat;
 using Threefold.CombatFeedback;
 using Threefold.InputHandling;
 using Threefold.Interface;
+using Threefold.Magic;
 using Threefold.Pooling;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -46,6 +47,7 @@ namespace Threefold.EditorTools
         private const string BoltPrefabPath = Folder + "/ArcaneBolt.prefab";
         private const string DummyPrefabPath = Folder + "/TrainingDummy.prefab";
         private const string SpellPath = Folder + "/ArcaneBolt.asset";
+        private const string StaffStrikePath = Folder + "/StaffStrike.asset";
 
         private const string DummiesName = "TrainingDummies";
         internal const string ConstructsName = "TrainingConstructs";
@@ -183,6 +185,7 @@ namespace Threefold.EditorTools
                 new Color(1f, 0.82f, 0.5f, 1f), 28, 1.1f, report);
             Projectile bolt = EnsureBoltPrefab(coreMaterial, glowMaterial, report);
             ProjectileSpellDefinition spell = EnsureSpell(bolt, impact, report);
+            MeleeStrikeDefinition staffStrike = EnsureStaffStrike(impact, report);
             GameObject dummyPrefab = EnsureDummyPrefab(DummyPrefabPath, "TrainingDummy", bodyMaterial, postMaterial, null,
                 barBackMaterial, barFillMaterial, burst, 100f, true, report);
 
@@ -195,7 +198,7 @@ namespace Threefold.EditorTools
 
             AssetDatabase.SaveAssets();
 
-            AbilityCaster caster = EnsureMageCombat(mage, spell, report);
+            AbilityCaster caster = EnsureMageCombat(mage, spell, staffStrike, report);
             EnsureTargets(scene, dummyPrefab, constructPrefab, dummies, report);
             EnsureHud(scene, mage, caster, report);
             EnsureCameraFeedback(scene, mage, caster, report);
@@ -205,6 +208,26 @@ namespace Threefold.EditorTools
         }
 
         // --------------------------------------------------------------- assets
+
+        /// <summary>
+        /// The Mage's standard (tap) attack: a short staff strike in front of the body. No mana cost, so
+        /// melee is always available; the cooldown keeps rapid tapping readable.
+        /// </summary>
+        private static MeleeStrikeDefinition EnsureStaffStrike(PooledObject impact, StringBuilder report)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<MeleeStrikeDefinition>(StaffStrikePath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var strike = ScriptableObject.CreateInstance<MeleeStrikeDefinition>();
+            strike.ConfigureAbility("Staff Strike", 0f, 0.45f);
+            strike.ConfigureStrike(14f, 2.3f, 120f, impact);
+            AssetDatabase.CreateAsset(strike, StaffStrikePath);
+            report.AppendLine("Generated ability 'Staff Strike' (14 damage, 2.3 m, 120 degrees, 0.45 s cooldown).");
+            return strike;
+        }
 
         internal static void EnsureFolder(string path)
         {
@@ -541,7 +564,8 @@ namespace Threefold.EditorTools
 
         // ---------------------------------------------------------------- scene
 
-        private static AbilityCaster EnsureMageCombat(GameObject mage, ProjectileSpellDefinition spell, StringBuilder report)
+        private static AbilityCaster EnsureMageCombat(GameObject mage, ProjectileSpellDefinition spell,
+            MeleeStrikeDefinition staffStrike, StringBuilder report)
         {
             if (!mage.TryGetComponent(out Health health))
             {
@@ -582,12 +606,20 @@ namespace Threefold.EditorTools
                 report.AppendLine("Added the ability caster to the Mage.");
             }
 
-            if (caster.GetAbility(0) == null && spell != null)
+            if (caster.GetAbility(PlayerAbilityInput.DefaultChargedSlot) == null && spell != null)
             {
                 Undo.RecordObject(caster, DialogTitle);
-                caster.SetAbility(0, spell);
+                caster.SetAbility(PlayerAbilityInput.DefaultChargedSlot, spell);
                 MarkChanged(caster);
-                report.AppendLine("Assigned Arcane Bolt as the Mage's primary attack.");
+                report.AppendLine("Assigned Arcane Bolt to the Mage's charged attack (a placeholder until the discipline abilities exist).");
+            }
+
+            if (caster.GetAbility(PlayerAbilityInput.DefaultMeleeSlot) == null && staffStrike != null)
+            {
+                Undo.RecordObject(caster, DialogTitle);
+                caster.SetAbility(PlayerAbilityInput.DefaultMeleeSlot, staffStrike);
+                MarkChanged(caster);
+                report.AppendLine("Assigned Staff Strike as the Mage's tap attack.");
             }
 
             if (!mage.TryGetComponent(out PlayerAbilityInput abilityInput))
@@ -607,6 +639,14 @@ namespace Threefold.EditorTools
                 {
                     report.AppendLine("WARNING: the Mage has no input source, so attacks cannot be triggered.");
                 }
+            }
+
+            if (abilityInput.Disciplines == null && mage.TryGetComponent(out PlayerDisciplines disciplines))
+            {
+                Undo.RecordObject(abilityInput, DialogTitle);
+                abilityInput.BindDisciplines(disciplines);
+                MarkChanged(abilityInput);
+                report.AppendLine("Connected the charged attack to the Mage's discipline selection.");
             }
 
             return caster;

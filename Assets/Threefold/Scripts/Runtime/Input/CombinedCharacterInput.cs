@@ -131,6 +131,114 @@ namespace Threefold.InputHandling
             }
         }
 
+        public override AttackGestureFrame AttackGesture
+        {
+            get
+            {
+                AttackGestureFrame merged = default;
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (IsUsable(sources[i]))
+                    {
+                        merged = AttackGestureFrame.Merge(merged, sources[i].AttackGesture);
+                    }
+                }
+
+                return merged;
+            }
+        }
+
+        public override bool BlockHeld
+        {
+            get
+            {
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (IsUsable(sources[i]) && sources[i].BlockHeld)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        public override bool BlockPressedThisFrame
+        {
+            get
+            {
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (IsUsable(sources[i]) && sources[i].BlockPressedThisFrame)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        public override bool BlockReleasedThisFrame
+        {
+            get
+            {
+                // Released only when no other source still holds block.
+                bool released = false;
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (!IsUsable(sources[i]))
+                    {
+                        continue;
+                    }
+
+                    if (sources[i].BlockHeld)
+                    {
+                        return false;
+                    }
+
+                    released |= sources[i].BlockReleasedThisFrame;
+                }
+
+                return released;
+            }
+        }
+
+        /// <summary>The first source's request wins; two devices choosing in the same frame is not meaningful.</summary>
+        public override int DisciplineSlotRequested
+        {
+            get
+            {
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (IsUsable(sources[i]) && sources[i].DisciplineSlotRequested >= 0)
+                    {
+                        return sources[i].DisciplineSlotRequested;
+                    }
+                }
+
+                return -1;
+            }
+        }
+
+        public override int DisciplineCycleRequested
+        {
+            get
+            {
+                int total = 0;
+                for (int i = 0; i < sources.Count; i++)
+                {
+                    if (IsUsable(sources[i]))
+                    {
+                        total += sources[i].DisciplineCycleRequested;
+                    }
+                }
+
+                return System.Math.Sign(total);
+            }
+        }
+
         public override bool InteractPressedThisFrame
         {
             get

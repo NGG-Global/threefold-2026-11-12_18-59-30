@@ -103,6 +103,15 @@ namespace Threefold.Combat
         /// <summary>Tries to use the ability in the given slot.</summary>
         public CastResult TryCast(int slot)
         {
+            return TryCast(slot, 0f);
+        }
+
+        /// <summary>
+        /// Tries to use the ability in the given slot, with its aim turned about the vertical axis by
+        /// the given angle in degrees (positive turns right). Used to steer an attack aimed by dragging.
+        /// </summary>
+        public CastResult TryCast(int slot, float aimYawOffsetDegrees)
+        {
             AbilityDefinition ability = GetAbility(slot);
             if (ability == null)
             {
@@ -124,7 +133,7 @@ namespace Threefold.Combat
                 return Fail(ability, CastResult.NotEnoughMana);
             }
 
-            AbilityContext context = BuildContext();
+            AbilityContext context = BuildContext(aimYawOffsetDegrees);
             ability.Execute(context);
 
             while (cooldowns.Count <= slot)
@@ -160,18 +169,34 @@ namespace Threefold.Combat
             return reason;
         }
 
-        private AbilityContext BuildContext()
+        private AbilityContext BuildContext(float yawOffsetDegrees)
         {
             Vector3 origin = castPoint != null ? castPoint.position : transform.TransformPoint(castOffset);
 
+            Vector3 point;
+            Vector3 direction;
             if (aimProvider != null)
             {
                 AimSolution aim = aimProvider.GetAim(origin);
-                return new AbilityContext(gameObject, origin, aim.Point, aim.Direction, damageMultiplier);
+                point = aim.Point;
+                direction = aim.Direction;
+            }
+            else
+            {
+                direction = transform.forward;
+                point = origin + direction * 50f;
             }
 
-            Vector3 forward = transform.forward;
-            return new AbilityContext(gameObject, origin, origin + forward * 50f, forward, damageMultiplier);
+            if (Mathf.Abs(yawOffsetDegrees) > 0.01f)
+            {
+                // Turning about the origin keeps the distance to the aim point.
+                Quaternion turn = Quaternion.AngleAxis(yawOffsetDegrees, Vector3.up);
+                float distance = Vector3.Distance(origin, point);
+                direction = turn * direction;
+                point = origin + direction * distance;
+            }
+
+            return new AbilityContext(gameObject, origin, point, direction, damageMultiplier);
         }
     }
 }

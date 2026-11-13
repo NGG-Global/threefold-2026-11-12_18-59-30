@@ -33,22 +33,5 @@ namespace Threefold.TouchControls
 
             return raw * (shaped / magnitude);
         }
-
-        /// <summary>
-        /// Moves the stick's origin just far enough that <paramref name="pointer"/> is no further
-        /// than <paramref name="radius"/> away, which lets the stick follow a thumb that drifts.
-        /// </summary>
-        public static Vector2 FollowOrigin(Vector2 origin, Vector2 pointer, float radius)
-        {
-            Vector2 offset = pointer - origin;
-            float distance = offset.magnitude;
-
-            if (distance <= radius || distance <= 0f)
-            {
-                return origin;
-            }
-
-            return origin + offset * ((distance - radius) / distance);
-        }
     }
 }

@@ -72,24 +72,5 @@ namespace Threefold.Tests
 
             Assert.Less(curved, linear);
         }
-
-        [Test]
-        public void OriginStaysPutWhileThumbIsWithinRadius()
-        {
-            Vector2 origin = new Vector2(100f, 100f);
-
-            Vector2 result = JoystickMath.FollowOrigin(origin, new Vector2(130f, 100f), 50f);
-
-            Assert.AreEqual(origin, result);
-        }
-
-        [Test]
-        public void OriginFollowsThumbBeyondRadius()
-        {
-            Vector2 result = JoystickMath.FollowOrigin(new Vector2(100f, 100f), new Vector2(200f, 100f), 50f);
-
-            Assert.AreEqual(150f, result.x, Tolerance);
-            Assert.AreEqual(100f, result.y, Tolerance);
-        }
     }
 }
