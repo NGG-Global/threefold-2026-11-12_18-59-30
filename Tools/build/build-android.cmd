@@ -8,7 +8,8 @@ rem The build assembles the Fantasy Playground scene from code first. It creates
 rem Assets\Scenes\FantasyPlayground.unity and Assets\Threefold\Generated. It does not touch any
 rem other scene.
 rem
-rem This script has not been run yet; see Docs\ReleaseReadiness.md.
+rem The same script is used by the "Android build" workflow on a self-hosted runner.
+rem It has not been run yet; see Docs\CloudBuild.md.
 
 setlocal
 set "PROJECT=%~dp0..\.."
@@ -29,8 +30,14 @@ if exist "%PROJECT%\Temp\UnityLockfile" (
 
 if not exist "%PROJECT%\build" mkdir "%PROJECT%\build"
 
+rem Remove the results of any earlier build, so an old APK or log is never mistaken for a new one.
+if exist "%PROJECT%\build\Android" rmdir /s /q "%PROJECT%\build\Android"
+if exist "%PROJECT%\build\logs" rmdir /s /q "%PROJECT%\build\logs"
+if exist "%PROJECT%\build\android-build.log" del /q "%PROJECT%\build\android-build.log"
+
 echo Building. This can take a long time on the first run...
-"%UNITY%" -batchmode -nographics -projectPath "%PROJECT%" -buildTarget Android ^
+rem "start /wait" makes the script wait for Unity and receive its exit code.
+start "" /wait "%UNITY%" -batchmode -nographics -projectPath "%PROJECT%" -buildTarget Android ^
   -executeMethod Threefold.EditorTools.PrototypeBuild.BuildAndroid ^
   -customBuildPath "%PROJECT%\build\Android\Threefold.apk" ^
   -logFile "%PROJECT%\build\android-build.log"
@@ -38,6 +45,12 @@ echo Building. This can take a long time on the first run...
 if errorlevel 1 (
   echo.
   echo BUILD FAILED. Send the file build\android-build.log to Claude Code.
+  exit /b 1
+)
+
+if not exist "%PROJECT%\build\Android\Threefold.apk" (
+  echo.
+  echo BUILD FAILED: Unity reported success but no APK was written. See build\android-build.log.
   exit /b 1
 )
 

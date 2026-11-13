@@ -1,45 +1,63 @@
 name: Android build
 
-# Builds a development APK of the playable prototype. It is started by hand only:
-# on GitHub open Actions > Android build > Run workflow.
+# Builds an installable development APK of Threefold and offers it for download.
 #
-# The build assembles the scene from code first (Threefold.EditorTools.PrototypeBuild.BuildAndroid),
-# so the generated scene and assets do not have to be committed.
+# It runs only when started by hand: Actions > Android build > Run workflow.
+# It never runs on a commit or a pull request.
 #
-# Requirements, explained in Docs/DevelopmentWorkflow.md:
-#   - a Unity licence in the repository secrets (UNITY_LICENSE or UNITY_SERIAL, with
-#     UNITY_EMAIL and UNITY_PASSWORD)
-#   - enough Actions budget: an Android build takes considerably longer than the test job
+# Two ways to build, chosen when starting the workflow:
+#   github-hosted  A GitHub Linux runner with a GameCI container. Needs Unity licence secrets
+#                  and uses the organisation's Actions allowance.
+#   self-hosted    A runner installed on a Windows PC that already has Unity 6000.6.0f1
+#                  activated. Needs no secrets and uses no Actions minutes.
 #
-# This workflow has never been run. Expect the first run to need adjustment.
+# Read Docs/CloudBuild.md first: it covers licensing, secrets, cost and setup for both.
+# Neither route has completed a build yet.
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Where to build
+        type: choice
+        default: github-hosted
+        options:
+          - github-hosted
+          - self-hosted
 
+# One Android build at a time for the whole repository. Starting a new one cancels the old one.
 concurrency:
-  group: android-build-${{ github.ref }}
+  group: android-build
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build development APK
+  github-hosted:
+    name: Build APK (GitHub-hosted)
+    if: inputs.runner == 'github-hosted'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
+      # Only tests whether the secrets exist. Their values are never printed.
       - name: Check for a Unity licence
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           if [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; then
-            echo "::error::No Unity licence secret is configured. See Docs/DevelopmentWorkflow.md."
+            echo "::error::No Unity licence secret is configured (UNITY_LICENSE or UNITY_SERIAL). See Docs/CloudBuild.md."
+            exit 1
+          fi
+          if [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ]; then
+            echo "::error::UNITY_EMAIL and UNITY_PASSWORD must both be configured. See Docs/CloudBuild.md."
             exit 1
           fi
 
-      # The Android build image and the build itself need more disk than the runner has free.
+      # The Android build image is about 8 GB and the build needs several more.
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android
@@ -50,6 +68,7 @@ jobs:
         with:
           lfs: true
 
+      # Unity's import cache. Without it every build re-imports the whole project.
       - name: Restore Unity Library cache
         uses: actions/cache@v4
         with:
@@ -58,7 +77,10 @@ jobs:
           restore-keys: |
             Library-Threefold-Android-
 
-      - name: Build
+      # The build method assembles the playable scene from code, validates it, applies the
+      # Android settings and builds a development APK signed with a debug key.
+      - name: Build development APK
+        id: build
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -67,15 +89,90 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           targetPlatform: Android
+          androidExportType: androidPackage
           buildName: Threefold
           buildMethod: Threefold.EditorTools.PrototypeBuild.BuildAndroid
           versioning: None
           allowDirtyBuild: true
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: threefold-android-development
-          path: build/Android
+          name: threefold-android-development-${{ github.run_number }}
+          path: build/Android/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+      # The build's own log and report. If Unity stopped before the build method started, for
+      # example on a licence or script compilation error, these files do not exist and the
+      # cause is in the "Build development APK" step output above.
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threefold-android-logs-${{ github.run_number }}
+          path: build/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Android build: ${{ job.status }}"
+            if ls build/Android/*.apk >/dev/null 2>&1; then
+              echo "APK: $(du -h build/Android/*.apk | cut -f1). Download it from the Artifacts section of this run."
+            else
+              echo "No APK was produced."
+            fi
+            if [ -f build/logs/build-report.txt ]; then
+              echo
+              echo '```'
+              head -n 40 build/logs/build-report.txt
+              echo '```'
+            else
+              echo
+              echo "No build report was written, so Unity stopped before the build started. See the build step's output."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  self-hosted:
+    name: Build APK (self-hosted Windows)
+    if: inputs.runner == 'self-hosted'
+    runs-on: [self-hosted, windows, threefold-unity]
+    timeout-minutes: 120
+    steps:
+      # The runner keeps its own copy of the repository, separate from any working copy on the PC.
+      # It is not cleaned between runs, so Unity's Library folder is reused and builds stay fast.
+      - name: Check out repository with LFS files
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          clean: false
+
+      - name: Build development APK
+        shell: cmd
+        env:
+          UNITY_EDITOR: ${{ vars.UNITY_EDITOR_PATH }}
+        run: call Tools\build\build-android.cmd
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threefold-android-development-${{ github.run_number }}
+          path: build/Android/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threefold-android-logs-${{ github.run_number }}
+          path: |
+            build/logs
+            build/android-build.log
+          if-no-files-found: ignore
           retention-days: 14
