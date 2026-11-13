@@ -157,6 +157,23 @@ namespace Threefold.EditorTools
 
             if (FindInScene<PlayerHud>(scene) == null) Problem("There is no combat HUD.");
 
+            // The character model is optional; if its driver is present, it must be able to animate.
+            if (mage.TryGetComponent(out CharacterAnimationDriver driver))
+            {
+                if (driver.Animator == null)
+                {
+                    Problem("The Mage's animation driver has no Animator.");
+                }
+                else if (driver.Animator.runtimeAnimatorController == null)
+                {
+                    Problem("The Mage's Animator has no Animator Controller.");
+                }
+                else if (driver.Animator.avatar == null || !driver.Animator.avatar.isHuman)
+                {
+                    Problem("The Mage's Animator has no Humanoid avatar.");
+                }
+            }
+
             DefeatTargetsObjective objective = FindInScene<DefeatTargetsObjective>(scene);
             if (objective == null)
             {
