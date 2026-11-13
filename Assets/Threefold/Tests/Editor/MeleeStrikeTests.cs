@@ -83,6 +83,29 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void AWallBetweenTakesTheBlow()
+        {
+            Health opponent = CreateCharacter("Opponent", new Vector3(0f, 0f, 2.2f), CombatTeam.Player).GetComponent<Health>();
+            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            created.Add(wall);
+            wall.transform.position = new Vector3(0f, 1f, 1.2f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.2f);
+
+            Strike();
+            Assert.AreEqual(100f, opponent.Current);
+        }
+
+        [Test]
+        public void AnAllyBetweenDoesNotShieldTheTarget()
+        {
+            Health opponent = CreateCharacter("Opponent", new Vector3(0f, 0f, 2.3f), CombatTeam.Player).GetComponent<Health>();
+            CreateCharacter("Ally", new Vector3(0f, 0f, 1.1f), CombatTeam.Enemy);
+
+            Strike();
+            Assert.AreEqual(75f, opponent.Current, 0.01f);
+        }
+
+        [Test]
         public void NeutralTargetsAreHit()
         {
             Health dummy = CreateCharacter("Dummy", new Vector3(-1f, 0f, 1.5f), CombatTeam.Neutral).GetComponent<Health>();

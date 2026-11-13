@@ -75,7 +75,9 @@ namespace Threefold.EditorTools
                 report.AppendLine("Added the session that restarts the level (R key, Start button, or the restart button).");
             }
 
-            if (objective.TotalCount == 0)
+            // Targets are (re)assigned when there are none, or when some were deleted, for example
+            // after the arena's enemies were removed to be generated again.
+            if (objective.TotalCount == 0 || HasMissingTargets(objective))
             {
                 Health[] targets = options.Targets;
                 if (targets == null)
@@ -99,6 +101,19 @@ namespace Threefold.EditorTools
 
             EnsureHud(scene, objective, session, options.CompletionHeading, report);
             EnsureDefeatPanel(scene, session, report);
+        }
+
+        private static bool HasMissingTargets(DefeatTargetsObjective objective)
+        {
+            foreach (Health target in objective.Targets)
+            {
+                if (target == null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void EnsureHud(Scene scene, DefeatTargetsObjective objective, PrototypeSession session,

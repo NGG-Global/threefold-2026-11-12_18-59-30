@@ -6,7 +6,7 @@ warnings, react to hits, and return to their posts. A new level, the Combat Aren
 together in three encounters. The Mage can now be defeated, and restart brings everything back.
 
 **Status:** the code compiles against Unity 6000.6.0f1 for the Editor and for Android, and the
-decision logic passes 50 automated tests outside Unity. **Nothing has run in Unity yet.** Nobody
+decision logic passes 53 automated tests outside Unity. **Nothing has run in Unity yet.** Nobody
 has seen an enemy move or played a fight. Every number below was set by calculation and
 judgement and will need tuning once it can be played.
 
@@ -14,7 +14,7 @@ judgement and will need tuning once it can be played.
 
 | Enemy | Role | Health | How it fights | How to beat it |
 | --- | --- | --- | --- | --- |
-| **Ruins Guardian** | Slow, durable melee | 200 (10 bolts) | Closes in at 2.6 m/s and slams the ground in front of it. Below 60% health it adds a shockwave all around itself | Keep moving: it walks slower than the Mage. Step out of the glowing area before it fills. Punish the long recovery after each attack. Three quick hits during a wind-up stagger it and cancel the attack |
+| **Ruins Guardian** | Slow, durable melee | 200 (10 bolts) | Closes in at 2.6 m/s and slams the ground in front of it. Below 60% health it adds a shockwave all around itself | Keep moving: it walks slower than the Mage. Step out of the glowing area before it fills. Punish the long recovery after each attack. Three quick hits during a wind-up stagger it and cancel the attack. A wall or column between you takes the blow |
 | **Arcane Wisp** | Fragile ranged | 40 (2 bolts) | Floats 6 to 11 m away, backs off when approached, and fires slow bolts after a visible charge | Watch the aim line: it follows you, then brightens and stops. Step sideways when it stops. Every hit staggers a Wisp |
 
 ### Warnings (telegraphs)
@@ -129,6 +129,7 @@ in the playground.
 | Patrol routes | Move the `Point` objects under each enemy's `Route` in the Scene view |
 | Which enemies alert each other | `ArenaEnemies` > `Encounter …` objects: Members, alert radius and delays |
 | How often enemies look for the player | Each enemy: Enemy Controller, Perception |
+| Rebake the navigation mesh | Run **Threefold > Setup > Combat Arena** again. The Bake button on the arena's NavMeshSurface also works, but it stores its result as a separate file next to the scene and removes the generated one; the next run of the menu command creates the generated file again |
 
 Difficulty levels at a glance:
 
@@ -245,21 +246,23 @@ Estimates from the code, not measurements:
 
 Engine-free (run by `Tools/ci/compile_check.sh`, all passing):
 
-- `EnemyBrainTests` (22): patrol; suspicion from a distant glimpse; instant notice up close; the
-  reaction pause; noise within and beyond hearing; search and return; ally alerts without loops;
+- `EnemyBrainTests` (25): patrol; suspicion from a distant glimpse; instant notice up close; the
+  reaction pause; noise within and beyond hearing; search and return; an investigation whose point
+  is taken by another enemy still ends; ally alerts without loops;
   being hit while unaware; a full telegraphed attack with its lock and recovery; the Shockwave
   only below 60% health; two Guardians never attacking together; interrupting a wind-up; stagger
   immunity; searching where the player was last seen; the leash; a defeated player; defeat during
-  an attack; reset; a Wisp backing away; a cornered Wisp; the order charge, lock, fire.
+  an attack; reset; a restart during a wind-up leaves no cooldown; a Wisp backing away; a cornered
+  Wisp; the order charge, lock, fire.
 - `AttackTokenPoolTests` (9): limits, melee limit, spacing, off-screen delay, fairness, expiry.
 - `EnemyRulesTests` (19): view cone, awareness, poise, geometry, attack choice, the struck area,
   difficulty scaling, minimum warning on Hard, speeds relative to the Mage, teams.
 
 Need Unity (written, not run):
 
-- `MeleeStrikeTests` (5): the strike against real colliders: opponents in front are hit; allies,
-  targets behind and out of reach are not; neutral targets are hit; damage scaling; one hit per
-  target.
+- `MeleeStrikeTests` (7): the strike against real colliders: opponents in front are hit; allies,
+  targets behind and out of reach are not; a wall in between blocks it, an ally in between does
+  not; neutral targets are hit; damage scaling; one hit per target.
 - `CombatArenaAssemblyTests` (2, batch mode only): the arena validates with no problems, has seven
   enemies in three encounters, a baked navigation mesh, every enemy on it and reachable from the
   start; running the setup twice changes nothing.
@@ -287,6 +290,8 @@ Need Unity (written, not run):
 - Enemies stay on the ground navigation mesh. They cannot follow the player onto ledges reached by
   climbing, and the Wisp does not fly over obstacles. A player on a high ledge can be shot by Wisps
   but not reached by Guardians.
-- Enemies do not hit each other, by design.
+- Enemies do not hit each other, by design. They also see and shoot past each other.
+- The navigation mesh is baked for the project's standard agent, 0.5 m wide. The Guardian is
+  broader, so its shoulders can pass slightly into walls and columns when it walks close by them.
 - Difficulty is chosen in the Inspector. There is no in-game menu for it.
 - The portal loads the next scene in one step, which may cause a short pause on a phone.

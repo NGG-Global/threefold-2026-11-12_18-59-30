@@ -146,7 +146,16 @@ namespace Threefold.Enemies
         private const float GlanceAngle = 70f;
         private const float GlanceSeconds = 1.3f;
 
+        /// <summary>Within this distance of the point the enemy starts looking around, even if another enemy stands on it.</summary>
+        private const float CloseEnough = 1.5f;
+
+        /// <summary>Allowed walking time, as a multiple of the straight-line time, plus a margin in seconds.</summary>
+        private const float TravelAllowance = 2f;
+        private const float TravelMargin = 2f;
+
         private bool searching;
+        private float travelStart;
+        private float travelLimit;
         private float searchStart;
         private float nextGlance;
         private float glanceSide;
@@ -181,7 +190,9 @@ namespace Threefold.Enemies
 
             if (!searching)
             {
-                if (brain.Body.HasArrived)
+                bool close = EnemyRules.FlatDistance(brain.Body.Position, brain.InvestigatePoint) <= CloseEnough;
+                bool tooLong = brain.TimeInState - travelStart > travelLimit;
+                if (brain.Body.HasArrived || close || tooLong)
                 {
                     StartSearch(brain);
                 }
@@ -206,6 +217,10 @@ namespace Threefold.Enemies
 
         private void GoToPoint(EnemyBrain brain)
         {
+            float distance = EnemyRules.FlatDistance(brain.Body.Position, brain.InvestigatePoint);
+            travelStart = brain.TimeInState;
+            travelLimit = distance / Mathf.Max(0.1f, brain.Tuning.walkSpeed) * TravelAllowance + TravelMargin;
+
             if (!brain.Body.MoveTo(brain.InvestigatePoint, false))
             {
                 StartSearch(brain);

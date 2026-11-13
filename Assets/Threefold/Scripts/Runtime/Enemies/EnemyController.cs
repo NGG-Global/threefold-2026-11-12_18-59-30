@@ -283,6 +283,14 @@ namespace Threefold.Enemies
             }
 
             ApplyDifficulty(settings, true);
+
+            // The agent starts switched off in the prefab and is switched on here, after every
+            // object's OnEnable, when the scene's navigation mesh has certainly been loaded.
+            if (!agent.enabled)
+            {
+                agent.enabled = true;
+            }
+
             TryPlaceOnNavMesh();
             PrepareTelegraph();
 
@@ -407,6 +415,13 @@ namespace Threefold.Enemies
             {
                 Transform hit = sightHits[i].transform;
                 if (hit.IsChildOf(transform) || (target != null && hit.IsChildOf(target.transform)))
+                {
+                    continue;
+                }
+
+                // Allies do not block: the enemy's own shots and strikes pass over them too.
+                Health other = hit.GetComponentInParent<Health>();
+                if (other != null && Health.IsAlliedWith(other))
                 {
                     continue;
                 }

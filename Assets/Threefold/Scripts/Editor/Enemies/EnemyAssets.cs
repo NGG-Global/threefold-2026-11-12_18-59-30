@@ -499,7 +499,9 @@ namespace Threefold.EditorTools
             EnemyPresentation presentation = root.AddComponent<EnemyPresentation>();
             presentation.Bind(controller, style, visual, body, leftArm, rightArm, orbit, alertCue);
 
-            agent.enabled = true;
+            // Switched on by the controller in Start, once the navigation mesh is loaded, so the
+            // agent is never created before there is a mesh to stand on.
+            agent.enabled = false;
         }
 
         private static Transform CreateArm(Transform parent, string name, Vector3 shoulder, Materials m)

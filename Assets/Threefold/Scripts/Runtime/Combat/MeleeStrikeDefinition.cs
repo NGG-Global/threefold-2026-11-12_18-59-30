@@ -18,6 +18,7 @@ namespace Threefold.Combat
         // Shared by every strike. Strikes resolve one at a time on the main thread.
         private static readonly Collider[] Overlaps = new Collider[32];
         private static readonly Health[] Struck = new Health[MaxTargets];
+        private static readonly RaycastHit[] CoverHits = new RaycastHit[16];
 
         [Header("Strike")]
         [Min(0f)]
@@ -141,6 +142,12 @@ namespace Threefold.Combat
                     continue;
                 }
 
+                // A wall or column between the user and the target takes the blow: cover works.
+                if (IsBehindCover(userTransform, userHealth, target, origin + Vector3.up * (verticalReach * 0.5f)))
+                {
+                    continue;
+                }
+
                 Struck[struckCount++] = target;
 
                 Vector3 direction = target.transform.position - origin;
@@ -163,6 +170,40 @@ namespace Threefold.Combat
             }
 
             CombatEvents.RaiseNoise(new NoiseEvent(landing, noiseRadius, user));
+        }
+
+        /// <summary>True if something other than the user, the target and the user's allies lies between them.</summary>
+        private bool IsBehindCover(Transform userTransform, Health userHealth, Health target, Vector3 from)
+        {
+            Vector3 to = target.AimPoint;
+            Vector3 offset = to - from;
+            float length = offset.magnitude;
+            if (length < 0.01f)
+            {
+                return false;
+            }
+
+            int count = Physics.RaycastNonAlloc(from, offset / length, CoverHits, length, hitLayers,
+                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                Transform hit = CoverHits[i].transform;
+                if (hit.IsChildOf(userTransform) || hit.IsChildOf(target.transform))
+                {
+                    continue;
+                }
+
+                Health other = hit.GetComponentInParent<Health>();
+                if (other != null && (other == target || (userHealth != null && userHealth.IsAlliedWith(other))))
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         private static bool AlreadyStruck(Health target, int count)

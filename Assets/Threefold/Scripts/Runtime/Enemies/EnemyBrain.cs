@@ -293,18 +293,21 @@ namespace Threefold.Enemies
         /// <summary>Forgets everything and stands idle, for a restart. The body is placed by its owner.</summary>
         public void ResetToHome()
         {
-            Tokens.Release(Id);
-            ForgetTarget();
-            Poise.Reset();
-            Array.Clear(cooldowns, 0, cooldowns.Length);
+            // Leaving the current state first: an attack cut short sets a cooldown on exit,
+            // which must not survive the restart.
             noisePending = false;
             allyAlertPending = false;
             IgnoresTargetUntilHome = false;
             AlertedByAlly = false;
-            CurrentAttack = -1;
             PatrolIndex = 0;
-            HealthFraction = 1f;
             machine.ChangeTo(EnemyStateId.Idle, this);
+
+            Tokens.Release(Id);
+            ForgetTarget();
+            Poise.Reset();
+            Array.Clear(cooldowns, 0, cooldowns.Length);
+            CurrentAttack = -1;
+            HealthFraction = 1f;
         }
 
         // ---------------------------------------------------------- for states

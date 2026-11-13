@@ -155,6 +155,34 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void AnInvestigationThatCannotReachItsPointStillEnds()
+        {
+            Create(EnemyArchetypes.RuinsGuardian());
+
+            // Another enemy stands on the point, so this one never quite arrives.
+            brain.HearNoise(new Vector3(8f, 0f, 0f), 10f);
+            Run(Step, TargetObservation.None);
+            Assert.AreEqual(EnemyStateId.Investigate, brain.State);
+
+            RunUntil(() => brain.State == EnemyStateId.Return, 25f, TargetObservation.None);
+        }
+
+        [Test]
+        public void CloseToThePointOfInterestIsCloseEnough()
+        {
+            Create(EnemyArchetypes.RuinsGuardian());
+            brain.HearNoise(new Vector3(8f, 0f, 0f), 10f);
+            Run(Step, TargetObservation.None);
+
+            body.Position = new Vector3(6.9f, 0f, 0f);
+            Run(Step, TargetObservation.None);
+            Assert.IsNull(body.Destination, "It stopped to look around.");
+
+            float search = RunUntil(() => brain.State == EnemyStateId.Return, 10f, TargetObservation.None);
+            Assert.GreaterOrEqual(search, brain.Tuning.searchSeconds - 2f * Step);
+        }
+
+        [Test]
         public void AnAllyAlertIsJoinedAfterItsDelayAndNotPassedOn()
         {
             Create(EnemyArchetypes.RuinsGuardian());
@@ -359,6 +387,23 @@ namespace Threefold.Tests
             Assert.AreEqual(0f, brain.Awareness.Value);
             Assert.IsFalse(brain.HasLastKnownPosition);
             Assert.AreEqual(0, tokens.HolderCount);
+            foreach (float cooldown in brain.Cooldowns)
+            {
+                Assert.AreEqual(0f, cooldown);
+            }
+        }
+
+        [Test]
+        public void ARestartDuringAWindupLeavesNoCooldownBehind()
+        {
+            var player = new Vector3(0f, 0f, 2f);
+            EngageGuardianAtCloseRange(player);
+            RunUntil(() => brain.State == EnemyStateId.Attack, 1f, Seen(player));
+
+            brain.ResetToHome();
+
+            Assert.AreEqual(EnemyStateId.Idle, brain.State);
+            Assert.AreEqual(1, body.CancelCount, "The interrupted attack was cancelled.");
             foreach (float cooldown in brain.Cooldowns)
             {
                 Assert.AreEqual(0f, cooldown);

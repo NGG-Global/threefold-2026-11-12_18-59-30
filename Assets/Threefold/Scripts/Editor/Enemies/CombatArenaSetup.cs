@@ -53,9 +53,11 @@ namespace Threefold.EditorTools
         internal static readonly Vector3 SpawnPosition = new Vector3(0f, 0f, -25.5f);
         private static readonly Vector3 PortalPosition = new Vector3(0f, 0f, -29.2f);
 
-        // Covers the floor and the platforms, but not the tops of walls and columns.
-        private static readonly Vector3 NavBoundsCentre = new Vector3(0f, 1.5f, 0f);
-        private static readonly Vector3 NavBoundsSize = new Vector3(HalfWidth * 2f + 4f, 5f, HalfLength * 2f + 4f);
+        // The whole arena, to its full height, so the result matches a manual Bake on the
+        // NavMeshSurface (which uses the bounds of all collected geometry). Wall and column tops
+        // are narrower than the agent and are eroded away or dropped as too small.
+        private static readonly Vector3 NavBoundsCentre = new Vector3(0f, 4f, 0f);
+        private static readonly Vector3 NavBoundsSize = new Vector3(HalfWidth * 2f + 4f, 12f, HalfLength * 2f + 4f);
 
         private sealed class Placement
         {
