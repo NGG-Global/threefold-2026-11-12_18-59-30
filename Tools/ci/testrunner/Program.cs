@@ -11,6 +11,25 @@ static class Program
 {
     static string[] dirs;
 
+    // NUnit's TestCase takes "params object[]", so its arguments arrive either one by one or as one array.
+    static object[] CaseArguments(CustomAttributeData data)
+    {
+        var values = new List<object>();
+        foreach (CustomAttributeTypedArgument argument in data.ConstructorArguments)
+        {
+            if (argument.Value is System.Collections.ObjectModel.ReadOnlyCollection<CustomAttributeTypedArgument> list)
+            {
+                values.AddRange(list.Select(item => item.Value));
+            }
+            else
+            {
+                values.Add(argument.Value);
+            }
+        }
+
+        return values.ToArray();
+    }
+
     static int Main(string[] args)
     {
         dirs = args.Skip(1).ToArray();
@@ -32,21 +51,42 @@ static class Program
         foreach (Type type in tests.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsNested).OrderBy(t => t.Name))
         {
             MethodInfo[] methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-            var testMethods = methods.Where(m => m.GetCustomAttributesData().Any(a => a.AttributeType.Name == "TestAttribute")).ToArray();
+            var testMethods = methods.Where(m => m.GetCustomAttributesData().Any(a =>
+                a.AttributeType.Name == "TestAttribute" || a.AttributeType.Name == "TestCaseAttribute")).ToArray();
             if (testMethods.Length == 0) continue;
             var setUp = methods.Where(m => m.GetCustomAttributesData().Any(a => a.AttributeType.Name == "SetUpAttribute")).ToArray();
             var tearDown = methods.Where(m => m.GetCustomAttributesData().Any(a => a.AttributeType.Name == "TearDownAttribute")).ToArray();
 
-            foreach (MethodInfo test in testMethods.OrderBy(m => m.Name))
+            var cases = new List<(MethodInfo Method, object[] Arguments)>();
+            foreach (MethodInfo method in testMethods.OrderBy(m => m.Name))
             {
-                string id = type.Name + "." + test.Name;
+                bool any = false;
+                foreach (CustomAttributeData data in method.GetCustomAttributesData())
+                {
+                    if (data.AttributeType.Name == "TestCaseAttribute")
+                    {
+                        cases.Add((method, CaseArguments(data)));
+                        any = true;
+                    }
+                }
+
+                if (!any)
+                {
+                    cases.Add((method, null));
+                }
+            }
+
+            foreach (var (test, arguments) in cases)
+            {
+                string id = type.Name + "." + test.Name +
+                            (arguments == null ? "" : "(" + string.Join(", ", arguments.Select(a => a == null ? "null" : a.ToString())) + ")");
                 object fixture = null;
                 string outcome;
                 try
                 {
                     fixture = Activator.CreateInstance(type);
                     foreach (MethodInfo m in setUp) m.Invoke(fixture, null);
-                    test.Invoke(fixture, null);
+                    test.Invoke(fixture, arguments);
                     outcome = "PASS";
                     pass++;
                 }

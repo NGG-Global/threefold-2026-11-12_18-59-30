@@ -4,6 +4,9 @@ Threefold is an Android-first, third-person, high-fantasy action-adventure game 
 playable classes (Mage, Rogue, Monk). The owner develops from an Android tablet through Claude
 Code and is new to Unity and Git. Read `Docs/DevelopmentWorkflow.md` for the full process.
 
+Visual work follows `Docs/ArtBible.md` (approved direction: Soft Illustrated Realism). It
+separates approved decisions from proposals; do not present a proposal as decided.
+
 ## Project facts
 
 - Unity 6000.6.0f1, Universal Render Pipeline, new Input System only (`activeInputHandler: 1`).
@@ -17,7 +20,9 @@ Code and is new to Unity and Git. Read `Docs/DevelopmentWorkflow.md` for the ful
 - There is no Unity Editor here. Compilation can be checked with `Tools/ci/compile_check.sh`.
   Never state that anything runs or works in Unity unless a CI run or the owner has confirmed it.
   Say what was checked and what was not.
-- LFS file contents are not downloaded here. Do not read, edit or regenerate binary assets.
+- Do not edit binary assets by hand. New binary assets (models, images) must be produced by a
+  committed script, with their source and licence recorded (see `Docs/Characters/Mage.md`).
+  Blender 4 can be installed from Ubuntu's packages (`blender`, `python3-numpy`) and run headless.
 - The owner's laptop may hold uncommitted files that are not in GitHub, including
   `Assets/Scenes/MagePrototype.unity`. Never add or replace a file at a path that may exist only
   on the laptop. Ask for it to be committed from the laptop first.
