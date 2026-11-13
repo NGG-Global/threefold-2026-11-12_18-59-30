@@ -40,6 +40,7 @@ Unity Editor, Windows tooling or a physical Android device.
 | Traversal: ledges, climbing, vaulting, edge guarding, training course | Written; rules tested outside Unity; not yet run in Unity. See `Docs/Traversal.md` |
 | Enemy AI: Ruins Guardian, Arcane Wisp, Combat Arena, player defeat | Written; decision logic tested outside Unity (53 tests); not yet run in Unity. See `Docs/EnemyAI.md` |
 | Play Mode tests for movement and camera | Not started |
+| Interaction and puzzles: prompts, doors, plates, switches, spell activators, timers, Sealed Gateway | Written; rules tested outside Unity; not yet run in Unity. See `Docs/Puzzles.md` |
 | Android build (APK) from GitHub | Workflow written (`android-build.yml`, started by hand), with a GitHub-hosted and a self-hosted route; **never run**. See `Docs/CloudBuild.md` |
 | Running Editor commands in CI | The Android build and one test assemble the scene from code in batch mode; never run. Committing the generated files back is not implemented |
 | Play-testing, feel tuning, device testing | Laptop only |

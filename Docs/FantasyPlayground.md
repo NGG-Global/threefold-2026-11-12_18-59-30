@@ -21,9 +21,12 @@ The command creates the scene `Assets/Scenes/FantasyPlayground.unity`, generates
 lays out the level, sets up lighting, adds the Mage with camera, controls, combat and HUD,
 saves the scene, and puts it first in Build Settings so a device build starts there.
 
+The command also builds the Sealed Gateway puzzle (`Docs/Puzzles.md`). The puzzle has its own
+root object, `SealedGateway Puzzle`, which is never deleted by a rebuild of the environment.
+
 Afterwards, upload the new files from the laptop (see `Docs/DevelopmentWorkflow.md`): the scene,
-`Assets/Threefold/Generated/Environment`, `Assets/Threefold/Generated/Combat`, and the changed
-`ProjectSettings/EditorBuildSettings.asset`.
+`Assets/Threefold/Generated/Environment`, `Assets/Threefold/Generated/Combat`,
+`Assets/Threefold/Generated/Puzzles`, and the changed `ProjectSettings/EditorBuildSettings.asset`.
 
 ### Running it again
 
@@ -48,6 +51,7 @@ spire on the horizon.
 | Crystal dais | Centre | The focal point. Standing within 4.5 m restores mana quickly, so a fight moves between the centre and the edges |
 | Terrace and stair | North | Stairs, height, shooting uphill; the colonnade gives cover |
 | Jump course | East | Blocks rising 0.5 m at a time with gaps of about 1.4 m, up to a platform 2.4 m high. A full jump reaches 1.5 m |
+| Sealed Gateway | South-east corner, with its lookout near the south gate | The example puzzle: climb the lookout, strike the crystal with Arcane Bolt, reach the plate in time. See `Docs/Puzzles.md` |
 | Ruined wall and arches | West | A passage about 3.5 m wide behind the ruins, to exercise the camera in a confined space |
 | Hillside | Outside the walls | About 8 m of walkable slope with trees and rocks, then an invisible wall |
 | South gate | Behind the starting point | A portal to the Combat Arena (Sprint 8, `Docs/EnemyAI.md`). Hidden if the arena is not in Build Settings |

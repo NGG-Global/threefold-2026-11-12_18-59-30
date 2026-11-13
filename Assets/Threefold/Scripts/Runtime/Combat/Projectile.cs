@@ -48,6 +48,9 @@ namespace Threefold.Combat
         [Tooltip("Optional. Cleared on each launch so a reused projectile does not draw a streak across the scene.")]
         [SerializeField] private TrailRenderer trail;
 
+        [Tooltip("The kind of magic this projectile carries. Magical activators respond only to the kinds they accept.")]
+        [SerializeField] private SpellElement element = SpellElement.Arcane;
+
         private readonly RaycastHit[] hits = new RaycastHit[8];
         private readonly Collider[] overlaps = new Collider[8];
 
@@ -57,6 +60,13 @@ namespace Threefold.Combat
         private CombatTeam ownerTeam;
         private float remainingRange;
         private bool flying;
+
+        /// <summary>The kind of magic this projectile carries.</summary>
+        public SpellElement Element
+        {
+            get => element;
+            set => element = value;
+        }
 
         /// <summary>Connects the trail. Called by the setup tooling.</summary>
         public void Bind(TrailRenderer trailRenderer)
@@ -186,6 +196,13 @@ namespace Threefold.Combat
             if (target != null && target.IsAlive && launch.Damage > 0f)
             {
                 target.ApplyDamage(new DamageInfo(launch.Damage, point, launch.Direction, launch.Owner));
+            }
+
+            // Only reached on impact, which is rare per frame, so the lookup costs little.
+            ISpellReceiver receiver = other.GetComponentInParent<ISpellReceiver>();
+            if (receiver != null)
+            {
+                receiver.ReceiveSpell(new SpellImpact(element, point, launch.Direction, launch.Owner));
             }
 
             if (launch.ImpactEffect != null)

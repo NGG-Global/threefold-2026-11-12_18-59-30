@@ -94,6 +94,7 @@ namespace Threefold.EditorTools
             WireReferences(mage, motor, input, cameraRig, report);
             TouchControlsSetup.Ensure(scene, mage, report);
             CombatSetup.Ensure(scene, mage, report, dummies);
+            InteractionSetup.Ensure(scene, mage, report);
             MageCharacterSetup.Ensure(scene, mage, report);
             ObjectiveSetup.Ensure(scene, mage, report, objective);
             return mage;

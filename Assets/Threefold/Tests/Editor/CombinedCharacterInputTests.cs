@@ -79,6 +79,16 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void InteractIsTrueWhenAnySourceIsTrue()
+        {
+            Assert.IsFalse(combined.InteractPressedThisFrame);
+
+            second.InteractPressed = true;
+
+            Assert.IsTrue(combined.InteractPressedThisFrame);
+        }
+
+        [Test]
         public void DisabledSourceIsIgnored()
         {
             first.MoveValue = new Vector2(0f, 1f);
@@ -111,6 +121,7 @@ namespace Threefold.Tests
             public bool JumpPressed;
             public bool AttackIsHeld;
             public bool AttackPressed;
+            public bool InteractPressed;
 
             public override Vector2 Move => MoveValue;
             public override Vector2 LookDelta => LookValue;
@@ -119,6 +130,7 @@ namespace Threefold.Tests
             public override bool JumpPressedThisFrame => JumpPressed;
             public override bool AttackHeld => AttackIsHeld;
             public override bool AttackPressedThisFrame => AttackPressed;
+            public override bool InteractPressedThisFrame => InteractPressed;
         }
     }
 }

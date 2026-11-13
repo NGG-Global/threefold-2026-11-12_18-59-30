@@ -8,7 +8,8 @@ namespace Threefold.Combat
     /// reaches, so a shot lands where the crosshair is even though it starts at the character.
     ///
     /// A small aim assist pulls the aim onto a nearby target that is close to the crosshair, which
-    /// makes aiming with a thumb on a touchscreen forgiving.
+    /// makes aiming with a thumb on a touchscreen forgiving. Targets are characters with health and
+    /// any registered <see cref="IAimAssistTarget"/>, such as a crystal waiting for a spell.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CameraAimProvider : AimProvider
@@ -123,6 +124,31 @@ namespace Threefold.Combat
                 {
                     bestAngle = angle;
                     aimPoint = candidatePoint;
+                    found = true;
+                }
+            }
+
+            // Objects that want to be struck, such as a crystal that responds to a spell.
+            var objects = AimAssistTargets.Active;
+            for (int i = 0; i < objects.Count; i++)
+            {
+                IAimAssistTarget target = objects[i];
+                if (target == null || !target.IsAimAssistAvailable)
+                {
+                    continue;
+                }
+
+                Vector3 targetPoint = target.AimPoint;
+                if ((targetPoint - transform.position).sqrMagnitude > assistRange * assistRange)
+                {
+                    continue;
+                }
+
+                float angle = Vector3.Angle(viewDirection, targetPoint - viewPosition);
+                if (angle < bestAngle)
+                {
+                    bestAngle = angle;
+                    aimPoint = targetPoint;
                     found = true;
                 }
             }

@@ -32,5 +32,11 @@ namespace Threefold.InputHandling
 
         /// <summary>True only on the frame the primary attack control was pressed.</summary>
         public abstract bool AttackPressedThisFrame { get; }
+
+        /// <summary>
+        /// True only on the frame the interact control was pressed: open a door, pull a lever.
+        /// Sources without an interact control report false.
+        /// </summary>
+        public virtual bool InteractPressedThisFrame => false;
     }
 }

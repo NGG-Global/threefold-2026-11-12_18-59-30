@@ -195,6 +195,7 @@ namespace Threefold.EditorTools
 
             GameObject mage = MagePrototypeSetup.EnsureCharacterRig(scene, SpawnPosition, Quaternion.identity,
                 GetTargetPlacements(), report);
+            SealedGatewaySetup.Ensure(scene, assets, rebuildAssets, report);
 
             if (mage.TryGetComponent(out Mana mana))
             {
@@ -435,8 +436,9 @@ namespace Threefold.EditorTools
                     : side == 2 ? new Vector3(inset, 0.01f, along)
                     : new Vector3(along < 0f ? along - 2f : along + 2f, 0.01f, inset - 7.5f);
 
-                // Keep the stair, the gate and the jump course clear.
-                if (Mathf.Abs(position.x) < 4f && (position.z < -12f || position.z > 6f))
+                // Keep the stair, the gate, the jump course and the sealed gateway puzzle clear.
+                if ((Mathf.Abs(position.x) < 4f && (position.z < -12f || position.z > 6f))
+                    || SealedGatewaySetup.IsReserved(position))
                 {
                     continue;
                 }
@@ -450,7 +452,7 @@ namespace Threefold.EditorTools
                 var position = new Vector3(EnvironmentAssets.Range(random, -15f, 15f), 0.012f + i * 0.001f,
                     EnvironmentAssets.Range(random, -15f, 9f));
 
-                if (position.sqrMagnitude < 5f * 5f)
+                if (position.sqrMagnitude < 5f * 5f || SealedGatewaySetup.IsReserved(position))
                 {
                     continue;
                 }
