@@ -14,8 +14,9 @@ Code and is new to Unity and Git. Read `Docs/DevelopmentWorkflow.md` for the ful
 
 ## Constraints of the cloud session
 
-- There is no Unity Editor here. Never state that code compiles or runs in Unity unless a CI run
-  or the owner has confirmed it. Say what was checked and what was not.
+- There is no Unity Editor here. Compilation can be checked with `Tools/ci/compile_check.sh`.
+  Never state that anything runs or works in Unity unless a CI run or the owner has confirmed it.
+  Say what was checked and what was not.
 - LFS file contents are not downloaded here. Do not read, edit or regenerate binary assets.
 - The owner's laptop may hold uncommitted files that are not in GitHub, including
   `Assets/Scenes/MagePrototype.unity`. Never add or replace a file at a path that may exist only
@@ -41,6 +42,8 @@ Code and is new to Unity and Git. Read `Docs/DevelopmentWorkflow.md` for the ful
 ## Before opening a pull request
 
 1. Run `python3 Tools/ci/check_unity_repo.py`. It must report no errors.
-2. Syntax-check new C# files if a parser is available.
+2. Run `Tools/ci/compile_check.sh`. It compiles all Threefold assemblies against the real Unity
+   assemblies without running Unity (needs the .NET 8 SDK; the first run downloads about 4 GB).
+   It must pass. Passing proves compilation only, never runtime behaviour.
 3. Use a separate branch per change and open a pull request against `main`. Do not merge it.
 4. Fill in the pull request template, including the "Laptop actions required" section.

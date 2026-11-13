@@ -1,0 +1,81 @@
+name: Android build
+
+# Builds a development APK of the playable prototype. It is started by hand only:
+# on GitHub open Actions > Android build > Run workflow.
+#
+# The build assembles the scene from code first (Threefold.EditorTools.PrototypeBuild.BuildAndroid),
+# so the generated scene and assets do not have to be committed.
+#
+# Requirements, explained in Docs/DevelopmentWorkflow.md:
+#   - a Unity licence in the repository secrets (UNITY_LICENSE or UNITY_SERIAL, with
+#     UNITY_EMAIL and UNITY_PASSWORD)
+#   - enough Actions budget: an Android build takes considerably longer than the test job
+#
+# This workflow has never been run. Expect the first run to need adjustment.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build development APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check for a Unity licence
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          if [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; then
+            echo "::error::No Unity licence secret is configured. See Docs/DevelopmentWorkflow.md."
+            exit 1
+          fi
+
+      # The Android build image and the build itself need more disk than the runner has free.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android
+          df -h /
+
+      - name: Check out repository with LFS files
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Restore Unity Library cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Threefold-Android-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Threefold-Android-
+
+      - name: Build
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          buildName: Threefold
+          buildMethod: Threefold.EditorTools.PrototypeBuild.BuildAndroid
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: threefold-android-development
+          path: build/Android
+          if-no-files-found: error
+          retention-days: 14

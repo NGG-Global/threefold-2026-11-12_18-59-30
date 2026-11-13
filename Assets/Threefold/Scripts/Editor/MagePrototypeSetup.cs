@@ -59,6 +59,7 @@ namespace Threefold.EditorTools
             EnsureDirectionalLight(scene, report);
 
             GameObject mage = EnsureCharacterRig(scene, origin, Quaternion.identity, null, report);
+            AppendValidation(scene, report);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(scene);
@@ -85,7 +86,19 @@ namespace Threefold.EditorTools
             WireReferences(mage, motor, input, cameraRig, report);
             TouchControlsSetup.Ensure(scene, mage, report);
             CombatSetup.Ensure(scene, mage, report, dummies);
+            ObjectiveSetup.Ensure(scene, mage, report);
             return mage;
+        }
+
+        /// <summary>Checks the finished scene and adds the outcome to the setup report.</summary>
+        internal static void AppendValidation(Scene scene, StringBuilder report)
+        {
+            var problems = new StringBuilder();
+            int count = PrototypeValidator.Validate(scene, problems);
+
+            report.AppendLine(count == 0
+                ? "Validation: no problems found."
+                : $"Validation: {count} problem(s) found:\n{problems.ToString().TrimEnd()}");
         }
 
         [MenuItem(MenuPath, true)]

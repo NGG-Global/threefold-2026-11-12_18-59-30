@@ -34,7 +34,8 @@ namespace Threefold.Combat
 
         private const float MinimumAimDistance = 1.5f;
 
-        private readonly RaycastHit[] hits = new RaycastHit[8];
+        // Generous on purpose: hits beyond the buffer are dropped in no particular order.
+        private readonly RaycastHit[] hits = new RaycastHit[32];
 
         public Camera AimCamera
         {

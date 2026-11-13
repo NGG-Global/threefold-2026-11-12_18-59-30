@@ -137,7 +137,8 @@ namespace Threefold.InputHandling
         private static bool WasDesktopDeviceUsedThisFrame()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.anyKey.wasPressedThisFrame)
+            // Escape is excluded because Android reports its Back button as that key.
+            if (keyboard != null && keyboard.anyKey.wasPressedThisFrame && !keyboard.escapeKey.wasPressedThisFrame)
             {
                 return true;
             }

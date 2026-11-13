@@ -73,7 +73,10 @@ namespace Threefold.CombatFeedback
             }
 
             ClearFlash();
-            visual.localScale = restScale;
+            if (visual != null)
+            {
+                visual.localScale = restScale;
+            }
             punchRemaining = 0f;
         }
 

@@ -97,7 +97,8 @@ namespace Threefold.Cameras
 
         private const float MinimumClipDistance = 0.3f;
 
-        private readonly RaycastHit[] collisionHits = new RaycastHit[8];
+        // Generous on purpose: hits beyond the buffer are dropped in no particular order.
+        private readonly RaycastHit[] collisionHits = new RaycastHit[32];
 
         private Vector3 pivot;
         private Vector3 framingPivot;

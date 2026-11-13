@@ -29,14 +29,16 @@ Unity Editor, Windows tooling or a physical Android device.
 | Feature branches and pull requests from the tablet | Working |
 | Git LFS for models, textures and audio | Working |
 | Scene setup by Editor command (`Threefold > Setup > Mage Prototype`) | Written in pull request #2; not yet run in Unity |
+| Compile check without Unity (`Tools/ci/compile_check.sh`) | Working when run by Claude Code: all assemblies compile against Unity 6000.6.0f1 |
 | Repository checks without Unity (`Tools/ci/check_unity_repo.py`) | Working when run by Claude Code; runs in CI after `CI_ENABLED` is set |
 | Unity compile check and Edit Mode tests in CI | Workflow written; **not yet run**; needs a Unity licence secret |
 | Android touch controls (joystick, camera drag, jump, sprint) | Written; not yet compiled in Unity or run on a device |
 | Mage combat (spell, health, mana, dummy, HUD, feedback) | Written; not yet compiled in Unity or played |
 | Fantasy Playground environment (generated level, lighting, modules) | Written; not yet compiled in Unity or seen |
-| Play Mode tests for movement and camera | Not started; depends on pull request #2 |
-| Android build (APK) in CI | Not started; planned after the compile job has passed once |
-| Running Editor commands in CI and committing the generated scenes | Not started; planned after the Android build |
+| Objective, completion and restart loop | Written; not yet compiled in Unity or played |
+| Play Mode tests for movement and camera | Not started |
+| Android build (APK) in CI | Workflow written (`android-build.yml`, started by hand); **never run**; needs a Unity licence secret |
+| Running Editor commands in CI | The Android build and one test assemble the scene from code in batch mode; never run. Committing the generated files back is not implemented |
 | Play-testing, feel tuning, device testing | Laptop only |
 
 Until the Unity job has passed once, no code in this repository has been confirmed to compile.
