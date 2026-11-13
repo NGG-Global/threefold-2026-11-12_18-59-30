@@ -3,12 +3,12 @@ using UnityEngine;
 namespace Threefold.TouchControls
 {
     /// <summary>
-    /// A rectangular area of the screen that one finger at a time can hold: a joystick zone, the
-    /// camera look area, or a button. <see cref="TouchControlsInput"/> decides which finger
+    /// An area of the screen that one finger at a time can hold: the joystick, the camera look
+    /// area, a button, the discipline selector. <see cref="PointerRouter"/> decides which finger
     /// belongs to which region, which is what makes simultaneous multi-touch work.
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
-    public abstract class TouchRegion : MonoBehaviour
+    public abstract class TouchRegion : MonoBehaviour, IPointerTarget
     {
         /// <summary>Value of <see cref="PointerId"/> when no finger holds this region.</summary>
         public const int NoPointer = int.MinValue;
@@ -19,6 +19,9 @@ namespace Threefold.TouchControls
         public int PointerId { get; private set; } = NoPointer;
 
         public bool IsCaptured => PointerId != NoPointer;
+
+        /// <summary>False while the region is inactive or disabled; subclasses may add conditions.</summary>
+        public virtual bool AcceptsPointers => isActiveAndEnabled;
 
         protected RectTransform Region
         {
@@ -53,7 +56,8 @@ namespace Threefold.TouchControls
             }
         }
 
-        public void Release()
+        /// <summary>Lets the finger go. Cancelled means the touch was aborted and nothing should fire.</summary>
+        public void Release(bool cancelled)
         {
             if (!IsCaptured)
             {
@@ -61,12 +65,12 @@ namespace Threefold.TouchControls
             }
 
             PointerId = NoPointer;
-            OnPointerEnded();
+            OnPointerEnded(cancelled);
         }
 
         protected virtual void OnDisable()
         {
-            Release();
+            Release(true);
         }
 
         /// <summary>Converts a screen position to this region's local space, in canvas units.</summary>
@@ -76,10 +80,18 @@ namespace Threefold.TouchControls
             return local;
         }
 
+        /// <summary>True if the point lies within a circle filling the rectangle, widened by the padding.</summary>
+        protected bool CircleContains(Vector2 screenPosition, float padding)
+        {
+            Rect rect = Region.rect;
+            float radius = Mathf.Min(rect.width, rect.height) * 0.5f + Mathf.Max(0f, padding);
+            return (ToLocal(screenPosition) - rect.center).sqrMagnitude <= radius * radius;
+        }
+
         protected abstract void OnPointerBegan(Vector2 screenPosition);
 
         protected abstract void OnPointerMoved(Vector2 screenPosition);
 
-        protected abstract void OnPointerEnded();
+        protected abstract void OnPointerEnded(bool cancelled);
     }
 }

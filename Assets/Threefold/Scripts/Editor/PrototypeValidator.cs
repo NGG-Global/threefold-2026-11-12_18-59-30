@@ -122,9 +122,13 @@ namespace Threefold.EditorTools
             else
             {
                 if (touch.Joystick == null) Problem("The touch controls have no joystick.");
+                if (touch.LookArea == null) Problem("The touch controls have no camera look area.");
                 if (touch.JumpButton == null) Problem("The touch controls have no jump button.");
-                if (touch.SprintButton == null) Problem("The touch controls have no sprint button.");
-                if (touch.AttackButton == null) Problem("The touch controls have no attack button.");
+                if (touch.AttackGestureButton == null) Problem("The touch controls have no ATTACK gesture button (run the setup command to upgrade).");
+                if (touch.BlockButton == null) Problem("The touch controls have no block button.");
+                if (touch.DisciplineSelector == null) Problem("The touch controls have no discipline selector.");
+                if (touch.LayoutVersion < TouchControlsInput.CurrentLayoutVersion) Problem("The touch controls use an earlier layout (run the setup command to upgrade).");
+                if (touch.Disciplines == null) Problem("The touch controls do not show the Mage's discipline.");
             }
 
             if (FindInScene<ControlSchemeSelector>(scene) == null) Problem("Nothing selects between touch and desktop controls.");
@@ -134,6 +138,12 @@ namespace Threefold.EditorTools
             if (mage.GetComponent<Health>() == null) Problem("The Mage has no Health.");
             if (mage.GetComponent<Mana>() == null) Problem("The Mage has no Mana.");
             if (mage.GetComponent<PlayerAbilityInput>() == null) Problem("The Mage's attack input is not connected.");
+            if (mage.GetComponent<PlayerGuard>() == null) Problem("The Mage has no block (PlayerGuard).");
+            if (mage.GetComponent<Threefold.Magic.PlayerDisciplines>() == null) Problem("The Mage has no discipline selection.");
+            if (mage.TryGetComponent(out AbilityCaster mageCaster) && mageCaster.GetAbility(PlayerAbilityInput.DefaultMeleeSlot) == null)
+            {
+                Problem("The Mage has no tap (melee) ability.");
+            }
 
             AbilityCaster caster = mage.GetComponent<AbilityCaster>();
             if (caster == null)

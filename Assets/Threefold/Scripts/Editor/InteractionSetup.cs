@@ -24,9 +24,9 @@ namespace Threefold.EditorTools
         private const string PromptName = "InteractionPrompt";
         private const string ButtonName = "InteractButton";
 
-        // Beside the attack button, above sprint, within reach of the right thumb.
-        private const float ButtonSize = 72f;
-        private static readonly Vector2 ButtonPosition = new Vector2(-198f, 170f);
+        // Up and to the left of BLOCK, within reach of the right thumb (see MobileControlsLayout).
+        private static float ButtonSize => MobileControlsLayout.Default.Interact.Diameter;
+        private static Vector2 ButtonPosition => MobileControlsLayout.Default.Interact.Position;
 
         private static readonly Color ButtonColor = new Color(1f, 0.96f, 0.86f, 0.28f);
         private static readonly Color OutlineColor = new Color(1f, 0.96f, 0.86f, 0.55f);
@@ -121,6 +121,7 @@ namespace Threefold.EditorTools
 
             TouchButton button = rect.gameObject.AddComponent<TouchButton>();
             button.Bind(background);
+            button.HitPadding = MobileControlsLayout.Default.Interact.HitPadding;
             rect.gameObject.SetActive(false);
             Undo.RegisterCreatedObjectUndo(rect.gameObject, DialogTitle);
 

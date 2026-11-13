@@ -9,6 +9,24 @@ namespace Threefold.Interface
         ChevronUp,
         DoubleChevronUp,
         Diamond,
+
+        /// <summary>Four-pointed star: the Arcane discipline.</summary>
+        Star,
+
+        /// <summary>Flame outline: the Flame discipline.</summary>
+        Flame,
+
+        /// <summary>Hexagonal ward: the Aegis discipline.</summary>
+        Hexagon,
+
+        /// <summary>Shield outline: the block button.</summary>
+        Shield,
+
+        /// <summary>Diagonal cross: cancel.</summary>
+        Cross,
+
+        /// <summary>Thick ring, used as a radial charge meter when the Image is set to Filled.</summary>
+        ThickRing,
     }
 
     /// <summary>
@@ -19,7 +37,7 @@ namespace Threefold.Interface
     public static class ProceduralSprites
     {
         private const int Size = 128;
-        private const int ShapeCount = 5;
+        private static readonly int ShapeCount = System.Enum.GetValues(typeof(ProceduralShape)).Length;
 
         private static readonly Sprite[] Cache = new Sprite[ShapeCount];
 
@@ -43,6 +61,43 @@ namespace Threefold.Interface
             new Vector2(0.50f, 0.74f), new Vector2(0.70f, 0.50f), new Vector2(0.50f, 0.26f),
             new Vector2(0.30f, 0.50f), new Vector2(0.50f, 0.74f),
         };
+
+        private static readonly Vector2[] Star =
+        {
+            new Vector2(0.50f, 0.80f), new Vector2(0.57f, 0.57f), new Vector2(0.80f, 0.50f), new Vector2(0.57f, 0.43f),
+            new Vector2(0.50f, 0.20f), new Vector2(0.43f, 0.43f), new Vector2(0.20f, 0.50f), new Vector2(0.43f, 0.57f),
+            new Vector2(0.50f, 0.80f),
+        };
+
+        private static readonly Vector2[] Flame =
+        {
+            new Vector2(0.50f, 0.22f), new Vector2(0.36f, 0.27f), new Vector2(0.30f, 0.39f), new Vector2(0.33f, 0.52f),
+            new Vector2(0.42f, 0.62f), new Vector2(0.47f, 0.80f), new Vector2(0.58f, 0.66f), new Vector2(0.62f, 0.58f),
+            new Vector2(0.64f, 0.66f), new Vector2(0.70f, 0.50f), new Vector2(0.69f, 0.37f), new Vector2(0.63f, 0.27f),
+            new Vector2(0.50f, 0.22f),
+        };
+
+        private static readonly Vector2[] Hexagon =
+        {
+            new Vector2(0.50f, 0.78f), new Vector2(0.74f, 0.64f), new Vector2(0.74f, 0.36f), new Vector2(0.50f, 0.22f),
+            new Vector2(0.26f, 0.36f), new Vector2(0.26f, 0.64f), new Vector2(0.50f, 0.78f),
+        };
+
+        private static readonly Vector2[] HexagonCore =
+        {
+            new Vector2(0.50f, 0.62f), new Vector2(0.60f, 0.56f), new Vector2(0.60f, 0.44f), new Vector2(0.50f, 0.38f),
+            new Vector2(0.40f, 0.44f), new Vector2(0.40f, 0.56f), new Vector2(0.50f, 0.62f),
+        };
+
+        private static readonly Vector2[] Shield =
+        {
+            new Vector2(0.30f, 0.72f), new Vector2(0.50f, 0.77f), new Vector2(0.70f, 0.72f), new Vector2(0.69f, 0.50f),
+            new Vector2(0.62f, 0.35f), new Vector2(0.50f, 0.23f), new Vector2(0.38f, 0.35f), new Vector2(0.31f, 0.50f),
+            new Vector2(0.30f, 0.72f),
+        };
+
+        private static readonly Vector2[] CrossA = { new Vector2(0.32f, 0.32f), new Vector2(0.68f, 0.68f) };
+        private static readonly Vector2[] CrossB = { new Vector2(0.32f, 0.68f), new Vector2(0.68f, 0.32f) };
 
         public static Sprite Get(ProceduralShape shape)
         {
@@ -116,6 +171,28 @@ namespace Threefold.Interface
 
                 case ProceduralShape.Diamond:
                     return DistanceToPolyline(point, Diamond) - Size * 0.04f;
+
+                case ProceduralShape.Star:
+                    return DistanceToPolyline(point, Star) - Size * 0.035f;
+
+                case ProceduralShape.Flame:
+                    return DistanceToPolyline(point, Flame) - Size * 0.035f;
+
+                case ProceduralShape.Hexagon:
+                    return Mathf.Min(DistanceToPolyline(point, Hexagon), DistanceToPolyline(point, HexagonCore))
+                           - Size * 0.032f;
+
+                case ProceduralShape.Shield:
+                    return DistanceToPolyline(point, Shield) - Size * 0.04f;
+
+                case ProceduralShape.Cross:
+                    return Mathf.Min(DistanceToPolyline(point, CrossA), DistanceToPolyline(point, CrossB)) - Size * 0.045f;
+
+                case ProceduralShape.ThickRing:
+                {
+                    float thickness = Size * 0.09f;
+                    return Mathf.Abs(fromCentre - (outerRadius - thickness * 0.5f)) - thickness * 0.5f;
+                }
 
                 default:
                     return fromCentre - outerRadius;

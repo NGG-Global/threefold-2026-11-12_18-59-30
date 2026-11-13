@@ -34,6 +34,31 @@ namespace Threefold.InputHandling
         public abstract bool AttackPressedThisFrame { get; }
 
         /// <summary>
+        /// The attack control read as a gesture: tap, charge, aim, release or cancel. Gameplay should
+        /// react to this rather than to <see cref="AttackHeld"/>, so a tap and a charge are never
+        /// confused. Sources without gesture support report Idle.
+        /// </summary>
+        public virtual AttackGestureFrame AttackGesture => default;
+
+        /// <summary>True while the block control is held.</summary>
+        public virtual bool BlockHeld => false;
+
+        /// <summary>True only on the frame the block control was pressed.</summary>
+        public virtual bool BlockPressedThisFrame => false;
+
+        /// <summary>True only on the frame the block control was let go (or its touch was cancelled).</summary>
+        public virtual bool BlockReleasedThisFrame => false;
+
+        /// <summary>
+        /// The discipline slot the player chose this frame (0 is the first), or -1. Touch reports the
+        /// selector, the keyboard its number keys.
+        /// </summary>
+        public virtual int DisciplineSlotRequested => -1;
+
+        /// <summary>-1 or +1 on the frame the player stepped to the previous or next discipline, otherwise 0.</summary>
+        public virtual int DisciplineCycleRequested => 0;
+
+        /// <summary>
         /// True only on the frame the interact control was pressed: open a door, pull a lever.
         /// Sources without an interact control report false.
         /// </summary>

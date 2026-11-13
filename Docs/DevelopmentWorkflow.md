@@ -32,7 +32,7 @@ Unity Editor, Windows tooling or a physical Android device.
 | Compile check without Unity (`Tools/ci/compile_check.sh`) | Working when run by Claude Code: all assemblies compile against Unity 6000.6.0f1 |
 | Repository checks without Unity (`Tools/ci/check_unity_repo.py`) | Working when run by Claude Code; runs in CI after `CI_ENABLED` is set |
 | Unity compile check and Edit Mode tests in CI | Workflow written; **not yet run**; needs a Unity licence secret |
-| Android touch controls (joystick, camera drag, jump, sprint) | Written; not yet compiled in Unity or run on a device |
+| Mobile controls LM-01: fixed joystick, camera drag, ATTACK (tap, charge, aim, cancel), BLOCK, JUMP, discipline selector, desktop equivalents | Written; input rules tested outside Unity (99 tests); layout checked on ten screen sizes; not yet compiled by Unity or run on a device. See `Docs/TouchControls.md` |
 | Mage combat (spell, health, mana, dummy, HUD, feedback) | Written; not yet compiled in Unity or played |
 | Fantasy Playground environment (generated level, lighting, modules) | Written; not yet compiled in Unity or seen |
 | Objective, completion and restart loop | Written; not yet compiled in Unity or played |

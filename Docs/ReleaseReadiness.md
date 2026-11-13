@@ -170,14 +170,17 @@ Install the APK, then check in this order. Stop at the first failure and report 
 - [ ] The courtyard, the Mage (a capsule) and the sky are visible. Nothing is bright pink.
 
 **Controls**
-- [ ] A joystick appears under the left thumb and moves the Mage.
-- [ ] Dragging on the right side turns the camera.
-- [ ] Jump, sprint and attack buttons respond.
-- [ ] Moving, turning the camera and attacking work at the same time.
+- [ ] The fixed joystick, bottom left, moves the Mage. Touching elsewhere on the left does not move it.
+- [ ] Pushing the joystick past its ring sprints.
+- [ ] Dragging on any free part of the screen turns the camera, while moving.
+- [ ] A tap on ATTACK strikes; holding charges; dragging aims; releasing fires; releasing on the red zone cancels.
+- [ ] BLOCK and JUMP respond while moving and turning the camera.
+- [ ] The discipline indicator on ATTACK opens the Arcane, Flame and Aegis fan; a choice shows on ATTACK.
+- [ ] Moving, turning the camera and charging work at the same time with three fingers.
 - [ ] No control is hidden by a notch or a rounded corner.
 
 **Combat**
-- [ ] The attack fires a bolt towards the crosshair.
+- [ ] A charged attack fires a bolt towards the crosshair; a tap swings the staff.
 - [ ] Bolts hit dummies: flash, number, health bar.
 - [ ] Mana falls when attacking and returns when not; with too little, the bar flashes red.
 - [ ] Standing near the crystal restores mana quickly.

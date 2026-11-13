@@ -7,8 +7,15 @@ namespace Threefold.InputHandling
     /// <summary>
     /// Reads character input from an Input System actions asset (the project's
     /// InputSystem_Actions asset by default). Keyboard, mouse and gamepad work through the
-    /// bindings already defined in that asset. Input System on-screen controls drive the same
-    /// actions, so a virtual joystick and buttons can be added later without changing this class.
+    /// bindings defined in that asset, and provide the same actions as the touch controls:
+    ///
+    /// - Attack: click (or gamepad West) for the standard attack; hold for at least the hold
+    ///   threshold to charge, release to fire. Aim with the camera. Pressing Block cancels a charge.
+    /// - Block: right mouse button, Q, or the gamepad's left trigger. Hold to keep blocking.
+    /// - Disciplines: keys 1, 2 and 3 choose directly; the gamepad's d-pad left and right step through them.
+    ///
+    /// Block and the discipline actions are optional in the asset. If the asset lacks them, the
+    /// bindings above are created in code, so an older asset keeps working.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-100)]
@@ -24,6 +31,17 @@ namespace Threefold.InputHandling
         [SerializeField] private string sprintActionName = "Sprint";
         [SerializeField] private string attackActionName = "Attack";
         [SerializeField] private string interactActionName = "Interact";
+        [SerializeField] private string blockActionName = "Block";
+
+        [Tooltip("Actions that choose a discipline directly, in slot order.")]
+        [SerializeField] private string[] disciplineSlotActionNames = { "DisciplineSlot1", "DisciplineSlot2", "DisciplineSlot3" };
+
+        [SerializeField] private string previousDisciplineActionName = "Previous";
+        [SerializeField] private string nextDisciplineActionName = "Next";
+
+        [Header("Attack gesture")]
+        [Tooltip("Hold threshold and charge time for the attack control. Aim settings are not used: the camera aims.")]
+        [SerializeField] private AttackGestureSettings attackGesture = new AttackGestureSettings();
 
         [Tooltip("Binding group of the keyboard and mouse in the actions asset. Used to name the interact key in prompts.")]
         [SerializeField] private string keyboardBindingGroup = "Keyboard&Mouse";
@@ -48,6 +66,12 @@ namespace Threefold.InputHandling
         private InputAction sprintAction;
         private InputAction attackAction;
         private InputAction interactAction;
+        private InputAction blockAction;
+        private InputAction previousDisciplineAction;
+        private InputAction nextDisciplineAction;
+        private InputAction[] disciplineSlotActions = new InputAction[0];
+        private readonly List<InputAction> actionsCreatedHere = new List<InputAction>(6);
+        private AttackGestureRecognizer attackRecognizer;
 
         private Vector2 move;
         private Vector2 lookDelta;
@@ -57,6 +81,14 @@ namespace Threefold.InputHandling
         private bool attackHeld;
         private bool attackPressedThisFrame;
         private bool interactPressedThisFrame;
+        private bool attackWasHeld;
+        private AttackGestureFrame attackFrame;
+        private bool blockHeld;
+        private bool blockWasHeld;
+        private bool blockPressedThisFrame;
+        private bool blockReleasedThisFrame;
+        private int disciplineRequest = -1;
+        private int disciplineCycle;
         private bool usingGamepad;
         private string keyboardInteractLabel;
         private string gamepadInteractLabel;
@@ -72,6 +104,15 @@ namespace Threefold.InputHandling
         public override bool AttackHeld => attackHeld;
         public override bool AttackPressedThisFrame => attackPressedThisFrame;
         public override bool InteractPressedThisFrame => interactPressedThisFrame;
+        public override AttackGestureFrame AttackGesture => attackFrame;
+        public override bool BlockHeld => blockHeld;
+        public override bool BlockPressedThisFrame => blockPressedThisFrame;
+        public override bool BlockReleasedThisFrame => blockReleasedThisFrame;
+        public override int DisciplineSlotRequested => disciplineRequest;
+        public override int DisciplineCycleRequested => disciplineCycle;
+
+        private AttackGestureRecognizer AttackRecognizer =>
+            attackRecognizer ?? (attackRecognizer = new AttackGestureRecognizer(attackGesture));
 
         /// <summary>True if a gamepad was used more recently than the keyboard and mouse.</summary>
         public bool UsingGamepad => usingGamepad;
@@ -151,6 +192,14 @@ namespace Threefold.InputHandling
             {
                 EnableIfNeeded(interactAction);
             }
+
+            EnableIfNeeded(blockAction);
+            EnableIfNeeded(previousDisciplineAction);
+            EnableIfNeeded(nextDisciplineAction);
+            for (int i = 0; i < disciplineSlotActions.Length; i++)
+            {
+                EnableIfNeeded(disciplineSlotActions[i]);
+            }
         }
 
         private void OnDisable()
@@ -161,8 +210,25 @@ namespace Threefold.InputHandling
             }
 
             actionsEnabledHere.Clear();
-            ClearState();
+
+            for (int i = 0; i < actionsCreatedHere.Count; i++)
+            {
+                actionsCreatedHere[i].Dispose();
+            }
+
+            actionsCreatedHere.Clear();
             ReleaseCursor();
+            AttackRecognizer.Reset();
+            ClearState();
+        }
+
+        /// <summary>Losing focus abandons a charge instead of firing it when the button state is reset.</summary>
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (!hasFocus)
+            {
+                AttackRecognizer.Cancel();
+            }
         }
 
         private void Update()
@@ -174,9 +240,81 @@ namespace Threefold.InputHandling
             jumpHeld = jumpAction.IsPressed();
             jumpPressedThisFrame = jumpAction.WasPressedThisFrame();
             lookDelta = ReadLook();
+            ReadBlock();
             ReadAttack();
+            ReadAttackGesture();
+            ReadDisciplines();
             ReadInteract();
             TrackDeviceKind();
+        }
+
+        /// <summary>
+        /// Block follows the same device rules as attack: not from the touchscreen (touch has its own
+        /// button), and from the mouse only while it is captured.
+        /// </summary>
+        private void ReadBlock()
+        {
+            bool held = false;
+            if (blockAction != null && blockAction.IsPressed())
+            {
+                InputControl control = blockAction.activeControl;
+                InputDevice device = control != null ? control.device : null;
+                bool mouseFree = device is Mouse && lockCursorForMouseLook && Cursor.lockState != CursorLockMode.Locked;
+                held = !(device is Touchscreen) && !mouseFree;
+            }
+
+            blockHeld = held;
+            blockPressedThisFrame = held && !blockWasHeld;
+            blockReleasedThisFrame = !held && blockWasHeld;
+            blockWasHeld = held;
+        }
+
+        /// <summary>Reads the attack button as a gesture: tap, or hold to charge and release to fire.</summary>
+        private void ReadAttackGesture()
+        {
+            AttackGestureRecognizer recognizer = AttackRecognizer;
+            recognizer.BeginFrame();
+            float now = Time.unscaledTime;
+
+            if (attackHeld && !attackWasHeld)
+            {
+                if (CombatInputRules.AttackPressAllowed(blockHeld))
+                {
+                    recognizer.Press(now, Vector2.zero);
+                }
+            }
+            else if (!attackHeld && attackWasHeld)
+            {
+                recognizer.Release(now, false);
+            }
+
+            attackWasHeld = attackHeld;
+            recognizer.Update(now);
+            CombatInputRules.ApplyBlock(recognizer, blockHeld, blockPressedThisFrame);
+            attackFrame = recognizer.Snapshot();
+        }
+
+        private void ReadDisciplines()
+        {
+            disciplineRequest = -1;
+            for (int i = 0; i < disciplineSlotActions.Length; i++)
+            {
+                if (disciplineSlotActions[i] != null && disciplineSlotActions[i].WasPressedThisFrame())
+                {
+                    disciplineRequest = i;
+                }
+            }
+
+            disciplineCycle = 0;
+            if (previousDisciplineAction != null && previousDisciplineAction.WasPressedThisFrame())
+            {
+                disciplineCycle -= 1;
+            }
+
+            if (nextDisciplineAction != null && nextDisciplineAction.WasPressedThisFrame())
+            {
+                disciplineCycle += 1;
+            }
         }
 
         private void ReadInteract()
@@ -204,7 +342,7 @@ namespace Threefold.InputHandling
         private void TrackDeviceKind()
         {
             InputDevice device = ActiveDevice(moveAction) ?? ActiveDevice(jumpAction) ?? ActiveDevice(interactAction)
-                                 ?? ActiveDevice(attackAction);
+                                 ?? ActiveDevice(attackAction) ?? ActiveDevice(blockAction);
             if (device is Gamepad)
             {
                 usingGamepad = true;
@@ -330,6 +468,9 @@ namespace Threefold.InputHandling
                 return;
             }
 
+            // Leaving mouse look while charging abandons the charge rather than firing it.
+            AttackRecognizer.Cancel();
+
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             cursorLockedHere = false;
@@ -378,6 +519,19 @@ namespace Threefold.InputHandling
                     $"action map '{map.name}'. Interacting from keyboard and gamepad is unavailable.", this);
             }
 
+            blockAction = FindOrCreate(map, blockActionName, "<Mouse>/rightButton", "<Keyboard>/q", "<Gamepad>/leftTrigger");
+            previousDisciplineAction = FindOrCreate(map, previousDisciplineActionName, "<Gamepad>/dpad/left");
+            nextDisciplineAction = FindOrCreate(map, nextDisciplineActionName, "<Gamepad>/dpad/right");
+
+            string[] slotNames = disciplineSlotActionNames ?? new string[0];
+            disciplineSlotActions = new InputAction[slotNames.Length];
+            for (int i = 0; i < slotNames.Length; i++)
+            {
+                // Number keys 1, 2, 3 ... for the default slots.
+                string key = i < 9 ? $"<Keyboard>/{i + 1}" : null;
+                disciplineSlotActions[i] = key != null ? FindOrCreate(map, slotNames[i], key) : map.FindAction(slotNames[i], false);
+            }
+
             keyboardInteractLabel = null;
             gamepadInteractLabel = null;
 
@@ -397,9 +551,36 @@ namespace Threefold.InputHandling
             return action;
         }
 
+        /// <summary>
+        /// Finds an optional action in the map, or creates one with default bindings when the asset
+        /// does not have it. Created actions belong to this component and are disposed with it.
+        /// </summary>
+        private InputAction FindOrCreate(InputActionMap map, string actionName, params string[] defaultBindings)
+        {
+            if (string.IsNullOrEmpty(actionName))
+            {
+                return null;
+            }
+
+            InputAction action = map.FindAction(actionName, false);
+            if (action != null)
+            {
+                return action;
+            }
+
+            action = new InputAction(actionName, InputActionType.Button);
+            for (int i = 0; i < defaultBindings.Length; i++)
+            {
+                action.AddBinding(defaultBindings[i]);
+            }
+
+            actionsCreatedHere.Add(action);
+            return action;
+        }
+
         private void EnableIfNeeded(InputAction action)
         {
-            if (action.enabled)
+            if (action == null || action.enabled)
             {
                 return;
             }
@@ -419,6 +600,14 @@ namespace Threefold.InputHandling
             attackPressedThisFrame = false;
             interactPressedThisFrame = false;
             suppressAttackUntilRelease = false;
+            attackWasHeld = false;
+            attackFrame = default;
+            blockHeld = false;
+            blockWasHeld = false;
+            blockPressedThisFrame = false;
+            blockReleasedThisFrame = false;
+            disciplineRequest = -1;
+            disciplineCycle = 0;
         }
     }
 }
