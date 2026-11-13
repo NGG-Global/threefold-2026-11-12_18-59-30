@@ -178,6 +178,20 @@ namespace Threefold.TouchControls
             set => sprintMode = value;
         }
 
+        /// <summary>Abandons the press or charge on ATTACK; the button shows the cancellation.</summary>
+        public override void InterruptAttack()
+        {
+            if (attackGesture != null)
+            {
+                attackGesture.Recognizer.Cancel();
+            }
+
+            if (legacyRecognizer != null)
+            {
+                legacyRecognizer.Cancel();
+            }
+        }
+
         /// <summary>Connects the core controls. Called by the setup tooling.</summary>
         public void Bind(VirtualJoystick moveJoystick, TouchLookArea cameraLookArea, TouchButton jump,
             TouchButton sprint, CanvasGroup controlsGroup)
@@ -343,10 +357,19 @@ namespace Threefold.TouchControls
 
             float deltaTime = Time.unscaledDeltaTime;
             displayedDiscipline = disciplines != null ? disciplines.CurrentSlot : displayedDiscipline;
-            DisciplineInfo info = DisciplineCatalog.Get(displayedDiscipline);
+            DisciplineInfo info = disciplines != null
+                ? disciplines.GetInfo(displayedDiscipline)
+                : DisciplineCatalog.Get(displayedDiscipline);
 
             if (attackGesture != null)
             {
+                // The charge ring fills in the time the selected discipline's charged attack needs.
+                float chargeSeconds = disciplines != null ? disciplines.CurrentFullChargeSeconds : 0f;
+                if (chargeSeconds > 0f)
+                {
+                    attackGesture.Gesture.fullChargeSeconds = chargeSeconds;
+                }
+
                 attackGesture.SetDiscipline(info.Color, info.Icon);
                 attackGesture.RefreshVisuals(deltaTime);
             }

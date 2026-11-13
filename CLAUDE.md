@@ -45,6 +45,11 @@ separates approved decisions from proposals; do not present a proposal as decide
 - Gameplay code reads input through `CharacterInputSource`, never from a device directly.
 - Enemy decisions live in plain C# (`EnemyBrain`, `EnemyStates`, `EnemyRules`) that never touches a
   Unity object, so they can be tested outside Unity. Keep it that way; see `Docs/EnemyAI.md`.
+- The Mage's combat is split the same way (`Docs/Disciplines.md`): sequencing and resolution rules
+  (`DisciplineCombatModel`, `MeleeComboMachine`, `TargetSelection`, `HeatMeter`, `BlockRules`) are
+  plain C#, and `DisciplineCombat` only carries out their commands. The starting numbers of the
+  disciplines are in `DisciplineDefaults`; generated discipline assets are the truth afterwards.
+  Input-side decisions likewise stay in plain C# (`AttackGestureRecognizer`, `PointerRouter`).
 - The visual style (`Docs/VisualStyle.md`) is a proposal until the owner has reviewed it in Unity
   and on a device. Its shader is `Assets/Threefold/Shaders/IllustratedLit.shader`. The shader's
   arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change

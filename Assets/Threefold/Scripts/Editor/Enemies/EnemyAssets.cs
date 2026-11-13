@@ -138,7 +138,7 @@ namespace Threefold.EditorTools
         // ----------------------------------------------------------- materials
 
         /// <summary>Transparent, unlit, two-sided and without depth writing. Coloured per enemy through property blocks.</summary>
-        private static Material CreateTelegraphMaterial()
+        internal static Material CreateTelegraphMaterial()
         {
             var material = new Material(FindShader(ParticleShader));
             material.color = Color.white;
@@ -254,6 +254,7 @@ namespace Threefold.EditorTools
             var existing = AssetDatabase.LoadAssetAtPath<EnemyDefinition>(path);
             if (existing != null)
             {
+                FillReactionsToDisciplines(existing, displayName, tuning);
                 return existing;
             }
 
@@ -262,6 +263,37 @@ namespace Threefold.EditorTools
             AssetDatabase.CreateAsset(definition, path);
             report.AppendLine($"Generated enemy definition '{displayName}'.");
             return definition;
+        }
+
+        /// <summary>
+        /// Definitions generated before the disciplines existed have the neutral values for push
+        /// resistance and heat. Those are filled from the archetype once; values that were changed by
+        /// hand are kept.
+        /// </summary>
+        private void FillReactionsToDisciplines(EnemyDefinition definition, string displayName, EnemyTuning archetype)
+        {
+            EnemyTuning current = definition.Tuning;
+            if (current == null || archetype == null)
+            {
+                return;
+            }
+
+            var neutral = new HeatSettings();
+            bool untouched = Mathf.Approximately(current.pushResistance, 0f) && current.heat != null &&
+                             Mathf.Approximately(current.heat.susceptibility, neutral.susceptibility);
+            bool differs = !Mathf.Approximately(archetype.pushResistance, 0f) ||
+                           !Mathf.Approximately(archetype.heat.susceptibility, neutral.susceptibility);
+
+            if (!untouched || !differs)
+            {
+                return;
+            }
+
+            current.pushResistance = archetype.pushResistance;
+            current.heat.susceptibility = archetype.heat.susceptibility;
+            EditorUtility.SetDirty(definition);
+            report.AppendLine($"Set how '{displayName}' reacts to force and heat (push resistance " +
+                              $"{archetype.pushResistance:0.##}, heat susceptibility {archetype.heat.susceptibility:0.##}).");
         }
 
         private EnemyDifficulty EnsureDifficulty(string path, EnemyDifficultySettings settings)

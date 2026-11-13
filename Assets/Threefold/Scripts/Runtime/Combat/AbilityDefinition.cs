@@ -30,13 +30,18 @@ namespace Threefold.Combat
         /// <summary>Multiplies the ability's damage. 1 for the player; enemies use it for difficulty.</summary>
         public readonly float DamageScale;
 
-        public AbilityContext(GameObject caster, Vector3 origin, Vector3 aimPoint, Vector3 direction, float damageScale = 1f)
+        /// <summary>How far a charged ability was charged, 0 to 1. Abilities that are not charged ignore it.</summary>
+        public readonly float Charge;
+
+        public AbilityContext(GameObject caster, Vector3 origin, Vector3 aimPoint, Vector3 direction, float damageScale = 1f,
+            float charge = 1f)
         {
             Caster = caster;
             Origin = origin;
             AimPoint = aimPoint;
             Direction = direction;
             DamageScale = damageScale;
+            Charge = charge;
         }
     }
 

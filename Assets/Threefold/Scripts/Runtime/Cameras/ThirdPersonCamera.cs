@@ -134,6 +134,21 @@ namespace Threefold.Cameras
             set => inputSource = value;
         }
 
+        /// <summary>The heading the camera is turning towards, in degrees. 0 looks along +Z, 90 along +X.</summary>
+        public float Yaw => targetYaw;
+
+        /// <summary>The point the camera orbits, in world space.</summary>
+        public Vector3 Pivot => pivot;
+
+        /// <summary>
+        /// Turns the view by a small angle, as if the player had dragged. Used for mild assistance;
+        /// the usual smoothing applies, so it never jumps.
+        /// </summary>
+        public void AddYaw(float degrees)
+        {
+            targetYaw += degrees;
+        }
+
         /// <summary>Preferred follow distance in metres, kept within the configured limits.</summary>
         public float Distance
         {

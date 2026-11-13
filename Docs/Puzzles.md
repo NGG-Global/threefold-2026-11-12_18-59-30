@@ -61,7 +61,7 @@ game, forgets it. There is no save system yet, so nothing is written to disk.
 | --- | --- | --- | --- |
 | Interact | **E** | North button (Y on Xbox layout) | The interact button, above BLOCK. It appears only while something can be used, labelled with what it does |
 | Climb, walk onto plates | As before | As before | As before |
-| Cast Arcane Bolt | Hold the left mouse button, release | Hold the west button, release | Hold ATTACK, release (a tap is a melee strike; see `Docs/TouchControls.md`) |
+| Cast Arcane Arrow (Arcane selected) | Hold the left mouse button, release | Hold the west button, release | Hold ATTACK, release (a tap is a melee strike; see `Docs/Disciplines.md`) |
 
 A prompt appears next to the thing in reach: the key and one verb, such as **E Open**. With touch
 controls the key is left out and the button carries the verb. Nothing is offered while the Mage

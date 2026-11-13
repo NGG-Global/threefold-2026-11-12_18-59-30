@@ -129,6 +129,8 @@ namespace Threefold.Characters
         private bool externalControl;
         private float landingRecoveryRemaining;
         private Vector3 blockedDirection;
+        private float speedLimit = 1f;
+        private bool sprintSuppressed;
         private bool missingCameraWarned;
         private bool missingInputWarned;
 
@@ -303,6 +305,18 @@ namespace Threefold.Characters
         }
 
         /// <summary>
+        /// Limits the top speed to a share of normal for the next motor update only, and optionally
+        /// rules out sprinting. Combat calls it every frame while a swing, a charge or a block slows
+        /// the character; when it stops calling, full speed returns by itself. Several callers may
+        /// limit in one frame: the lowest limit applies.
+        /// </summary>
+        public void LimitSpeedThisFrame(float multiplier, bool allowSprint)
+        {
+            speedLimit = Mathf.Min(speedLimit, Mathf.Clamp01(multiplier));
+            sprintSuppressed |= !allowSprint;
+        }
+
+        /// <summary>
         /// Hands the character over to another component, which then positions it with
         /// <see cref="SetExternalPose"/>. The collider is switched off and momentum cleared.
         /// </summary>
@@ -472,13 +486,18 @@ namespace Threefold.Characters
 
         private void UpdateHorizontalVelocity(Vector3 moveDirection, bool hasMoveInput, bool sprintHeld, float deltaTime)
         {
-            isSprinting = hasMoveInput && sprintHeld;
+            isSprinting = hasMoveInput && sprintHeld && !sprintSuppressed;
 
             float topSpeed = isSprinting ? sprintSpeed : walkSpeed;
             if (landingRecoveryRemaining > 0f)
             {
                 topSpeed *= hardLandingSpeedFactor;
             }
+
+            // Limits last one update; whoever wants one asks again every frame.
+            topSpeed *= speedLimit;
+            speedLimit = 1f;
+            sprintSuppressed = false;
 
             Vector3 targetVelocity = moveDirection * topSpeed;
 

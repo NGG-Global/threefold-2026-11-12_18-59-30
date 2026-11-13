@@ -18,9 +18,26 @@ namespace Threefold.Combat
         /// <summary>How far away the impact can be heard by enemies, in metres. 0 is silent.</summary>
         public readonly float NoiseRadius;
 
+        /// <summary>Poise damage. Negative uses the damage.</summary>
+        public readonly float Stagger;
+
+        /// <summary>The kind of magic carried. None uses the projectile prefab's own kind.</summary>
+        public readonly SpellElement Element;
+
+        /// <summary>Heat added to a target that can be heated.</summary>
+        public readonly float Heat;
+
+        /// <summary>Size of the projectile's visuals relative to the prefab. A charged shot is larger.</summary>
+        public readonly float VisualScale;
+
         public ProjectileLaunch(GameObject owner, Vector3 direction, float speed, float maxRange, float radius,
-            float damage, LayerMask hitLayers, PooledObject impactEffect, float noiseRadius = 0f)
+            float damage, LayerMask hitLayers, PooledObject impactEffect, float noiseRadius = 0f, float stagger = -1f,
+            SpellElement element = SpellElement.None, float heat = 0f, float visualScale = 1f)
         {
+            Stagger = stagger;
+            Element = element;
+            Heat = heat;
+            VisualScale = visualScale;
             Owner = owner;
             Direction = direction;
             Speed = speed;
@@ -60,6 +77,8 @@ namespace Threefold.Combat
         private CombatTeam ownerTeam;
         private float remainingRange;
         private bool flying;
+        private Vector3 baseScale;
+        private bool baseScaleKnown;
 
         /// <summary>The kind of magic this projectile carries.</summary>
         public SpellElement Element
@@ -81,6 +100,15 @@ namespace Threefold.Combat
             {
                 pooled = GetComponent<PooledObject>();
             }
+
+            if (!baseScaleKnown)
+            {
+                baseScale = transform.localScale;
+                baseScaleKnown = true;
+            }
+
+            // Set on every launch: a pooled projectile must not keep the size of its previous shot.
+            transform.localScale = baseScale * Mathf.Max(0.05f, data.VisualScale);
 
             launch = data;
             ownerTransform = data.Owner != null ? data.Owner.transform : null;
@@ -192,17 +220,29 @@ namespace Threefold.Combat
         {
             flying = false;
 
+            SpellElement carried = launch.Element != SpellElement.None ? launch.Element : element;
+
             IDamageable target = other.GetComponentInParent<IDamageable>();
             if (target != null && target.IsAlive && launch.Damage > 0f)
             {
-                target.ApplyDamage(new DamageInfo(launch.Damage, point, launch.Direction, launch.Owner));
+                target.ApplyDamage(new DamageInfo(launch.Damage, point, launch.Direction, launch.Owner, launch.Stagger,
+                    carried));
             }
 
-            // Only reached on impact, which is rare per frame, so the lookup costs little.
+            // Only reached on impact, which is rare per frame, so the lookups cost little.
+            if (launch.Heat > 0f)
+            {
+                IHeatReceiver heat = other.GetComponentInParent<IHeatReceiver>();
+                if (heat != null)
+                {
+                    heat.ReceiveHeat(launch.Heat, launch.Owner);
+                }
+            }
+
             ISpellReceiver receiver = other.GetComponentInParent<ISpellReceiver>();
             if (receiver != null)
             {
-                receiver.ReceiveSpell(new SpellImpact(element, point, launch.Direction, launch.Owner));
+                receiver.ReceiveSpell(new SpellImpact(carried, point, launch.Direction, launch.Owner));
             }
 
             if (launch.ImpactEffect != null)

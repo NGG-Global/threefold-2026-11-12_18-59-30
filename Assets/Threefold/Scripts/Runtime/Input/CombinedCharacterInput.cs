@@ -148,6 +148,17 @@ namespace Threefold.InputHandling
             }
         }
 
+        public override void InterruptAttack()
+        {
+            for (int i = 0; i < sources.Count; i++)
+            {
+                if (IsUsable(sources[i]))
+                {
+                    sources[i].InterruptAttack();
+                }
+            }
+        }
+
         public override bool BlockHeld
         {
             get

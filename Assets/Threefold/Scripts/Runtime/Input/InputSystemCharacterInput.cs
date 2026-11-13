@@ -222,6 +222,12 @@ namespace Threefold.InputHandling
             ClearState();
         }
 
+        /// <summary>Abandons the press or charge; letting go of the button afterwards does nothing.</summary>
+        public override void InterruptAttack()
+        {
+            AttackRecognizer.Cancel();
+        }
+
         /// <summary>Losing focus abandons a charge instead of firing it when the button state is reset.</summary>
         private void OnApplicationFocus(bool hasFocus)
         {

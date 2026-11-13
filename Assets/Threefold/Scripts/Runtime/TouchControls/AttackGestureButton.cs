@@ -83,7 +83,7 @@ namespace Threefold.TouchControls
         private AttackGestureRecognizer recognizer;
         private Vector2 lastScreenPosition;
         private Vector2 cancelCentre;
-        private Color disciplineColor = new Color(0.58f, 0.72f, 1f, 1f);
+        private Color disciplineColor = new Color(0.62f, 0.64f, 1f, 1f);
         private ProceduralShape disciplineIcon = ProceduralShape.Diamond;
         private bool disciplineDirty = true;
         private float flashRemaining;

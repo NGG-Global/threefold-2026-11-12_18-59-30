@@ -40,6 +40,16 @@ namespace Threefold.InputHandling
         /// </summary>
         public virtual AttackGestureFrame AttackGesture => default;
 
+        /// <summary>
+        /// Abandons the attack press or charge in progress, as if the player had cancelled it. Called
+        /// by gameplay when an attack cannot go on (a charge that cannot be paid for, a heavy hit,
+        /// grabbing a ledge), so that the controls show the cancellation and lifting the finger later
+        /// fires nothing. Sources without gesture support ignore it.
+        /// </summary>
+        public virtual void InterruptAttack()
+        {
+        }
+
         /// <summary>True while the block control is held.</summary>
         public virtual bool BlockHeld => false;
 

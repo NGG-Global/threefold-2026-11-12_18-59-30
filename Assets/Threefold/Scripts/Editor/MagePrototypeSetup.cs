@@ -96,6 +96,7 @@ namespace Threefold.EditorTools
             CombatSetup.Ensure(scene, mage, report, dummies);
             InteractionSetup.Ensure(scene, mage, report);
             MageCharacterSetup.Ensure(scene, mage, report);
+            DisciplineSetup.Ensure(scene, mage, report);
             ObjectiveSetup.Ensure(scene, mage, report, objective);
             return mage;
         }

@@ -9,7 +9,7 @@ namespace Threefold.Combat
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Health))]
-    public sealed class TrainingDummy : MonoBehaviour, IRestorable
+    public sealed class TrainingDummy : MonoBehaviour, IRestorable, IHeatReceiver
     {
         private const int MaxDefeatEffects = 4;
 
@@ -29,9 +29,39 @@ namespace Threefold.Combat
         [Min(0.1f)]
         [SerializeField] private float respawnSeconds = 4f;
 
+        [Tooltip("How the dummy responds to heat from flame attacks. Straw catches fire easily. It cannot be " +
+                 "pushed: it stands on a post.")]
+        [SerializeField] private HeatSettings heat = new HeatSettings { susceptibility = 1.4f };
+
         private Health health;
+        private HeatCarrier heatCarrier;
         private float respawnRemaining;
         private bool down;
+
+        public float HeatFraction => heatCarrier != null ? heatCarrier.Meter.Fraction : 0f;
+
+        public bool IsBurning => heatCarrier != null && heatCarrier.Meter.IsBurning;
+
+        public HeatSettings Heat => heat;
+
+        public bool ReceiveHeat(float amount, GameObject source)
+        {
+            return !down && Carrier.Receive(amount, source);
+        }
+
+        private HeatCarrier Carrier
+        {
+            get
+            {
+                if (heatCarrier == null)
+                {
+                    heatCarrier = new HeatCarrier(heat);
+                    heatCarrier.Bind(health != null ? health : GetComponent<Health>());
+                }
+
+                return heatCarrier;
+            }
+        }
 
         /// <summary>Connects the dummy's parts. Called by the setup tooling.</summary>
         public void Bind(GameObject visuals, Collider[] bodyColliders, PooledObject defeatEffect)
@@ -56,6 +86,7 @@ namespace Threefold.Combat
             }
 
             down = false;
+            heatCarrier?.Clear();
             SetPresent(true);
             health.Revive();
         }
@@ -77,6 +108,11 @@ namespace Threefold.Combat
 
         private void Update()
         {
+            if (!down)
+            {
+                heatCarrier?.Tick(Time.deltaTime);
+            }
+
             if (!down || !respawns)
             {
                 return;
@@ -95,6 +131,7 @@ namespace Threefold.Combat
         {
             down = true;
             respawnRemaining = respawnSeconds;
+            heatCarrier?.Clear();
 
             if (defeatEffectPrefab != null)
             {

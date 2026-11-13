@@ -140,6 +140,7 @@ namespace Threefold.EditorTools
             if (mage.GetComponent<PlayerAbilityInput>() == null) Problem("The Mage's attack input is not connected.");
             if (mage.GetComponent<PlayerGuard>() == null) Problem("The Mage has no block (PlayerGuard).");
             if (mage.GetComponent<Threefold.Magic.PlayerDisciplines>() == null) Problem("The Mage has no discipline selection.");
+            ValidateDisciplines(scene, mage, Problem);
             if (mage.TryGetComponent(out AbilityCaster mageCaster) && mageCaster.GetAbility(PlayerAbilityInput.DefaultMeleeSlot) == null)
             {
                 Problem("The Mage has no tap (melee) ability.");
@@ -300,6 +301,61 @@ namespace Threefold.EditorTools
                 {
                     problem($"{label} does not stand on the navigation mesh.");
                 }
+            }
+        }
+
+        /// <summary>The three disciplines, their attacks and what shows them.</summary>
+        private static void ValidateDisciplines(Scene scene, GameObject mage, System.Action<string> problem)
+        {
+            var disciplines = mage.GetComponent<Threefold.Magic.PlayerDisciplines>();
+            if (disciplines == null)
+            {
+                return;
+            }
+
+            if (mage.GetComponent<Threefold.Magic.DisciplineCombat>() == null)
+            {
+                problem("The Mage has no discipline combat (run Threefold > Setup > Disciplines).");
+            }
+
+            for (int slot = 0; slot < disciplines.Count; slot++)
+            {
+                Threefold.Magic.DisciplineDefinition definition = disciplines.GetDefinition(slot);
+                string name = Threefold.Magic.DisciplineCatalog.Get(slot).Name;
+                if (definition == null)
+                {
+                    problem($"The Mage has no {name} discipline asset.");
+                    continue;
+                }
+
+                if (definition.Melee == null || definition.Melee.StepCount == 0)
+                {
+                    problem($"The {name} discipline has no melee swings.");
+                }
+
+                if (definition.ChargedAbility == null)
+                {
+                    problem($"The {name} discipline has no charged attack.");
+                }
+                else if (definition.ChargedAbility is ChargedProjectileDefinition projectile && projectile.ProjectilePrefab == null)
+                {
+                    problem($"The {name} discipline's charged attack has no projectile prefab.");
+                }
+
+                if (definition.Presentation.sweepEffect == null)
+                {
+                    problem($"The {name} discipline has no swing effect.");
+                }
+            }
+
+            if (FindInScene<Threefold.CombatFeedback.ChargeAimPreview>(scene) == null)
+            {
+                problem("Nothing shows where a charged attack is aimed.");
+            }
+
+            if (FindInScene<Threefold.CombatFeedback.DisciplineFeedback>(scene) == null)
+            {
+                problem("Nothing shows the disciplines' attacks.");
             }
         }
     }
