@@ -141,6 +141,26 @@ namespace Threefold.Tests
             Step();
         }
 
+        /// <summary>
+        /// The other tests rely on a CharacterController made in Edit Mode being visible to physics
+        /// queries. If this fails, the detection tests below fail for that reason, not for theirs.
+        /// </summary>
+        [Test]
+        public void StandInPlayerIsVisibleToPhysicsQueries()
+        {
+            MovePlayer(LookoutTop);
+            var found = new Collider[4];
+            int count = Physics.OverlapBoxNonAlloc(LookoutTop + Vector3.up, Vector3.one * 0.5f, found);
+
+            bool seen = false;
+            for (int i = 0; i < count; i++)
+            {
+                seen |= found[i] is CharacterController;
+            }
+
+            Assert.IsTrue(seen);
+        }
+
         [Test]
         public void PlayerIsDetectedOnlyInsideTheZone()
         {
@@ -350,6 +370,33 @@ namespace Threefold.Tests
 
             handDoor.Interact(player);
             Assert.IsFalse(handDoor.IsActive);
+        }
+
+        [Test]
+        public void HandOpenedDoorClosesWhenReset()
+        {
+            PuzzleDoor handDoor = Create("ResetDoor", Vector3.zero).AddComponent<PuzzleDoor>();
+            Transform handLeaf = Create("ResetLeaf", Vector3.zero).transform;
+            handLeaf.SetParent(handDoor.transform, false);
+            handDoor.ConfigureMotion(handLeaf, new Vector3(0f, 2f, 0f), Vector3.zero, 0.5f, 0.5f);
+            handDoor.Control = DoorControl.Interact;
+
+            handDoor.Interact(player);
+            for (int i = 0; i < 30; i++)
+            {
+                handDoor.Tick(Frame);
+            }
+
+            // A timer that runs out resets the door, as in "a gate that closes again".
+            handDoor.ResetState();
+            for (int i = 0; i < 30; i++)
+            {
+                handDoor.Tick(Frame);
+            }
+
+            Assert.IsFalse(handDoor.IsActive);
+            Assert.AreEqual(0f, handLeaf.localPosition.y, 0.001f);
+            Assert.AreEqual("Open", handDoor.InteractionVerb);
         }
 
         [Test]

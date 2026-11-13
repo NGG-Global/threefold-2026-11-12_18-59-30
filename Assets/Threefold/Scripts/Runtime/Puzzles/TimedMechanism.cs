@@ -13,8 +13,12 @@ namespace Threefold.Puzzles
     /// It starts when its trigger element activates, or when <see cref="StartTimer"/> is called
     /// (for example from a Unity Event). Locking it stops the countdown and keeps it active, which
     /// is how a solved puzzle freezes its timer.
+    ///
+    /// It updates before plates and zones, so when the time runs out in the same frame as a plate
+    /// is pressed, the time has run out first: the press is too late.
     /// </summary>
     [DisallowMultipleComponent]
+    [DefaultExecutionOrder(-50)]
     public sealed class TimedMechanism : PuzzleElement
     {
         [Header("Timer")]
@@ -84,6 +88,13 @@ namespace Threefold.Puzzles
 
             resetWhenExpired.Add(element);
             return true;
+        }
+
+        /// <summary>Removes entries whose element no longer exists. Called by the setup tooling.</summary>
+        /// <returns>The number removed.</returns>
+        public int RemoveMissingResetTargets()
+        {
+            return resetWhenExpired.RemoveAll(element => element == null);
         }
 
         /// <summary>Starts the countdown. Ignored while locked, and while running unless restarting is allowed.</summary>

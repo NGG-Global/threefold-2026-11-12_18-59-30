@@ -32,7 +32,9 @@ namespace Threefold.Puzzles
 
     /// <summary>
     /// Generates simple placeholder sounds in memory, so puzzles can be heard before real audio
-    /// exists. No audio files are involved. Every hook that plays one of these also accepts a clip,
+    /// exists. No audio files are involved. Each sound is built once, the first time it is asked
+    /// for; the components that play them ask when the scene starts, so building one never
+    /// interrupts play. Every hook that plays one of these also accepts a clip,
     /// which replaces it. The waveforms are plain C# and can be tested without Unity.
     /// </summary>
     public static class PuzzleSounds
@@ -43,6 +45,11 @@ namespace Threefold.Puzzles
         private const float TwoPi = (float)(Math.PI * 2.0);
 
         private static readonly AudioClip[] Cache = new AudioClip[Enum.GetValues(typeof(PuzzleTone)).Length];
+
+        /// <summary>Pitch of each step chime relative to the first: up a major chord, then on up the octave.</summary>
+        private static readonly float[] StepRatios = { 1f, 1.26f, 1.5f, 2f, 2.52f, 3f, 4f };
+
+        private static readonly AudioClip[] StepCache = new AudioClip[StepRatios.Length];
 
         /// <summary>The generated clip for a tone, built on first use and then shared. Null for None.</summary>
         public static AudioClip Get(PuzzleTone tone)
@@ -62,6 +69,35 @@ namespace Threefold.Puzzles
             }
 
             return Cache[index];
+        }
+
+        /// <summary>
+        /// A chime for the given completed step (1 for the first), higher with each step, so
+        /// progress can be heard. Each step has its own clip, so nothing already playing changes pitch.
+        /// </summary>
+        public static AudioClip GetStepChime(int step)
+        {
+            int index = Math.Max(0, Math.Min(StepRatios.Length - 1, step - 1));
+            if (StepCache[index] == null)
+            {
+                float[] samples = SynthesizeStepChime(step);
+                AudioClip clip = AudioClip.Create("PuzzleStep" + (index + 1), samples.Length, 1, SampleRate, false);
+                clip.SetData(samples, 0);
+                StepCache[index] = clip;
+            }
+
+            return StepCache[index];
+        }
+
+        /// <summary>The waveform of a step chime. See <see cref="GetStepChime"/>.</summary>
+        public static float[] SynthesizeStepChime(int step)
+        {
+            int index = Math.Max(0, Math.Min(StepRatios.Length - 1, step - 1));
+            float[] samples = Silence(1.2f);
+            AddBell(samples, 0f, 660f * StepRatios[index], 1f);
+            FadeEdges(samples);
+            Normalise(samples);
+            return samples;
         }
 
         /// <summary>The waveform of a tone: mono, <see cref="SampleRate"/> samples per second, within -1 to 1.</summary>
@@ -243,6 +279,7 @@ namespace Threefold.Puzzles
         private static void ResetStatics()
         {
             Array.Clear(Cache, 0, Cache.Length);
+            Array.Clear(StepCache, 0, StepCache.Length);
         }
     }
 }

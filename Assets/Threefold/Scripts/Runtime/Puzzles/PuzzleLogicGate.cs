@@ -32,7 +32,7 @@ namespace Threefold.Puzzles
         /// <summary>Replaces the inputs. Called by the setup tooling and by tests.</summary>
         public void SetInputs(IEnumerable<PuzzleElement> newInputs)
         {
-            bool listening = subscribed.Count > 0;
+            bool listening = Application.isPlaying && isActiveAndEnabled;
             Unsubscribe();
             inputs.Clear();
             if (newInputs != null)

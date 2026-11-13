@@ -7,7 +7,8 @@ namespace Threefold.Puzzles
     /// Active while the player (or, if allowed, another character or a heavy object) is inside a
     /// box: the top of a lookout, a doorway, a ring of runes. The box is checked with a physics
     /// query every frame rather than with trigger messages, because traversal switches the
-    /// character's collider off and on, which trigger messages do not report reliably.
+    /// character's collider off and on, and leaving a trigger that way is not reported reliably.
+    /// While its collider is off (hanging, climbing, vaulting), the character is not detected.
     /// </summary>
     [DisallowMultipleComponent]
     public class PresenceZone : PuzzleElement

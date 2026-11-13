@@ -503,6 +503,19 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void EachStepHasItsOwnChime()
+        {
+            float[] first = PuzzleSounds.SynthesizeStepChime(1);
+            float[] second = PuzzleSounds.SynthesizeStepChime(2);
+
+            Assert.AreEqual(first.Length, second.Length);
+            Assert.AreNotEqual(first[PuzzleSounds.SampleRate / 10], second[PuzzleSounds.SampleRate / 10],
+                "The second step must sound different from the first.");
+            Assert.AreEqual(0f, second[0], 0.0001f);
+            Assert.AreEqual(0f, second[second.Length - 1], 0.0001f);
+        }
+
+        [Test]
         public void NoneHasNoSound()
         {
             Assert.AreEqual(0, PuzzleSounds.Synthesize(PuzzleTone.None).Length);

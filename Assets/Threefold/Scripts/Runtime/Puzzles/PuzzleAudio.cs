@@ -4,9 +4,10 @@ namespace Threefold.Puzzles
 {
     /// <summary>
     /// Plays sounds for a puzzle element's moments: switching on, switching off, a refused attempt,
-    /// and for a sequence each completed step (higher in pitch with each), lost progress and the
-    /// solution. Every slot takes a clip; an empty slot plays a generated placeholder
-    /// (<see cref="PuzzleSounds"/>), or nothing if its tone is None.
+    /// and for a sequence each completed step, lost progress and the solution. Every slot takes a
+    /// clip; an empty slot plays a generated placeholder (<see cref="PuzzleSounds"/>), or nothing
+    /// if its tone is None. Generated step chimes rise with each step; a step clip set by hand is
+    /// played as it is for every step.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(AudioSource))]
@@ -72,6 +73,35 @@ namespace Threefold.Puzzles
             subscribed.Rejected += HandleRejected;
         }
 
+        private void Start()
+        {
+            // Builds the generated sounds now, while the scene starts, not at the moment they are needed.
+            Prepare(activatedClip, activatedTone);
+            Prepare(deactivatedClip, deactivatedTone);
+            Prepare(rejectedClip, rejectedTone);
+
+            if (source is PuzzleSequence steps)
+            {
+                Prepare(progressLostClip, progressLostTone);
+                Prepare(solvedClip, solvedTone);
+                if (stepClip == null && stepTone != PuzzleTone.None)
+                {
+                    for (int i = 1; i < steps.StepCount; i++)
+                    {
+                        PuzzleSounds.GetStepChime(i);
+                    }
+                }
+            }
+        }
+
+        private static void Prepare(AudioClip clip, PuzzleTone tone)
+        {
+            if (clip == null)
+            {
+                PuzzleSounds.Get(tone);
+            }
+        }
+
         private void OnDisable()
         {
             if (subscribed == null)
@@ -99,53 +129,59 @@ namespace Threefold.Puzzles
         {
             if (element.IsActive)
             {
-                Play(activatedClip, activatedTone, 1f);
+                Play(activatedClip, activatedTone);
             }
             else
             {
-                Play(deactivatedClip, deactivatedTone, 1f);
+                Play(deactivatedClip, deactivatedTone);
             }
         }
 
         private void HandleRejected(PuzzleElement element)
         {
-            Play(rejectedClip, rejectedTone, 1f);
+            Play(rejectedClip, rejectedTone);
         }
 
         private void HandleStepCompleted(int completed)
         {
             // The last step is announced by the solved sound instead.
-            if (sequence != null && completed < sequence.StepCount)
+            if (sequence == null || completed >= sequence.StepCount)
             {
-                Play(stepClip, stepTone, 1f + 0.12f * (completed - 1));
+                return;
+            }
+
+            if (stepClip != null)
+            {
+                PlayClip(stepClip);
+            }
+            else if (stepTone != PuzzleTone.None)
+            {
+                PlayClip(stepTone == PuzzleTone.Chime ? PuzzleSounds.GetStepChime(completed) : PuzzleSounds.Get(stepTone));
             }
         }
 
         private void HandleProgressLost(int remaining)
         {
-            Play(progressLostClip, progressLostTone, 1f);
+            Play(progressLostClip, progressLostTone);
         }
 
         private void HandleSolved()
         {
-            Play(solvedClip, solvedTone, 1f);
+            Play(solvedClip, solvedTone);
         }
 
-        private void Play(AudioClip clip, PuzzleTone tone, float pitch)
+        private void Play(AudioClip clip, PuzzleTone tone)
         {
-            if (audioSource == null)
-            {
-                return;
-            }
+            PlayClip(clip != null ? clip : PuzzleSounds.Get(tone));
+        }
 
-            AudioClip chosen = clip != null ? clip : PuzzleSounds.Get(tone);
-            if (chosen == null)
+        /// <summary>The source's pitch is never changed, because that would also bend sounds still ringing.</summary>
+        private void PlayClip(AudioClip clip)
+        {
+            if (audioSource != null && clip != null)
             {
-                return;
+                audioSource.PlayOneShot(clip, volume);
             }
-
-            audioSource.pitch = pitch;
-            audioSource.PlayOneShot(chosen, volume);
         }
     }
 }

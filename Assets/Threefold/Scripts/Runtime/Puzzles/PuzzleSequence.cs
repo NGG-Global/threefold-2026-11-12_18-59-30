@@ -106,7 +106,7 @@ namespace Threefold.Puzzles
         /// <summary>Replaces the steps. Called by the setup tooling and by tests.</summary>
         public void SetSteps(IEnumerable<SequenceStep> newSteps)
         {
-            bool listening = subscribed.Count > 0;
+            bool listening = Application.isPlaying && isActiveAndEnabled;
             Unsubscribe();
 
             steps.Clear();
@@ -134,6 +134,13 @@ namespace Threefold.Puzzles
             return true;
         }
 
+        /// <summary>Removes entries whose element no longer exists. Called by the setup tooling.</summary>
+        /// <returns>The number removed.</returns>
+        public int RemoveMissingLockTargets()
+        {
+            return lockWhenSolved.RemoveAll(element => element == null);
+        }
+
         /// <summary>
         /// Reads the state of every step and updates the progress. Runs whenever a step changes;
         /// public so tests can drive it.
@@ -146,8 +153,9 @@ namespace Threefold.Puzzles
                 return;
             }
 
-            // Switching off is handled first, so a timer that runs out in the same frame as the
-            // last step is pressed counts as too late.
+            // Switching off is handled before switching on. Each change normally arrives on its
+            // own; when several are found together (in tests, or after re-enabling), a step that
+            // switched off is taken into account before one that switched on.
             for (int i = 0; i < steps.Count; i++)
             {
                 if (!StepActive(i))

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using Threefold.Characters;
 using Threefold.Combat;
@@ -228,7 +229,7 @@ namespace Threefold.EditorTools
             }
 
             PuzzleGlow glow = GetOrAdd<PuzzleGlow>(lookout.gameObject, out added);
-            if (added || glow.Source == null)
+            if (added || glow.Source == null || HasMissing(glow.Renderers))
             {
                 Undo.RecordObject(glow, DialogTitle);
                 glow.Bind(zone, null, new Renderer[] { ring.GetComponent<MeshRenderer>(), stele.GetComponent<MeshRenderer>() },
@@ -288,7 +289,7 @@ namespace Threefold.EditorTools
 
             AudioSource tickSource = EnsureAudioSource(ring.gameObject);
             TimerIndicator indicator = GetOrAdd<TimerIndicator>(ring.gameObject, out bool added);
-            if (added || indicator.Timer == null)
+            if (added || indicator.Timer == null || HasMissing(indicator.Segments))
             {
                 Undo.RecordObject(indicator, DialogTitle);
                 indicator.Bind(timer, stones, tickSource);
@@ -296,7 +297,7 @@ namespace Threefold.EditorTools
             }
 
             PuzzleGlow glow = GetOrAdd<PuzzleGlow>(plate.gameObject, out added);
-            if (added || glow.Source == null)
+            if (added || glow.Source == null || HasMissing(glow.Renderers))
             {
                 Undo.RecordObject(glow, DialogTitle);
                 // The plate beckons while the timer runs.
@@ -380,11 +381,15 @@ namespace Threefold.EditorTools
             MarkChanged(activator);
 
             PuzzleGlow glow = GetOrAdd<PuzzleGlow>(crystalObject, out added);
-            if (added || glow.Source == null)
+            if (added || glow.Source == null || HasMissing(glow.Renderers))
             {
                 Undo.RecordObject(glow, DialogTitle);
                 glow.Bind(activator, null, new Renderer[] { bodyRenderer }, -1, light);
-                glow.SetLightLevels(0f, 0.9f, 3f);
+                if (added)
+                {
+                    glow.SetLightLevels(0f, 0.9f, 3f);
+                }
+
                 MarkChanged(glow);
             }
 
@@ -403,21 +408,43 @@ namespace Threefold.EditorTools
         {
             GameObject mechanism = Child(root, "Mechanism", Vector3.zero);
 
-            sequence = GetOrAdd<PuzzleSequence>(mechanism, out bool sequenceAdded);
+            sequence = GetOrAdd<PuzzleSequence>(mechanism, out _);
             timer = GetOrAdd<TimedMechanism>(mechanism, out bool timerAdded);
+
+            var expected = new[]
+            {
+                new SequenceStep(lookout, StepRule.HoldUntilNextStep),
+                new SequenceStep(crystal, StepRule.HoldUntilNextStep),
+                new SequenceStep(plate, StepRule.Latch),
+            };
 
             Undo.RecordObject(sequence, DialogTitle);
             if (sequence.StepCount == 0)
             {
-                sequence.SetSteps(new[]
+                sequence.SetSteps(expected);
+            }
+            else
+            {
+                // A step whose part was deleted and rebuilt points at nothing; point it at the new part.
+                var repaired = new List<SequenceStep>(sequence.Steps);
+                bool missing = false;
+                for (int i = 0; i < repaired.Count && i < expected.Length; i++)
                 {
-                    new SequenceStep(lookout, StepRule.HoldUntilNextStep),
-                    new SequenceStep(crystal, StepRule.HoldUntilNextStep),
-                    new SequenceStep(plate, StepRule.Latch),
-                });
+                    if (repaired[i] == null || repaired[i].element == null)
+                    {
+                        repaired[i] = new SequenceStep(expected[i].element, repaired[i] != null ? repaired[i].rule : expected[i].rule);
+                        missing = true;
+                    }
+                }
+
+                if (missing)
+                {
+                    sequence.SetSteps(repaired);
+                }
             }
 
-            if (sequenceAdded)
+            sequence.RemoveMissingLockTargets();
+            if (sequence.LockWhenSolved.Count == 0)
             {
                 sequence.AddLockWhenSolved(timer);
             }
@@ -429,6 +456,11 @@ namespace Threefold.EditorTools
             if (timerAdded)
             {
                 timer.Duration = TimerSeconds;
+            }
+
+            timer.RemoveMissingResetTargets();
+            if (timer.ResetWhenExpired.Count == 0)
+            {
                 timer.AddResetTarget(crystal);
             }
 
@@ -485,7 +517,7 @@ namespace Threefold.EditorTools
             MarkChanged(door);
 
             PuzzleGlow glow = GetOrAdd<PuzzleGlow>(seal, out added);
-            if (added || glow.Source == null)
+            if (added || glow.Source == null || HasMissing(glow.Renderers))
             {
                 Undo.RecordObject(glow, DialogTitle);
                 // The seal's runes pulse while it is closed and flare when it is broken.
@@ -508,7 +540,7 @@ namespace Threefold.EditorTools
             }
 
             SequenceIndicator indicator = GetOrAdd<SequenceIndicator>(lamps.gameObject, out bool added);
-            if (added || indicator.Sequence == null)
+            if (added || indicator.Sequence == null || HasMissing(indicator.Lamps))
             {
                 Undo.RecordObject(indicator, DialogTitle);
                 indicator.Bind(sequence, renderers);
@@ -586,12 +618,17 @@ namespace Threefold.EditorTools
             MarkChanged(chest);
 
             PuzzleGlow glow = GetOrAdd<PuzzleGlow>(relic, out added);
-            if (added || glow.Source == null)
+            if (added || glow.Source == null || HasMissing(glow.Renderers))
             {
                 Undo.RecordObject(glow, DialogTitle);
                 glow.Bind(chest, null, new Renderer[] { inner.GetComponent<MeshRenderer>() }, -1, light);
-                glow.SetColors(new Color(0.05f, 0.04f, 0.02f), new Color(0.6f, 0.45f, 0.15f), new Color(3f, 2.2f, 0.8f));
-                glow.SetLightLevels(0f, 0.35f, 1.8f);
+                if (added)
+                {
+                    // Warm gold, unlike the arcane blue of the rest of the puzzle.
+                    glow.SetColors(new Color(0.05f, 0.04f, 0.02f), new Color(0.6f, 0.45f, 0.15f), new Color(3f, 2.2f, 0.8f));
+                    glow.SetLightLevels(0f, 0.35f, 1.8f);
+                }
+
                 MarkChanged(glow);
             }
 
@@ -657,6 +694,25 @@ namespace Threefold.EditorTools
             }
 
             return child;
+        }
+
+        /// <summary>True if a list of renderers is empty or refers to one that no longer exists.</summary>
+        private static bool HasMissing(Renderer[] renderers)
+        {
+            if (renderers == null || renderers.Length == 0)
+            {
+                return true;
+            }
+
+            foreach (Renderer item in renderers)
+            {
+                if (item == null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static T GetOrAdd<T>(GameObject target, out bool added) where T : Component

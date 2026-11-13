@@ -73,8 +73,29 @@ namespace Threefold.Interaction
             touchControls = touch;
         }
 
-        public Interactor Interactor => interactor;
-        public TouchControlsInput TouchControls => touchControls;
+        public Interactor Interactor
+        {
+            get => interactor;
+            set => interactor = value;
+        }
+
+        public TouchControlsInput TouchControls
+        {
+            get => touchControls;
+            set => touchControls = value;
+        }
+
+        public InputSystemCharacterInput DesktopInput
+        {
+            get => desktopInput;
+            set => desktopInput = value;
+        }
+
+        public ControlSchemeSelector SchemeSelector
+        {
+            get => schemeSelector;
+            set => schemeSelector = value;
+        }
 
         private void OnEnable()
         {

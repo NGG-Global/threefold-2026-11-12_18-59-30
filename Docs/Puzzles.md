@@ -7,7 +7,7 @@ new puzzle is built by connecting parts, not by writing code. An example puzzle,
 Gateway, stands in the Fantasy Playground.
 
 **Status:** all code compiles against Unity 6000.6.0f1, including with Android player defines,
-and the puzzle rules pass 64 tests outside Unity. **Nothing has run in Unity.** The component
+and the puzzle rules pass 65 tests outside Unity. **Nothing has run in Unity.** The component
 tests and the end-to-end test of the assembled puzzle are written but need the Unity engine, so
 they have not run either. How the puzzle reads, feels and sounds can only be judged by playing.
 
@@ -85,7 +85,8 @@ the open scene, which must already contain the Mage. It is placed at the same po
 scene.
 
 Both commands can be run again at any time. They add what is missing and fill empty references
-only; positions, materials and values changed in the Inspector are kept. To rebuild the puzzle
+only; positions, materials and values changed in the Inspector are kept. A part that was deleted
+is rebuilt and reconnected everywhere it was used. To rebuild the puzzle
 with the default layout, delete the `SealedGateway Puzzle` object and run the command again.
 
 Afterwards, upload from the laptop (see `Docs/DevelopmentWorkflow.md`): the scene and the new
@@ -162,8 +163,9 @@ connect sounds and effects in the Inspector. Ready-made presentation components 
 
 **Audio.** There are no audio files in the project. Every sound slot accepts a clip; an empty slot
 plays a simple placeholder generated in code (`Puzzles/PuzzleSounds`: a bell, a falling tone, a
-crackle, a rumble, an arpeggio, a knock and a tick). They are meant to make the hooks audible
-until real sounds exist, not as final audio. These are the first sounds in the game.
+crackle, a rumble, an arpeggio, a knock and a tick; step chimes rise with each step). They are
+meant to make the hooks audible until real sounds exist, not as final audio. They are built when
+the scene starts, so building one never interrupts play. These are the first sounds in the game.
 
 ## Making another puzzle
 
@@ -223,10 +225,10 @@ looking at the scene:
 
 | File | Covers | Runs |
 | --- | --- | --- |
-| `PuzzleLogicTests.cs` | Sequence rules including the gateway with a failed and a successful attempt, countdown and indicator stones, debouncing, door movement and easing, gates, spell and switch decisions, session memory, generated sounds | Outside Unity: 57 passed |
+| `PuzzleLogicTests.cs` | Sequence rules including the gateway with a failed and a successful attempt, countdown and indicator stones, debouncing, door movement and easing, gates, spell and switch decisions, session memory, generated sounds | Outside Unity: 58 passed |
 | `InteractionRulesTests.cs` | Reach, angle, height and preference | Outside Unity: 7 passed |
 | `CombinedCharacterInputTests.cs` | Interact merged from several sources (one test added) | Needs Unity |
-| `PuzzleComponentTests.cs` | The components together with real physics: detection, the full sequence, fizzling, wrong spell, too slow, wrong order, locking, session memory, chest, lever, interactive door, gate | Needs Unity (Edit Mode); not run |
+| `PuzzleComponentTests.cs` | The components together with real physics: detection, the full sequence, fizzling, wrong spell, too slow, wrong order, locking, session memory, chest, lever, interactive door and its reset, gate. One test first checks that physics queries see the stand-in player in Edit Mode, which the others rely on | Needs Unity (Edit Mode); not run |
 | `SealedGatewayAssemblyTests.cs` | Builds the playground and checks the puzzle's wiring, detection on the lookout and plate, not on the crate, the bolt's path to the crystal, the seal blocking and then clearing the way, and solves it with the real Mage | Needs Unity, batch mode only; not run |
 
 Not covered by automated tests: how anything looks or sounds, the prompt's position on screen,
@@ -238,8 +240,8 @@ the touch button, and the timing of the puzzle in real play.
 | --- | --- |
 | Compiles against Unity 6000.6.0f1, also with Android player defines | Passed (`Tools/ci/compile_check.sh`) |
 | Repository checks | Passed |
-| Puzzle and interaction rules outside Unity | 64 tests passed |
-| Independent code review | Done; see the pull request |
+| Puzzle and interaction rules outside Unity | 65 tests passed |
+| Independent code review | Done. It found seven defects (among them: a solved seal rumbling again on reload, a hand-opened door not closing on reset, re-running the setup not reconnecting a rebuilt part); all were fixed |
 | **Anything in Unity: the setup command, the puzzle, the prompt, the sounds** | **Not verified** |
 | **Edit Mode and batch-mode tests** | **Not run** |
 | **Touch interaction on a device** | **Not verified** |

@@ -144,6 +144,22 @@ namespace Threefold.Puzzles
             return true;
         }
 
+        /// <summary>
+        /// Changes the state without announcing it, for showing the state a scene starts in: a gate
+        /// that is already open when the level loads must not rumble open again.
+        /// </summary>
+        protected void SetElementActiveSilently(bool value)
+        {
+            if (locked || active == value)
+            {
+                return;
+            }
+
+            active = value;
+            Remember();
+            OnStateChanged(value);
+        }
+
         /// <summary>Announces a refused attempt.</summary>
         protected void RaiseRejected()
         {

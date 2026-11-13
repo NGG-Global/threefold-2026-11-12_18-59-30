@@ -134,8 +134,10 @@ namespace Threefold.EditorTools
         private static void EnsurePrompt(Scene scene, GameObject mage, Interactor interactor, TouchControlsInput touch,
             StringBuilder report)
         {
-            if (FindInScene<InteractionPrompt>(scene) != null)
+            InteractionPrompt existing = FindInScene<InteractionPrompt>(scene);
+            if (existing != null)
             {
+                FillPromptReferences(scene, mage, existing, interactor, touch, report);
                 return;
             }
 
@@ -187,6 +189,45 @@ namespace Threefold.EditorTools
 
             Undo.RegisterCreatedObjectUndo(marker.gameObject, DialogTitle);
             report.AppendLine("Added the interaction prompt to the HUD.");
+        }
+
+        /// <summary>Fills references of an existing prompt that are empty, for example after the touch controls were rebuilt.</summary>
+        private static void FillPromptReferences(Scene scene, GameObject mage, InteractionPrompt prompt, Interactor interactor,
+            TouchControlsInput touch, StringBuilder report)
+        {
+            Undo.RecordObject(prompt, DialogTitle);
+            bool changed = false;
+
+            if (prompt.Interactor == null)
+            {
+                prompt.Interactor = interactor;
+                changed = true;
+            }
+
+            if (prompt.TouchControls == null && touch != null)
+            {
+                prompt.TouchControls = touch;
+                changed = true;
+            }
+
+            if (prompt.DesktopInput == null && mage.TryGetComponent(out InputSystemCharacterInput desktop))
+            {
+                prompt.DesktopInput = desktop;
+                changed = true;
+            }
+
+            ControlSchemeSelector selector = FindInScene<ControlSchemeSelector>(scene);
+            if (prompt.SchemeSelector == null && selector != null)
+            {
+                prompt.SchemeSelector = selector;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                MarkChanged(prompt);
+                report.AppendLine("Reconnected the interaction prompt.");
+            }
         }
 
         private static Text CreateText(string name, Transform parent, string content, int size, Color color, TextAnchor alignment)

@@ -179,6 +179,12 @@ namespace Threefold.Puzzles
             leaf.Apply(motion.Progress);
         }
 
+        /// <summary>Follows every change of state, including a reset by a timer, so the leaf always matches.</summary>
+        protected override void OnStateChanged(bool isActive)
+        {
+            motion.Target = isActive;
+        }
+
         private void OnEnable()
         {
             if (control == DoorControl.Interact)
@@ -204,18 +210,17 @@ namespace Threefold.Puzzles
 
         private void Start()
         {
-            // Whatever the state is when the scene starts, show it without an opening movement.
+            // Whatever the state is when the scene starts, show it at once and without announcing
+            // it, so a gate opened earlier in the session neither moves nor rumbles.
             started = true;
             if (control == DoorControl.Input)
             {
-                Evaluate(true);
+                SetElementActiveSilently(input != null && (input.IsActive != invertInput));
             }
-            else
-            {
-                motion.Target = IsActive;
-                motion.Snap();
-                leaf.Apply(motion.Progress);
-            }
+
+            motion.Target = IsActive;
+            motion.Snap();
+            leaf.Apply(motion.Progress);
         }
 
         private void Update()

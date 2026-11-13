@@ -52,6 +52,15 @@ namespace Threefold.Puzzles
             tickSource = source;
         }
 
+        private void Start()
+        {
+            // Builds the generated tick while the scene starts, not when the first stone goes out.
+            if (tickSource != null && tickClip == null)
+            {
+                PuzzleSounds.Get(PuzzleTone.Tick);
+            }
+        }
+
         private void Update()
         {
             if (timer == null)
@@ -99,6 +108,7 @@ namespace Threefold.Puzzles
                 return;
             }
 
+            // This source plays only these short ticks, so changing its pitch bends nothing else.
             tickSource.pitch = 1f + 0.06f * gone;
             tickSource.PlayOneShot(clip, tickVolume);
         }
