@@ -34,6 +34,7 @@ namespace Threefold.Combat
         [Min(0f)]
         [SerializeField] private float pressBufferSeconds = 0.2f;
 
+        private TraversalController traversal;
         private float retryTime;
         private float bufferedUntil = -1f;
 
@@ -43,6 +44,11 @@ namespace Threefold.Combat
             inputSource = input;
             caster = abilityCaster;
             motor = characterMotor;
+        }
+
+        private void Awake()
+        {
+            traversal = GetComponent<TraversalController>();
         }
 
         private void OnEnable()
@@ -65,6 +71,13 @@ namespace Threefold.Combat
         {
             if (inputSource == null || caster == null)
             {
+                return;
+            }
+
+            // Hands are busy while hanging, climbing or vaulting.
+            if (traversal != null && (traversal.IsHanging || traversal.IsMoving))
+            {
+                bufferedUntil = -1f;
                 return;
             }
 

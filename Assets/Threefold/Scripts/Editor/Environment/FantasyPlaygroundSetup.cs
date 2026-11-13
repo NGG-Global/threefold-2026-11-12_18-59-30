@@ -181,6 +181,7 @@ namespace Threefold.EditorTools
             BuildTerrace(assets, architecture);
             BuildWestRuins(assets, architecture);
             BuildJumpCourse(assets, architecture);
+            BuildTraversalCourse(assets, architecture);
             BuildPerimeter(assets, architecture);
             BuildNature(assets, nature);
             BuildBackground(assets, background);
@@ -343,6 +344,28 @@ namespace Threefold.EditorTools
             PlaceBlock(assets, parent, "JumpBlock4", new Vector3(1.8f, 2f, 1.8f), new Vector3(14.6f, 0f, 0f), stone);
             PlaceBlock(assets, parent, "HighPlatform", new Vector3(4.5f, 2.4f, 4.5f), new Vector3(14.5f, 0f, 4.6f), stone);
             Place(assets.ColumnBroken, parent, new Vector3(16f, 2.4f, 6f), 300f);
+        }
+
+        /// <summary>
+        /// A traversal training ground in the south-west corner, a few steps to the left of the
+        /// starting point. In order of use:
+        ///   a rail to vault at a run (0.9 m high, 0.4 m deep),
+        ///   a crate to climb onto (1.1 m),
+        ///   a wall whose 5 m long top edge is caught from the crate or with a jump (2.4 m), and shimmied along,
+        ///   a taller block (3.2 m) beside it, caught from the ground with a jump and climbed,
+        ///   a gap of 1.65 m at 2.4 m height to a second platform,
+        ///   and the high edges to lower oneself from and drop.
+        /// </summary>
+        private static void BuildTraversalCourse(EnvironmentAssets assets, Transform parent)
+        {
+            Material stone = assets.DarkStoneMaterial;
+            PlaceBlock(assets, parent, "VaultRail", new Vector3(0.4f, 0.9f, 3f), new Vector3(-4.5f, 0f, -10.5f), stone);
+            PlaceBlock(assets, parent, "MantleCrate", new Vector3(2f, 1.1f, 2f), new Vector3(-7f, 0f, -10.5f), stone);
+            PlaceBlock(assets, parent, "ClimbWall", new Vector3(2.5f, 2.4f, 5f), new Vector3(-10.25f, 0f, -10f), stone);
+            PlaceBlock(assets, parent, "HangWall", new Vector3(2.5f, 3.2f, 2.5f), new Vector3(-10.25f, 0f, -6.25f), stone);
+            PlaceBlock(assets, parent, "GapPlatform", new Vector3(2.5f, 2.4f, 2.5f), new Vector3(-10.25f, 0f, -15.4f), stone);
+            PlaceBlock(assets, parent, "StepLow", new Vector3(1.2f, 0.25f, 1.2f), new Vector3(-5f, 0f, -14.5f), stone);
+            PlaceBlock(assets, parent, "StepMantle", new Vector3(1.2f, 0.6f, 1.2f), new Vector3(-6.4f, 0f, -14.5f), stone);
         }
 
         /// <summary>Low walls around the edge, with gaps, so the courtyard reads as an enclosed place.</summary>

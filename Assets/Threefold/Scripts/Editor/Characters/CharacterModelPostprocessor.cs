@@ -18,13 +18,13 @@ namespace Threefold.EditorTools
 
         private static readonly HashSet<string> LoopingClips = new HashSet<string>
         {
-            "Idle", "Walk", "Jog", "Sprint", "JumpLoop",
+            "Idle", "Walk", "Jog", "Sprint", "JumpLoop", "Hang",
         };
 
         // Changing this number makes Unity re-import the characters with the new settings.
         public override uint GetVersion()
         {
-            return 1;
+            return 2;
         }
 
         internal static bool IsCharacterModel(string path)
