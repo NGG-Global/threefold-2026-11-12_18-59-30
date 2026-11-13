@@ -15,6 +15,8 @@ namespace Threefold.VisualStyle
     /// global outline switch and the sky material. It never writes to a project file.
     ///
     /// Keys, for testing: F6 next quality level, F7 contour lines on or off, F8 next lighting.
+    /// What is chosen with them, or on the test panel, is kept for the rest of the run, so it
+    /// survives a change of scene through a portal.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class VisualStyleController : MonoBehaviour
@@ -55,6 +57,16 @@ namespace Threefold.VisualStyle
         [Header("Testing")]
         [Tooltip("F6, F7 and F8 switch quality, contour lines and lighting.")]
         [SerializeField] private bool testKeys = true;
+
+        // The controller whose settings are in force. During a change of scene the new scene's
+        // controller may be enabled before the old one is disabled; only the one in force may put
+        // the shared settings back, or it would undo what the new one has just applied.
+        private static VisualStyleController active;
+
+        // What was chosen by hand in this run. -1 means nothing was chosen.
+        private static int chosenQuality = -1;
+        private static int chosenLighting = -1;
+        private static int chosenOutlines = -1;
 
         private Material runtimeSky;
         private Material originalSky;
@@ -125,6 +137,8 @@ namespace Threefold.VisualStyle
 
             qualityLevel = Mathf.Clamp(level, 0, QualityLevelCount - 1);
             outlinesOverride = false;
+            chosenQuality = qualityLevel;
+            chosenOutlines = -1;
             ApplyQuality();
             Changed?.Invoke();
         }
@@ -145,6 +159,7 @@ namespace Threefold.VisualStyle
             }
 
             lighting = Mathf.Clamp(index, 0, LightingCount - 1);
+            chosenLighting = lighting;
             ApplyLighting();
 
             // The lighting preset sets shadow strength; the quality level decides whether shadows exist.
@@ -165,6 +180,7 @@ namespace Threefold.VisualStyle
         {
             outlinesOverride = true;
             outlinesOverrideValue = enabled;
+            chosenOutlines = enabled ? 1 : 0;
             ApplyOutlines();
             Changed?.Invoke();
         }
@@ -221,11 +237,29 @@ namespace Threefold.VisualStyle
                 viewCamera = Camera.main;
             }
 
-            if (chooseQualityForDevice && QualityLevelCount > 0)
+            active = this;
+
+            // A choice made by hand earlier in this run comes first; otherwise the device decides.
+            if (chosenQuality >= 0 && QualityLevelCount > 0)
+            {
+                qualityLevel = Mathf.Clamp(chosenQuality, 0, QualityLevelCount - 1);
+            }
+            else if (chooseQualityForDevice && QualityLevelCount > 0)
             {
                 int suggested = VisualQualityPreset.SuggestLevel(Application.isMobilePlatform, SystemInfo.systemMemorySize,
                     SystemInfo.graphicsShaderLevel);
                 qualityLevel = Mathf.Clamp(suggested, 0, QualityLevelCount - 1);
+            }
+
+            if (chosenLighting >= 0 && LightingCount > 0)
+            {
+                lighting = Mathf.Clamp(chosenLighting, 0, LightingCount - 1);
+            }
+
+            if (chosenOutlines >= 0)
+            {
+                outlinesOverride = true;
+                outlinesOverrideValue = chosenOutlines == 1;
             }
 
             ApplyLighting();
@@ -234,8 +268,12 @@ namespace Threefold.VisualStyle
 
         private void OnDisable()
         {
-            UrpQualityBridge.Restore();
-            Shader.SetGlobalFloat(OutlineSuppressId, 0f);
+            if (active == this)
+            {
+                active = null;
+                UrpQualityBridge.Restore();
+                Shader.SetGlobalFloat(OutlineSuppressId, 0f);
+            }
 
             if (runtimeSky != null)
             {
@@ -295,6 +333,16 @@ namespace Threefold.VisualStyle
                 Debug.Log("[Threefold] Soft shadows are switched off in the active URP asset, so shadows have crisp edges. " +
                           "Threefold > Visual Style > Check Rendering Settings explains how to enable them.", this);
             }
+        }
+
+        // Static state survives between Play sessions when domain reload is disabled in the Editor.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            active = null;
+            chosenQuality = -1;
+            chosenLighting = -1;
+            chosenOutlines = -1;
         }
 
         private void ApplyOutlines()

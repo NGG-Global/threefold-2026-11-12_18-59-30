@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Threefold.EditorTools
 {
@@ -38,6 +39,7 @@ namespace Threefold.EditorTools
         private readonly bool regenerate;
         private int created;
         private int kept;
+        private int upgraded;
 
         private VisualStyleAssets(StringBuilder report, bool regenerate)
         {
@@ -83,7 +85,10 @@ namespace Threefold.EditorTools
                 return null;
             }
 
-            if (!shader.isSupported)
+            // A build server usually runs Unity without a graphics device. What isSupported answers
+            // there is not known, and it says nothing about the phone the build is for, so it is
+            // only consulted where there is a device to ask.
+            if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && !shader.isSupported)
             {
                 problem = $"the shader '{ShaderName}' is not supported by this graphics device";
                 return null;
@@ -121,7 +126,8 @@ namespace Threefold.EditorTools
                 }
 
                 Material material = EnsureMaterial($"{MaterialFolder}/{preset.Name}.mat",
-                    () => CreatePresetMaterial(preset, map, variation));
+                    () => CreatePresetMaterial(preset, map, variation),
+                    existing => ConfigureIllustratedPreset(existing, preset, variation));
                 ByName[preset.Name] = material;
 
                 if (preset.Replaces != null)
@@ -140,6 +146,11 @@ namespace Threefold.EditorTools
             AssetDatabase.SaveAssets();
 
             report.AppendLine($"Visual style assets: {created} created, {kept} kept. Folder: '{Folder}'.");
+            if (upgraded > 0)
+            {
+                report.AppendLine($"{upgraded} material(s) made earlier with the stock shader now use '{ShaderName}'. " +
+                                  "Their colour and texture were kept.");
+            }
         }
 
         // ------------------------------------------------------------ textures
@@ -186,11 +197,26 @@ namespace Threefold.EditorTools
 
         // ----------------------------------------------------------- materials
 
-        private Material EnsureMaterial(string path, System.Func<Material> create)
+        /// <param name="upgrade">
+        /// Gives an existing material the style's own shader and settings. Used only for a material
+        /// that still carries the stock shader from a run in which the style's shader was unusable.
+        /// </param>
+        private Material EnsureMaterial(string path, System.Func<Material> create, System.Action<Material> upgrade)
         {
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (existing != null)
             {
+                if (UsesIllustratedShader && existing.shader != null && existing.shader.name == FallbackShaderName)
+                {
+                    // Colour, texture and culling carry over: both shaders use the same property names.
+                    existing.shader = Shader;
+                    existing.DisableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                    upgrade(existing);
+                    EditorUtility.SetDirty(existing);
+                    upgraded++;
+                    return existing;
+                }
+
                 kept++;
                 return existing;
             }
@@ -224,6 +250,13 @@ namespace Threefold.EditorTools
                 return material;
             }
 
+            ConfigureIllustratedPreset(material, preset, variation);
+            return material;
+        }
+
+        /// <summary>The settings that only the style's own shader has, for a material preset.</summary>
+        private static void ConfigureIllustratedPreset(Material material, StyleMaterialPreset preset, Texture2D variation)
+        {
             SetColor(material, "_ShadeColor", ToColor(preset.Shade));
             SetFloat(material, "_Wrap", preset.Wrap);
             ConfigureHighlight(material, preset.HighlightColour, preset.HighlightStrength, preset.HighlightSize);
@@ -236,8 +269,10 @@ namespace Threefold.EditorTools
             SetFloat(material, "_PaintScale", preset.PaintScale);
 
             // The environment carries its lines in its textures; contour lines are for characters.
+            // The pass is switched off, and the width is zero as well: should the pass be drawn
+            // after all, a hull of no width is folded away by the shader and shows nothing.
+            SetFloat(material, "_OutlineWidth", 0f);
             material.SetShaderPassEnabled(OutlinePass, false);
-            return material;
         }
 
         /// <summary>
@@ -264,7 +299,8 @@ namespace Threefold.EditorTools
 
                 string key = original.name.StartsWith("Mage_") ? original.name.Substring("Mage_".Length) : original.name;
                 Material styled = EnsureMaterial($"{MaterialFolder}/{CharacterPrefix}Mage_{key}.mat",
-                    () => CreateCharacterMaterial(original, key, smoothNormals));
+                    () => CreateCharacterMaterial(original, key, smoothNormals),
+                    existing => ConfigureIllustratedCharacter(existing, original, key, smoothNormals));
 
                 if (styled != null)
                 {
@@ -290,6 +326,13 @@ namespace Threefold.EditorTools
                 return material;
             }
 
+            ConfigureIllustratedCharacter(material, original, key, smoothNormals);
+            return material;
+        }
+
+        /// <summary>The settings that only the style's own shader has, for a character material.</summary>
+        private static void ConfigureIllustratedCharacter(Material material, Material original, string key, bool smoothNormals)
+        {
             SetColor(material, "_ShadeColor", ToColor(StylePalette.ShadeCool));
 
             // Skin and cloth turn more softly than stone.
@@ -321,7 +364,6 @@ namespace Threefold.EditorTools
             SetFloat(material, "_OutlineSmoothNormals", smoothNormals ? 1f : 0f);
             SetKeyword(material, "_OUTLINE_SMOOTH_NORMALS", smoothNormals);
             material.SetShaderPassEnabled(OutlinePass, true);
-            return material;
         }
 
         /// <summary>A copy of the scene's sky material, so tinting the sky never changes the original.</summary>

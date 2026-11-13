@@ -49,13 +49,19 @@ Full-size samples: [stone](VisualStyle/images/texture_Stone.png), [foliage](Visu
 | Lines | F7 | The Mage's contour line on and off |
 | Light | F8 | Golden Afternoon and Overcast Morning |
 
-The buttons appear in the Editor and in development builds only.
+The buttons appear in the Editor and in development builds only. What is chosen with them is
+kept for the rest of the run, including through the portal to the arena.
+
+**The Editor does not start at the level a phone uses.** In the Editor the controller starts at
+High, which adds the project's bloom, tone mapping and vignette. A phone starts at Medium or Low,
+without them. Press F6 until the panel reads Medium to see in the Editor what a mid-range phone
+is given. The preview images above correspond to Medium: they contain no post-processing.
 
 | Command (under **Threefold >**) | What it does |
 | --- | --- |
 | Visual Style > Apply To Open Scene | Generates missing style assets, replaces grey-box materials in the scene, gives the Mage its line, sets the lighting, adds the controller and the test panel |
-| Visual Style > Remove From Open Scene | Puts the grey-box materials and lighting back and removes what was added, so the two looks can be compared. The assets stay |
-| Visual Style > Check Rendering Settings | Reports on the project's rendering settings. Changes one of them only if you choose "Change" |
+| Visual Style > Remove From Open Scene | Puts the grey-box materials back, sets the lighting of the generated levels (playground, arena, lab) and removes what was added, so the two looks can be compared. The assets stay. In a scene lit by hand, the lighting it sets is the generated levels', not that scene's own |
+| Visual Style > Check Rendering Settings | Reports on the project's rendering settings. Changes one of them only if you choose "Change". Not available in Play mode |
 | Visual Style > Repaint Textures | Paints the textures again from code, after asking. Overwrites textures edited by hand |
 | Setup > Style Lab | Builds `Assets/Scenes/StyleLab.unity`, the isolated test scene |
 
@@ -65,7 +71,9 @@ Mage's nine and the sky), the changed scenes,
 and `Assets/Settings/*_RPAsset.asset` if you accepted the settings change.
 
 **Existing assets are kept.** A texture repainted by hand, or a material tuned in the Inspector,
-survives every later run. Delete an asset to have it generated again.
+survives every later run. Delete an asset to have it generated again. One exception: a material
+that was created with the stock shader, because the style's shader was unusable at the time, is
+moved to the style's shader on the next run once that shader works. Its colour and texture stay.
 
 ### The Style Lab
 
@@ -182,6 +190,8 @@ be the dependable baseline", inverted-hull outlines "may work for selected chara
   Anti-aliasing (2 samples at Medium) steadies thin lines further.
 - **Minimal on distant things.** The contour fades between 12 m and 28 m and is gone beyond.
   Nothing in the environment is outlined. Texture lines soften with distance by themselves.
+- **Close to the camera.** Hull pixels nearer than 0.9 m are not drawn. Without this, the inside
+  of the hull would show as a dark shell when a wall presses the camera into the character.
 - **Closed outlines on flat-shaded parts.** The Mage's clothing is flat-shaded, which would tear
   an inverted hull open along every edge. On import, smoothed normals are stored in the model's
   unused tangent channel, and the outline follows those. Unity deforms tangents with the
@@ -199,6 +209,13 @@ No full-screen edge detection is used.
 | Render scale | 0.7 | 0.85 | 1.0 |
 | Anti-aliasing | Off | 2 samples | 4 samples |
 | Post-processing, HDR | Off | Off | On |
+
+**Medium and Low switch post-processing and HDR off.** The earlier playground had bloom, tone
+mapping and vignette on for every device. On a phone they are now off, so the mana crystal, the
+runes and the puzzle glows lose their bloom, and colours are not tone-mapped. This follows the
+brief ("avoid expensive screen-space effects unless justified by profiling") and is the look the
+previews were judged in. To compare on a device, tick Post Processing and HDR for Medium on the
+`VisualStyle` object and build again.
 
 These are starting points chosen by reasoning about cost, **not measured**. The art bible asks
 for quality tiers "only after actual device profiling identifies useful trade-offs" (section 9);
@@ -229,8 +246,9 @@ sprint. How it is met:
   that one change is made without asking, because nothing there is kept.
 
 The check also reports, without changing anything: colour space (Linear, correct), the SRP
-Batcher, requested depth or opaque textures, and renderers set to Deferred, which the style's
-shader does not support.
+Batcher, requested depth or opaque textures, renderers set to Deferred or Deferred+, which the
+style's shader does not support, and depth priming, under which contour lines are not drawn
+(it is disabled on both of the project's renderers).
 
 Current values found in the repository: Linear colour space; `Mobile_RPAsset` (Android) uses a
 Forward renderer without renderer features, render scale 0.8, 1024 shadow map, 50 m shadow
@@ -246,7 +264,7 @@ acceptance evidence" (section 9).
 | Feature | Cost, reasoned from the code | How to switch it for comparison |
 | --- | --- | --- |
 | The lit shader | One texture sample, plus one more with paint variation. No normal map, no reflection probe, no physically based lighting. Ambient light is computed per vertex. Expected to cost about as much as URP's Simple Lit and less than URP Lit, which the grey-box materials use | Remove the style |
-| Contour line | The Mage's mesh is drawn twice: about 15,600 extra triangles and nine extra draws (one per material). Its pixels are a single flat colour | F7, or the Low level |
+| Contour line | The Mage's mesh is drawn twice: about 15,600 extra triangles and nine extra draws (one per material). Its pixels are a single flat colour. Switched off (F7, or Low), the nine draws remain but the hull is folded into a point and fills no pixels | F7, or the Low level |
 | Shadows | One shadow map sample per pixel with crisp edges; four with soft edges | F6 |
 | Render scale | The largest single lever: at 0.7, half the pixels of full resolution are drawn | F6 |
 | Anti-aliasing | Usually cheap on phone graphics chips at 2 samples, but it adds memory | F6 |
@@ -339,6 +357,23 @@ This judges textures, palette, light response and line weight. It does **not** j
 - Interaction with Sprint 10's puzzle in the playground. Its stonework uses the shared stone
   materials and should be painted with the rest; its glows are left as they are.
 
+### Reading the first Android build
+
+The build workflow assembles both levels from code and applies the style while doing so. It is
+the first time Unity compiles this shader. In the build log (`threefold-build.log` in the run's
+log artifact) look for:
+
+| Text in the log | Meaning |
+| --- | --- |
+| `The visual style is applied. It is a proposal` | The style's own shader was accepted when the materials were made |
+| `New style materials use 'Universal Render Pipeline/Simple Lit'` | Unity rejected the style's shader. The build continues with the stock shader: painted textures, no soft light response, no contour lines |
+| `The visual style could not be applied` | The style's setup failed. The level was still built, without the style or with part of it. The error follows in the log |
+| `Shader error` together with `Illustrated Lit` (the exact wording is Unity's and may differ) | A variant failed to compile for the phone's graphics interface. Objects using it would be drawn in Unity's bright pink error colour on the device |
+
+The check made when the materials are created cannot see errors that only arise for the phone's
+graphics interface. Those appear later in the build, as the last row describes. The build server
+normally runs without a graphics device; the setup does not rely on one.
+
 ### Not verified: needs an Android device
 
 - Frame rate, memory and heat at each quality level.
@@ -369,8 +404,13 @@ This judges textures, palette, light response and line weight. It does **not** j
 - A line of full width on a small, mid-distance figure reads heavier than on a near one. Only the
   Mage is outlined, about 5 m from the camera, so this does not arise yet.
 - Characters have no painted textures. Enemies, effects and puzzle glows are not styled.
-- The shader does not support lightmaps, normal maps, transparency, decals, light cookies or
-  Deferred rendering.
+- The shader does not support lightmaps, normal maps, transparency, decals, light cookies,
+  shadows from point and spot lights, ambient occlusion in the lit pass, or Deferred rendering.
+  **Do not bake lighting with the style applied**: static scenery would probably lose its
+  ambient light, because the shader has no lightmap variant.
+- Contour lines are not drawn if depth priming is enabled on a renderer. It is disabled now, and
+  the settings check warns if that changes.
+- The contour's pass can only be enabled on a material from code, not in the Inspector.
 - Quality levels change values on the URP asset in memory and put them back when Play mode ends.
   The code never saves them. One caution: if the URP asset itself is edited in the Inspector
   while the game is playing, Unity saves the whole asset, including the level's values at that

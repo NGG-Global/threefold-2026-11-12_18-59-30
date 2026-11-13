@@ -98,6 +98,14 @@ namespace Threefold.EditorTools
         [MenuItem(MenuRoot + "Check Rendering Settings", false, 40)]
         public static void CheckRenderingSettings()
         {
+            // While the game plays, the active URP asset holds the quality level's values, not the
+            // project's. They would be reported as the project's settings, and saved with any change.
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                EditorUtility.DisplayDialog(DialogTitle, "Exit Play mode first.", "OK");
+                return;
+            }
+
             List<RenderingSettingsCheck.Finding> findings = RenderingSettingsCheck.Inspect();
             string text = RenderingSettingsCheck.Describe(findings);
             Debug.Log($"[Threefold] Rendering settings:\n{text}");
@@ -136,6 +144,7 @@ namespace Threefold.EditorTools
 
         [MenuItem(MenuRoot + "Apply To Open Scene", true)]
         [MenuItem(MenuRoot + "Remove From Open Scene", true)]
+        [MenuItem(MenuRoot + "Check Rendering Settings", true)]
         [MenuItem(MenuRoot + "Repaint Textures", true)]
         private static bool CanEdit()
         {
@@ -153,10 +162,28 @@ namespace Threefold.EditorTools
         /// <summary>
         /// For the level setup commands. On a build server the one proposed project setting is
         /// changed, because nothing there is kept; in an open Editor it is only reported.
+        ///
+        /// The style is a layer on top of a level that works without it. If applying it fails, the
+        /// failure is logged and reported and the level setup carries on, so a fault here cannot
+        /// stop a level, or an Android build, from being produced.
         /// </summary>
-        internal static void ApplyDuringSetup(Scene scene, StringBuilder report, PropPlacement props)
+        /// <returns>False if the style could not be applied completely.</returns>
+        internal static bool ApplyDuringSetup(Scene scene, StringBuilder report, PropPlacement props)
         {
-            Apply(scene, report, Application.isBatchMode, props);
+            try
+            {
+                Apply(scene, report, Application.isBatchMode, props);
+                return true;
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError("[Threefold] The visual style could not be applied; the level setup continues without it " +
+                               "or with part of it. Threefold > Visual Style > Remove From Open Scene restores the earlier look.");
+                Debug.LogException(exception);
+                report.AppendLine($"WARNING: The visual style could not be applied ({exception.GetType().Name}: {exception.Message}). " +
+                                  "The level was built without it or with part of it. See the Console for details.");
+                return false;
+            }
         }
 
         /// <param name="changeProjectSettings">Also make the proposed change to the URP assets, without asking.</param>

@@ -206,6 +206,7 @@ Shader "Threefold/Illustrated Lit"
         }
     }
 
-    // If this shader cannot be compiled on a device, the object still renders, with the stock shader.
+    // Used when a device supports none of the SubShaders above. It does not cover compile errors:
+    // a variant that fails to compile is drawn with Unity's error shader.
     FallBack "Universal Render Pipeline/Simple Lit"
 }

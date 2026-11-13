@@ -90,6 +90,14 @@ namespace Threefold.EditorTools
         /// <summary>Makes the changes the findings propose. Returns how many settings were changed.</summary>
         internal static int ApplyChanges(List<Finding> findings, StringBuilder report)
         {
+            // While the game plays, the quality level holds its own values in the active URP asset.
+            // Saving the asset then would write those values to the project file.
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                report.AppendLine("No setting was changed: exit Play mode first.");
+                return 0;
+            }
+
             int changed = 0;
 
             foreach (Finding finding in findings)
@@ -250,14 +258,27 @@ namespace Threefold.EditorTools
                 var serialized = new SerializedObject(rendererData);
                 SerializedProperty mode = serialized.FindProperty("m_RenderingMode");
 
-                // 0 Forward, 1 Deferred, 2 Forward+ in URP 17.
-                if (mode != null && mode.intValue == 1)
+                // 0 Forward, 1 Deferred, 2 Forward+, 3 Deferred+ in URP 17.6.
+                if (mode != null && (mode.intValue == 1 || mode.intValue == 3))
                 {
                     findings.Add(new Finding
                     {
                         Subject = $"{AssetDatabase.GetAssetPath(rendererData)} (renderer of {subject})", Warning = true,
-                        Text = "This renderer uses Deferred rendering. The style's shader has no deferred pass, so its " +
-                               "objects would not be drawn. Use Forward or Forward+. Not changed.",
+                        Text = "This renderer uses Deferred or Deferred+ rendering. The style's shader has no deferred pass, " +
+                               "so its objects would not be drawn. Use Forward or Forward+. Not changed.",
+                    });
+                }
+
+                // Depth priming draws depth first and then accepts only pixels at exactly that depth.
+                // The contour's hull lies outside the mesh, so its pixels would be rejected.
+                SerializedProperty priming = serialized.FindProperty("m_DepthPrimingMode");
+                if (priming != null && priming.intValue != 0)
+                {
+                    findings.Add(new Finding
+                    {
+                        Subject = $"{AssetDatabase.GetAssetPath(rendererData)} (renderer of {subject})", Warning = true,
+                        Text = "Depth priming is enabled on this renderer. With it, contour lines are not drawn. " +
+                               "Set Depth Priming Mode to Disabled to keep them. Not changed.",
                     });
                 }
             }

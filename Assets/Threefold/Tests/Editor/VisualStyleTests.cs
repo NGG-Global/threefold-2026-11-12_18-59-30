@@ -441,6 +441,10 @@ namespace Threefold.Tests
             StringAssert.Contains($"#define ILLUSTRATED_SHADOW_FADE {IllustratedLightingReference.ShadowFade:0.0}", lighting);
             StringAssert.Contains("float2(0.37, 0.61)", input, "The paint variation's projection differs from the reference.");
             StringAssert.Contains("_ThreefoldOutlineSuppress", outline);
+            StringAssert.Contains($"#define ILLUSTRATED_OUTLINE_NEAR_CUT {OutlineRules.NearCut:0.0}", outline);
+            StringAssert.Contains("clip(input.viewDepth - ILLUSTRATED_OUTLINE_NEAR_CUT)", outline,
+                "The hull is no longer cut away near the camera.");
+            StringAssert.Contains("if (baseWidth <= 0.0)", outline, "A hidden hull is no longer folded away.");
 
             // Every property the setup tool writes must exist, or it would be silently skipped.
             foreach (string property in new[]

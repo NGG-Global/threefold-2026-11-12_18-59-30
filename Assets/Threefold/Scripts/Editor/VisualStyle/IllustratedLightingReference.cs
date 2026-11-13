@@ -102,6 +102,12 @@ namespace Threefold.EditorTools
     /// </summary>
     public static class OutlineRules
     {
+        /// <summary>
+        /// Hull pixels nearer to the camera than this, in metres, are not drawn, so the inside of
+        /// the hull never fills the screen when the camera is pressed into a character.
+        /// </summary>
+        public const float NearCut = 0.9f;
+
         /// <summary>1 up to the fade start, 0 from the fade end, smooth in between.</summary>
         public static float Fade(float distance, float fadeStart, float fadeEnd)
         {
