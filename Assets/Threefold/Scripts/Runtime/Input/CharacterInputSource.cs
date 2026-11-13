@@ -26,5 +26,11 @@ namespace Threefold.InputHandling
 
         /// <summary>True only on the frame the jump control was pressed.</summary>
         public abstract bool JumpPressedThisFrame { get; }
+
+        /// <summary>True while the primary attack control is held.</summary>
+        public abstract bool AttackHeld { get; }
+
+        /// <summary>True only on the frame the primary attack control was pressed.</summary>
+        public abstract bool AttackPressedThisFrame { get; }
     }
 }

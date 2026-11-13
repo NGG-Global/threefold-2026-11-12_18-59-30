@@ -33,6 +33,8 @@ Code and is new to Unity and Git. Read `Docs/DevelopmentWorkflow.md` for the ful
 - Avoid namespaces that shadow Unity types: use `Threefold.InputHandling`, `Threefold.Cameras`,
   `Threefold.Characters`, `Threefold.EditorTools`, not `Threefold.Input`, `.Camera` or `.Editor`.
 - Runtime code goes in a runtime assembly, Editor-only code in an Editor assembly (`.asmdef`).
+- `Assets/Threefold/Generated/` holds assets produced by the setup commands on the laptop (prefabs,
+  materials, spell assets). Never author or edit those files here; change the generating code instead.
 - Gameplay code reads input through `CharacterInputSource`, never from a device directly.
 - No paid assets and no new packages without the owner's agreement.
 

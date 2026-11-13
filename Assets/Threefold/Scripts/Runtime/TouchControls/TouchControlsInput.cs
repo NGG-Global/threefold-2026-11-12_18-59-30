@@ -35,6 +35,7 @@ namespace Threefold.TouchControls
         [SerializeField] private TouchLookArea lookArea;
         [SerializeField] private TouchButton jumpButton;
         [SerializeField] private TouchButton sprintButton;
+        [SerializeField] private TouchButton attackButton;
 
         [Tooltip("Optional. Used to show and hide all touch controls together.")]
         [SerializeField] private CanvasGroup canvasGroup;
@@ -57,7 +58,7 @@ namespace Threefold.TouchControls
 
         private const float ReferenceScreenHeight = 1080f;
         private const int MousePointerId = int.MinValue + 1;
-        private const int MaxRegions = 4;
+        private const int MaxRegions = 5;
 
         private readonly TouchRegion[] regions = new TouchRegion[MaxRegions];
         private readonly bool[] regionSeen = new bool[MaxRegions];
@@ -69,6 +70,8 @@ namespace Threefold.TouchControls
         private bool sprintLatched;
         private bool jumpHeld;
         private bool jumpPressedThisFrame;
+        private bool attackHeld;
+        private bool attackPressedThisFrame;
         private bool visible = true;
         private bool enhancedTouchEnabledHere;
 
@@ -77,6 +80,13 @@ namespace Threefold.TouchControls
         public override bool SprintHeld => sprintHeld;
         public override bool JumpHeld => jumpHeld;
         public override bool JumpPressedThisFrame => jumpPressedThisFrame;
+        public override bool AttackHeld => attackHeld;
+        public override bool AttackPressedThisFrame => attackPressedThisFrame;
+
+        public VirtualJoystick Joystick => joystick;
+        public TouchButton JumpButton => jumpButton;
+        public TouchButton SprintButton => sprintButton;
+        public TouchButton AttackButton => attackButton;
 
         /// <summary>Whether the controls are shown and respond to touch.</summary>
         public bool Visible => visible;
@@ -102,6 +112,13 @@ namespace Threefold.TouchControls
             jumpButton = jump;
             sprintButton = sprint;
             canvasGroup = controlsGroup;
+            CollectRegions();
+        }
+
+        /// <summary>Connects the attack button. Called by the setup tooling.</summary>
+        public void BindAttackButton(TouchButton attack)
+        {
+            attackButton = attack;
             CollectRegions();
         }
 
@@ -310,6 +327,9 @@ namespace Threefold.TouchControls
             jumpHeld = jumpButton != null && jumpButton.IsHeld;
             jumpPressedThisFrame = jumpButton != null && jumpButton.WasPressedThisFrame;
 
+            attackHeld = attackButton != null && attackButton.IsHeld;
+            attackPressedThisFrame = attackButton != null && attackButton.WasPressedThisFrame;
+
             sprintHeld = ReadSprint();
         }
 
@@ -349,6 +369,7 @@ namespace Threefold.TouchControls
             regionCount = 0;
 
             // Priority order: buttons first, then the joystick, then the look area.
+            AddRegion(attackButton);
             AddRegion(jumpButton);
             AddRegion(sprintButton);
             AddRegion(joystick);
@@ -384,6 +405,8 @@ namespace Threefold.TouchControls
             sprintLatched = false;
             jumpHeld = false;
             jumpPressedThisFrame = false;
+            attackHeld = false;
+            attackPressedThisFrame = false;
 
             if (sprintButton != null)
             {

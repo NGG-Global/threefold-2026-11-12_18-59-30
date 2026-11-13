@@ -35,9 +35,11 @@ namespace Threefold.EditorTools
         private const float KnobSize = 62f;
         private const float JumpButtonSize = 84f;
         private const float SprintButtonSize = 64f;
+        private const float AttackButtonSize = 92f;
         private static readonly Vector2 JoystickRestPosition = new Vector2(125f, 120f);
         private static readonly Vector2 JumpButtonPosition = new Vector2(-82f, 82f);
         private static readonly Vector2 SprintButtonPosition = new Vector2(-184f, 62f);
+        private static readonly Vector2 AttackButtonPosition = new Vector2(-90f, 194f);
 
         // A warm ivory that reads on both dark and bright scenes without drawing attention.
         private static readonly Color FillColor = new Color(1f, 0.96f, 0.86f, 0.1f);
@@ -114,8 +116,33 @@ namespace Threefold.EditorTools
                 report.AppendLine($"Kept existing touch controls on '{touch.name}'.");
             }
 
+            EnsureAttackButton(touch, report);
             EnsureInputRouting(scene, mage, touch, report);
             EnsureSchemeSelector(scene, mage, touch, report);
+        }
+
+        /// <summary>
+        /// Adds the attack button to touch controls that do not have one yet. This also upgrades
+        /// controls that were created before combat existed, without changing their other parts.
+        /// </summary>
+        private static void EnsureAttackButton(TouchControlsInput touch, StringBuilder report)
+        {
+            if (touch.AttackButton != null)
+            {
+                return;
+            }
+
+            // Sit beside the existing buttons so the new one shares their safe-area parent.
+            Transform parent = touch.JumpButton != null ? touch.JumpButton.transform.parent : touch.transform;
+
+            TouchButton attack = BuildButton("AttackButton", parent, AttackButtonSize, AttackButtonPosition,
+                ProceduralShape.Diamond);
+            Undo.RegisterCreatedObjectUndo(attack.gameObject, DialogTitle);
+
+            Undo.RecordObject(touch, DialogTitle);
+            touch.BindAttackButton(attack);
+            MarkChanged(touch);
+            report.AppendLine("Added the attack button to the touch controls.");
         }
 
         // ------------------------------------------------------------ hierarchy
@@ -180,7 +207,7 @@ namespace Threefold.EditorTools
             return joystick;
         }
 
-        private static TouchButton BuildButton(string name, RectTransform parent, float size, Vector2 position,
+        internal static TouchButton BuildButton(string name, Transform parent, float size, Vector2 position,
             ProceduralShape icon)
         {
             RectTransform rect = CreateRect(name, parent);
@@ -196,7 +223,7 @@ namespace Threefold.EditorTools
             return button;
         }
 
-        private static Image CreateShape(string name, Transform parent, ProceduralShape shape, Color color)
+        internal static Image CreateShape(string name, Transform parent, ProceduralShape shape, Color color)
         {
             RectTransform rect = CreateRect(name, parent);
             Image image = rect.gameObject.AddComponent<Image>();
@@ -206,7 +233,7 @@ namespace Threefold.EditorTools
             return image;
         }
 
-        private static RectTransform CreateRect(string name, Transform parent)
+        internal static RectTransform CreateRect(string name, Transform parent)
         {
             var gameObject = new GameObject(name, typeof(RectTransform));
             gameObject.layer = UiLayer;
@@ -215,7 +242,7 @@ namespace Threefold.EditorTools
             return rect;
         }
 
-        private static void SetAnchors(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax)
+        internal static void SetAnchors(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax)
         {
             rect.anchorMin = anchorMin;
             rect.anchorMax = anchorMax;
@@ -223,18 +250,18 @@ namespace Threefold.EditorTools
             rect.offsetMax = Vector2.zero;
         }
 
-        private static void Stretch(RectTransform rect)
+        internal static void Stretch(RectTransform rect)
         {
             SetAnchors(rect, Vector2.zero, Vector2.one);
         }
 
-        private static void Centre(RectTransform rect, float size)
+        internal static void Centre(RectTransform rect, float size)
         {
             PlaceAtCorner(rect, new Vector2(0.5f, 0.5f), Vector2.zero, size);
         }
 
         /// <summary>Gives the rect a fixed square size, positioned relative to an anchor point of its parent.</summary>
-        private static void PlaceAtCorner(RectTransform rect, Vector2 anchor, Vector2 position, float size)
+        internal static void PlaceAtCorner(RectTransform rect, Vector2 anchor, Vector2 position, float size)
         {
             rect.anchorMin = anchor;
             rect.anchorMax = anchor;

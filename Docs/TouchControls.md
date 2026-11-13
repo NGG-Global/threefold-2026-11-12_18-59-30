@@ -103,7 +103,7 @@ anything on a real device. These need a run in the Editor or on Android.
 ## Known limits
 
 - Not yet compiled in Unity or run on a device.
-- There is no attack or spell button yet; those come with the Mage's abilities.
+- An attack button was added in Sprint 3; see `Docs/MageCombat.md`.
 - The layout is for landscape orientation.
 - Existing touch controls are never modified by the setup command, so a layout change in a later
   version requires deleting `TouchControls` and running the command again.

@@ -22,6 +22,10 @@ namespace Threefold.Cameras
         [Tooltip("Point the camera orbits, measured from the target's position in world axes.")]
         [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1.5f, 0f);
 
+        [Tooltip("Shifts the camera sideways (X) and up (Y) from the orbit point, in metres, so the character " +
+                 "stands off-centre and the middle of the screen is clear for aiming.")]
+        [SerializeField] private Vector2 shoulderOffset = new Vector2(0.55f, 0.15f);
+
         [Tooltip("Preferred distance from the orbit point, in metres.")]
         [Min(0f)]
         [SerializeField] private float distance = 5f;
@@ -78,11 +82,26 @@ namespace Threefold.Cameras
         [Min(0f)]
         [SerializeField] private float distanceRecoverSpeed = 6f;
 
+        [Header("Shake")]
+        [Tooltip("Largest rotation, in degrees, that camera shake can add.")]
+        [Min(0f)]
+        [SerializeField] private float maxShakeAngle = 1.6f;
+
+        [Tooltip("How quickly shake dies away, per second.")]
+        [Min(0.01f)]
+        [SerializeField] private float shakeDecay = 2.6f;
+
+        [Tooltip("Speed of the shake movement.")]
+        [Min(0f)]
+        [SerializeField] private float shakeFrequency = 22f;
+
         private const float MinimumClipDistance = 0.3f;
 
         private readonly RaycastHit[] collisionHits = new RaycastHit[8];
 
         private Vector3 pivot;
+        private Vector3 framingPivot;
+        private float trauma;
         private Vector3 pivotVelocity;
         private float targetYaw;
         private float targetPitch;
@@ -159,7 +178,9 @@ namespace Threefold.Cameras
                 : desiredPivot;
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
+            framingPivot = GetFramingPivot(rotation);
             float allowedDistance = GetUnobstructedDistance(rotation);
+            trauma = Mathf.Max(0f, trauma - shakeDecay * Time.unscaledDeltaTime);
 
             // Close in immediately so geometry never hides the character; ease back out to avoid a pop.
             currentDistance = allowedDistance < currentDistance
@@ -188,6 +209,8 @@ namespace Threefold.Cameras
             pivotVelocity = Vector3.zero;
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
+            framingPivot = GetFramingPivot(rotation);
+            trauma = 0f;
             currentDistance = GetUnobstructedDistance(rotation);
             ApplyTransform(rotation);
         }
@@ -206,10 +229,65 @@ namespace Threefold.Cameras
             targetPitch = Mathf.Clamp(targetPitch + look.y * verticalSensitivity * verticalDirection, minPitch, maxPitch);
         }
 
+        /// <summary>
+        /// Adds camera shake. Amounts accumulate up to 1 and die away on their own. Typical values
+        /// are 0.1 for a light kick and 0.4 for a heavy impact.
+        /// </summary>
+        public void AddTrauma(float amount)
+        {
+            trauma = Mathf.Clamp01(trauma + Mathf.Max(0f, amount));
+        }
+
         private void ApplyTransform(Quaternion rotation)
         {
-            Vector3 position = pivot - rotation * Vector3.forward * currentDistance;
+            Vector3 position = framingPivot - rotation * Vector3.forward * currentDistance;
+
+            if (trauma > 0f && maxShakeAngle > 0f)
+            {
+                // Squaring makes small amounts subtle and keeps strong hits pronounced.
+                float strength = trauma * trauma * maxShakeAngle;
+                float time = Time.unscaledTime * shakeFrequency;
+                float shakePitch = (Mathf.PerlinNoise(time, 0.37f) - 0.5f) * 2f * strength;
+                float shakeYaw = (Mathf.PerlinNoise(0.71f, time) - 0.5f) * 2f * strength;
+                rotation *= Quaternion.Euler(shakePitch, shakeYaw, 0f);
+            }
+
             transform.SetPositionAndRotation(position, rotation);
+        }
+
+        /// <summary>
+        /// The point the camera pulls back from: the orbit point moved to the shoulder. The sideways
+        /// shift is shortened when a wall is in the way, so the camera never starts inside geometry.
+        /// </summary>
+        private Vector3 GetFramingPivot(Quaternion rotation)
+        {
+            Vector3 raised = pivot + Vector3.up * shoulderOffset.y;
+            float side = Mathf.Abs(shoulderOffset.x);
+            if (side <= 0.001f)
+            {
+                return raised;
+            }
+
+            Vector3 direction = rotation * (shoulderOffset.x > 0f ? Vector3.right : Vector3.left);
+
+            if (avoidClipping)
+            {
+                int hitCount = Physics.SphereCastNonAlloc(raised, collisionRadius, direction, collisionHits, side,
+                    collisionLayers, QueryTriggerInteraction.Ignore);
+
+                for (int i = 0; i < hitCount; i++)
+                {
+                    RaycastHit hit = collisionHits[i];
+                    if (hit.transform == null || hit.transform.IsChildOf(target) || hit.distance <= 0f)
+                    {
+                        continue;
+                    }
+
+                    side = Mathf.Min(side, hit.distance);
+                }
+            }
+
+            return raised + direction * side;
         }
 
         private float GetUnobstructedDistance(Quaternion rotation)
@@ -221,7 +299,7 @@ namespace Threefold.Cameras
             }
 
             Vector3 direction = rotation * Vector3.back;
-            int hitCount = Physics.SphereCastNonAlloc(pivot, collisionRadius, direction, collisionHits, preferred,
+            int hitCount = Physics.SphereCastNonAlloc(framingPivot, collisionRadius, direction, collisionHits, preferred,
                 collisionLayers, QueryTriggerInteraction.Ignore);
 
             float nearest = preferred;
