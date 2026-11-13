@@ -83,6 +83,35 @@ namespace Threefold.CombatFeedback
             guardEffect = guardSpark;
         }
 
+        /// <summary>
+        /// Connects only the shared effects that are not set, leaving the others as they are. Returns
+        /// true if anything changed.
+        /// </summary>
+        public bool FillEffects(PooledObject burn, PooledObject push, PooledObject guardSpark)
+        {
+            bool changed = false;
+
+            if (burnEffect == null && burn != null)
+            {
+                burnEffect = burn;
+                changed = true;
+            }
+
+            if (pushEffect == null && push != null)
+            {
+                pushEffect = push;
+                changed = true;
+            }
+
+            if (guardEffect == null && guardSpark != null)
+            {
+                guardEffect = guardSpark;
+                changed = true;
+            }
+
+            return changed;
+        }
+
         public DisciplineCombat Combat => combat;
         public PooledObject BurnEffect => burnEffect;
 

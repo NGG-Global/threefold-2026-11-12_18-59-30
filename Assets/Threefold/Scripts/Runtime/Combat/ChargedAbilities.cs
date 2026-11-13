@@ -100,8 +100,10 @@ namespace Threefold.Combat
     {
         private const int MaxImpactEffects = 8;
 
-        // Shared by every area attack. They resolve one at a time on the main thread.
+        // Shared by every area attack. A release that happens while another is still resolving
+        // (which nothing does today) gets a list of its own.
         private static readonly List<Health> Struck = new List<Health>(16);
+        private static bool resolving;
 
         [Header("Area")]
         [SerializeField] private AreaProfile area = new AreaProfile();
@@ -160,17 +162,34 @@ namespace Threefold.Combat
                 CoverCheckHeight = area.verticalReach * 0.5f,
             };
 
-            LastHitCount = AreaStrike.Resolve(request, Struck);
+            List<Health> struck = resolving ? new List<Health>(8) : Struck;
+            bool outermost = !resolving;
+            resolving = true;
 
-            if (impactEffectPrefab != null)
+            try
             {
-                for (int i = 0; i < Struck.Count; i++)
+                LastHitCount = AreaStrike.Resolve(request, struck);
+
+                if (impactEffectPrefab != null)
                 {
-                    Pools.Spawn(impactEffectPrefab, Struck[i].AimPoint, Quaternion.identity, MaxImpactEffects);
+                    for (int i = 0; i < struck.Count; i++)
+                    {
+                        if (struck[i] != null)
+                        {
+                            Pools.Spawn(impactEffectPrefab, struck[i].AimPoint, Quaternion.identity, MaxImpactEffects);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                struck.Clear();
+                if (outermost)
+                {
+                    resolving = false;
                 }
             }
 
-            Struck.Clear();
             CombatEvents.RaiseNoise(new NoiseEvent(shape.Origin + shape.Forward * (shape.Reach * 0.5f), area.noiseRadius, user));
         }
 
@@ -179,6 +198,7 @@ namespace Threefold.Combat
         private static void ResetStatics()
         {
             Struck.Clear();
+            resolving = false;
             LastHitCount = 0;
         }
     }

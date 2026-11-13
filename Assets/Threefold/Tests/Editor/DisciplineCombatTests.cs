@@ -449,6 +449,39 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void AQuickBlockDoesNotSkipTheRecoveryOfASwingThatLanded()
+        {
+            slot = Aegis;
+            Tap();
+            Wait(0.5f); // the Force Palm lands after 0.18 s; its 0.34 s recovery ends at about 0.52 s
+            Tap();      // the Bulwark Slam starts, lands 0.26 s later, then recovers for 0.46 s
+            for (int i = 0; i < 60 && Count(CombatCommandKind.MeleeHit) < 2; i++)
+            {
+                Frame();
+            }
+
+            Assert.AreEqual(2, Count(CombatCommandKind.MeleeHit));
+            float landed = time;
+
+            block = true;
+            Frame();
+            block = false;
+            Tap();
+            Wait(0.2f);
+
+            Assert.AreEqual(2, Count(CombatCommandKind.MeleeStepStarted),
+                "Flicking block must not let the next swing start before the recovery is over.");
+
+            Wait(0.5f);
+            Tap();
+            Wait(0.5f);
+            List<CombatCommand> starts = All(CombatCommandKind.MeleeStepStarted);
+            Assert.AreEqual(3, starts.Count);
+            Assert.AreEqual(0, starts[2].StepIndex, "Blocking ends the combo; the next swing is the first.");
+            Assert.Greater(time - landed, fixture.Melee[Aegis].steps[1].recoverySeconds);
+        }
+
+        [Test]
         public void TapsWhileBlockingDoNothing()
         {
             block = true;
@@ -673,17 +706,39 @@ namespace Threefold.Tests
         }
 
         [Test]
-        public void SwitchingDuringAChargeFiresTheNewlySelectedDiscipline()
+        public void AChargeIsReleasedAsTheDisciplineItBeganWith()
         {
             slot = Arcane;
             Hold(0.5f);
-            slot = Flame;
+            slot = Flame; // switched while holding
             Frame(() => gesture.Move(time, Vector2.zero, false));
             Assert.IsTrue(model.IsCharging, "Switching does not cancel the charge.");
+            Assert.AreEqual(Arcane, model.ChargeSlot);
 
             Release();
+            Assert.AreEqual(Arcane, Last(CombatCommandKind.ChargedReleased).Slot);
+            Assert.AreEqual(100f - fixture.Charged[Arcane].ManaCost, fixture.Mana, 0.0001f);
+
+            // The switch applies to the next attack.
+            Wait(0.5f);
+            Hold(0.5f);
+            Release();
             Assert.AreEqual(Flame, Last(CombatCommandKind.ChargedReleased).Slot);
-            Assert.AreEqual(100f - fixture.Charged[Flame].ManaCost, fixture.Mana, 0.0001f);
+        }
+
+        [Test]
+        public void SwitchingToADisciplineThatCannotBePaidForDoesNotLoseTheCharge()
+        {
+            // 20 mana pays for the Arcane Arrow (18) but not for the Flame Wave (26).
+            fixture.Mana = 20f;
+            slot = Arcane;
+            Hold(0.5f);
+            slot = Flame;
+            Release();
+
+            Assert.AreEqual(1, Count(CombatCommandKind.ChargedReleased));
+            Assert.AreEqual(0, Count(CombatCommandKind.ChargeRefused));
+            Assert.AreEqual(2f, fixture.Mana, 0.0001f);
         }
 
         [Test]

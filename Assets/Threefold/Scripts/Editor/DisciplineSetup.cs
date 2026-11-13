@@ -213,9 +213,13 @@ namespace Threefold.EditorTools
                 var existing = AssetDatabase.LoadAssetAtPath<ChargedProjectileDefinition>(path);
                 if (existing != null)
                 {
-                    if (existing.ProjectilePrefab == null || existing.ImpactEffectPrefab == null)
+                    // Each reference is filled only if it is empty, so a prefab assigned by hand is kept.
+                    bool needsProjectile = existing.ProjectilePrefab == null && arrow != null;
+                    bool needsImpact = existing.ImpactEffectPrefab == null && impact != null;
+                    if (needsProjectile || needsImpact)
                     {
-                        existing.ConfigureProjectile(arrow, impact, existing.Projectile);
+                        existing.ConfigureProjectile(needsProjectile ? arrow : existing.ProjectilePrefab,
+                            needsImpact ? impact : existing.ImpactEffectPrefab, existing.Projectile);
                         EditorUtility.SetDirty(existing);
                         report.AppendLine($"Reconnected '{defaults.Name}' to its regenerated prefabs.");
                     }
@@ -445,12 +449,14 @@ namespace Threefold.EditorTools
                 MarkChanged(feedback);
                 report.AppendLine("Added attack feedback: swing arcs, impact bursts, embers, a guard spark and light camera shake.");
             }
-            else if (feedback.BurnEffect == null && effects.Burn != null)
+            else
             {
                 Undo.RecordObject(feedback, DialogTitle);
-                feedback.BindEffects(effects.Burn, effects.Push, effects.Guard);
-                MarkChanged(feedback);
-                report.AppendLine("Reconnected the attack feedback to its regenerated effects.");
+                if (feedback.FillEffects(effects.Burn, effects.Push, effects.Guard))
+                {
+                    MarkChanged(feedback);
+                    report.AppendLine("Reconnected the attack feedback to its regenerated effects.");
+                }
             }
         }
 

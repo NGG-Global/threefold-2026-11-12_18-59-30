@@ -39,7 +39,9 @@ device. Every number below is a first estimate that has never been played.
   still, and turns towards a target that is within reach and within 50 to 60 degrees of that
   direction. Single-target strikes take the nearest target in the arc; area attacks take the
   nearest up to their limit. The same code decides for melee, wave and pulse. Never hit: the
-  Mage, allies, the defeated, and anything behind a wall. Creatures do not shield each other.
+  Mage, allies, the defeated, and anything behind a wall. A swing does not turn towards a target
+  it could not hit. Creatures do not shield each other; this now also holds for the enemies' own
+  strikes, where a training dummy standing between a Guardian and the Mage used to take the blow.
 - **Aiming a charged attack.** The Arcane Arrow goes to what the camera's crosshair points at
   (with the existing aim assist); dragging offsets it by up to 25 degrees sideways and 12 degrees
   up or down. A ring marks where it will strike, tightening as the charge builds. The Flame Wave
@@ -54,9 +56,10 @@ device. Every number below is a first estimate that has never been played.
   system-cancelled touch abandons a charge (LM-01). In addition, a hit of 10 damage or more,
   grabbing a ledge, or defeat breaks a charge; nothing fires, and lifting the finger afterwards
   does nothing.
-- **Switching discipline.** At any time. A swing in progress lands as the discipline it started
-  with; the next swing starts the new discipline's combo from its first step. A charge that is
-  being held is released as the discipline selected at the moment of release.
+- **Switching discipline.** At any time. An attack in progress finishes as the discipline it
+  started with: a swing lands as that discipline, and a charge being held is released as the
+  discipline it began with, at that discipline's cost. The switch applies from the next attack,
+  and the next swing starts the new discipline's combo from its first step.
 - **Movement.** Charging and swinging never root the Mage. Heavier attacks slow it by the shares
   in the table, and sprinting is off while swinging, charging or blocking.
 - **Camera help.** While a swing is aimed at a target and the player is not turning the camera,
@@ -67,7 +70,8 @@ device. Every number below is a first estimate that has never been played.
 
 Flame strikes and the Flame Wave add heat to targets that can be heated. Heat fades after 1.5 s
 without more. At 100 the target ignites and burns for 4 s (6 damage per second, in ticks), then
-starts again from cold; heat added while it burns is ignored. Burning never staggers.
+starts again from cold; heat added while it burns is ignored. Burning never staggers, and a
+burning enemy stays alert but does not learn where the Mage is from the burn.
 
 | Target | Heat |
 | --- | --- |
@@ -105,6 +109,7 @@ Block is the same whatever discipline is selected. While BLOCK is held and the h
 - Hits from behind, and damage without a direction (a burn), are not reduced.
 - The Mage turns to face where the camera looks, so the player chooses what is guarded by looking at it.
 - Movement is at 55%, and no swing or charge can start. A swing that has not landed is abandoned.
+  A swing that has landed still has to recover, so flicking BLOCK does not speed up attacks.
 
 There is no timed parry or counter; none existed before, and none was added. A pale arc on the
 ground shows the guarded side and flashes when a hit is stopped.
@@ -230,7 +235,7 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `DisciplineCombatTests` (46) | All three melee combos step by step, wrap and restart, buffered taps, mashing; all three charged attacks; tap versus hold; charge power and cap; aim passed with the release; charging while moving; cancel zone, block, heavy hit, climbing and defeat; mana spent on release only, refusal without mana or on cooldown, running out of mana; switching discipline between swings, during a swing and during a charge; the mouse-button path; the design intent of the default numbers |
+| `DisciplineCombatTests` (48) | All three melee combos step by step, wrap and restart, buffered taps, mashing; all three charged attacks; tap versus hold; charge power and cap; aim passed with the release; charging while moving; cancel zone, block, heavy hit, climbing and defeat; mana spent on release only, refusal without mana or on cooldown, running out of mana; switching discipline between swings, during a swing and during a charge; the mouse-button path; the design intent of the default numbers |
 | `CombatRulesTests` (36) | Target selection (reach, arc, height, nearest first, limits, allies, the defeated, the attacker), turning towards a target, heat (build-up, fading, ignition, burn total, immunity), block (arc, direction, mitigation), charge scaling, aim mapping, camera help, stagger apart from damage |
 | `EnemyBrainTests` (4 added) | A forceful hit staggers with little damage; precise hits do not; a full Force Pulse staggers a Guardian at once; burn damage never staggers |
 | `DisciplineSetupTests` (3) | Needs Unity: the range assembles and validates with all three disciplines; a second run adds nothing; generated assets match the defaults |
@@ -252,6 +257,8 @@ Unity job runs). Feel is untested by definition.
 - All numbers are first estimates: damage, timing, costs, heat, stagger, push and camera help.
 - Melee does not move the Mage (no lunge), and has no hit-stop.
 - A swing is resolved in one instant at the end of its start-up, not swept over time.
+- Combat timing follows game time and the charge ring on ATTACK follows real time. They agree
+  unless the time scale changes, which nothing in the game does yet (no pause, no slow motion).
 - Heat and push exist on enemies and dummies only. No brazier, crate or other world object
   responds yet; the interfaces are there.
 - Enemies do not use the disciplines, heat or block.

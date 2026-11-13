@@ -132,7 +132,7 @@ namespace Threefold.Magic
         private readonly List<CombatCommand> commands = new List<CombatCommand>(6);
         private readonly List<Health> struck = new List<Health>(8);
         private readonly TargetCandidate[] candidates = new TargetCandidate[MaxCandidates];
-        private readonly RaycastHit[] previewHits = new RaycastHit[8];
+        private readonly RaycastHit[] previewHits = new RaycastHit[24];
 
         private DisciplineCombatModel model;
         private TraversalController traversal;
@@ -378,7 +378,7 @@ namespace Threefold.Magic
             {
                 LayerMask layers = definition.MeleeHitLayers;
                 float range = step.reach + combo.facingAssistExtraRange;
-                int count = AreaStrike.CollectCandidates(gameObject, origin, range, layers, candidates);
+                int count = AreaStrike.CollectCandidates(gameObject, origin, range, step.verticalReach, layers, candidates);
                 int best = TargetSelection.FindFacingTarget(origin, swingDirection, candidates, count, range,
                     combo.facingAssistDegrees);
 
@@ -484,14 +484,15 @@ namespace Threefold.Magic
                 return;
             }
 
-            DisciplineDefinition definition = disciplines.CurrentDefinition;
+            // The charge keeps the discipline it began with, whatever is selected now.
+            DisciplineDefinition definition = disciplines.GetDefinition(rules.ChargeSlot);
             ChargedAbilityDefinition ability = definition != null ? definition.ChargedAbility : null;
             if (ability == null)
             {
                 return;
             }
 
-            float power = rules.ChargePower(disciplines.CurrentSlot);
+            float power = rules.CurrentChargePower;
             CastOptions options = BuildOptions(ability, frame.Gesture.Aim, power);
             AbilityContext context = caster.PreviewContext(options);
 
@@ -531,16 +532,28 @@ namespace Threefold.Magic
             int count = Physics.SphereCastNonAlloc(origin, radius, direction, previewHits, range, layers,
                 QueryTriggerInteraction.Ignore);
 
+            // The same exclusions as the projectile itself: the caster and the caster's allies are passed through.
             for (int i = 0; i < count; i++)
             {
                 RaycastHit hit = previewHits[i];
-                if (hit.distance <= 0f || hit.distance >= nearest || hit.transform.IsChildOf(transform))
+                if (hit.distance >= nearest || hit.transform.IsChildOf(transform))
                 {
                     continue;
                 }
 
+                if (health != null)
+                {
+                    Health other = hit.collider.GetComponentInParent<Health>();
+                    if (other != null && health.IsAlliedWith(other))
+                    {
+                        continue;
+                    }
+                }
+
                 nearest = hit.distance;
-                point = hit.point;
+
+                // A sweep reports distance 0 for something it starts inside: the shot would strike at once.
+                point = hit.distance > 0f ? hit.point : origin;
                 found = true;
             }
 

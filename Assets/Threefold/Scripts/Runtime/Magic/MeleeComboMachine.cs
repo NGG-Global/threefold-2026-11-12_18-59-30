@@ -83,16 +83,33 @@ namespace Threefold.Magic
         }
 
         /// <summary>
-        /// Abandons a swing that has not landed, forgets a waiting tap and ends the combo. A swing in
-        /// recovery has already hit; its recovery is cut short.
+        /// Abandons a swing that has not landed, forgets a waiting tap and ends the combo. A swing that
+        /// has already hit still has to recover: cancelling never shortens the wait before the next swing.
         /// </summary>
         public void Cancel(List<MeleeEvent> events)
         {
+            requestTime = float.NegativeInfinity;
+            EndCombo();
+
+            if (Phase == MeleePhase.Recovery)
+            {
+                // The recovery runs on; the swing after it starts the combo afresh.
+                chainBroken = true;
+                return;
+            }
+
             if (Phase == MeleePhase.Startup && events != null)
             {
                 events.Add(new MeleeEvent(MeleeEventKind.Interrupted, StepIndex, current));
             }
 
+            Phase = MeleePhase.Idle;
+            chainBroken = false;
+        }
+
+        /// <summary>Returns to idle at once and forgets everything, for when combat is switched off.</summary>
+        public void Reset()
+        {
             Phase = MeleePhase.Idle;
             requestTime = float.NegativeInfinity;
             chainBroken = false;

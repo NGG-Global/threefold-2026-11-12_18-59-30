@@ -55,6 +55,13 @@ namespace Threefold.Combat
         private static readonly ISpellReceiver[] Receivers = new ISpellReceiver[16];
         private static readonly RaycastHit[] CoverHits = new RaycastHit[16];
 
+        // Applying damage runs other code (defeat, puzzles), which could start another strike. The targets
+        // of each strike in progress are therefore copied out of the shared buffers before any damage.
+        private const int MaxNesting = 4;
+        private static readonly Health[][] HitTargets = CreateBuffers<Health>(MaxCandidates);
+        private static readonly ISpellReceiver[][] HitReceivers = CreateBuffers<ISpellReceiver>(16);
+        private static int nesting;
+
         /// <summary>Carries out the attack.</summary>
         /// <param name="struck">Optional. Receives the targets that were hit, nearest first.</param>
         /// <returns>How many targets were hit.</returns>
@@ -63,7 +70,7 @@ namespace Threefold.Combat
             struck?.Clear();
 
             GameObject user = request.User;
-            if (user == null)
+            if (user == null || nesting >= MaxNesting)
             {
                 return 0;
             }
@@ -118,8 +125,12 @@ namespace Threefold.Combat
                 int index = IndexOf(target, candidateCount);
                 if (index >= 0)
                 {
-                    // A target with several colliders counts once, at its nearest point.
-                    if ((bodyPoint - origin).sqrMagnitude < (Candidates[index].Position - origin).sqrMagnitude)
+                    // A target with several colliders counts once: at a point inside the area if any of
+                    // its colliders reaches in, and at the nearest such point.
+                    bool newInside = TargetSelection.IsInside(shape, bodyPoint);
+                    bool oldInside = TargetSelection.IsInside(shape, Candidates[index].Position);
+                    bool nearer = (bodyPoint - origin).sqrMagnitude < (Candidates[index].Position - origin).sqrMagnitude;
+                    if ((newInside && !oldInside) || (newInside == oldInside && nearer))
                     {
                         Candidates[index].Position = bodyPoint;
                     }
@@ -155,52 +166,82 @@ namespace Threefold.Combat
 
             int hitCount = TargetSelection.Select(shape, Candidates, candidateCount, request.MaxTargets, Selected);
 
+            // Copy the result out and release the shared buffers before anything is damaged.
+            Health[] targets = HitTargets[nesting];
+            ISpellReceiver[] receivers = HitReceivers[nesting];
+
             for (int i = 0; i < hitCount; i++)
             {
-                Health target = Found[Selected[i]];
-                Vector3 direction = target.transform.position - origin;
-                direction.y = 0f;
-                direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : shape.Forward;
-
-                target.ApplyDamage(new DamageInfo(request.Damage, target.AimPoint, direction, user, request.Stagger,
-                    request.Element));
-                struck?.Add(target);
-
-                if (request.Element != SpellElement.None)
-                {
-                    ISpellReceiver receiver = target.GetComponentInParent<ISpellReceiver>();
-                    if (receiver != null && !ContainsReceiver(receiver, receiverCount) && receiverCount < Receivers.Length)
-                    {
-                        Receivers[receiverCount++] = receiver;
-                    }
-                }
-
-                if (!target.IsAlive)
-                {
-                    continue;
-                }
-
-                if (request.Heat > 0f && target.TryGetComponent(out IHeatReceiver heat))
-                {
-                    heat.ReceiveHeat(request.Heat, user);
-                }
-
-                // After the damage, so that a push is not overridden by the smaller knockback of a stagger.
-                if (request.PushDistance > 0f && target.TryGetComponent(out IForceReceiver force))
-                {
-                    force.ReceiveForce(new ForceImpulse(direction, request.PushDistance, user));
-                }
+                targets[i] = Found[Selected[i]];
             }
 
             for (int i = 0; i < receiverCount; i++)
             {
-                Receivers[i].ReceiveSpell(new SpellImpact(request.Element, origin, shape.Forward, user));
+                receivers[i] = Receivers[i];
                 Receivers[i] = null;
             }
 
             for (int i = 0; i < candidateCount; i++)
             {
                 Found[i] = null;
+            }
+
+            nesting++;
+            try
+            {
+                for (int i = 0; i < hitCount; i++)
+                {
+                    Health target = targets[i];
+                    targets[i] = null;
+                    if (target == null || !target.IsAlive)
+                    {
+                        continue;
+                    }
+
+                    Vector3 direction = target.transform.position - origin;
+                    direction.y = 0f;
+                    direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : shape.Forward;
+
+                    target.ApplyDamage(new DamageInfo(request.Damage, target.AimPoint, direction, user, request.Stagger,
+                        request.Element));
+                    struck?.Add(target);
+
+                    if (request.Element != SpellElement.None && receiverCount < receivers.Length)
+                    {
+                        ISpellReceiver receiver = target.GetComponentInParent<ISpellReceiver>();
+                        if (receiver != null && System.Array.IndexOf(receivers, receiver, 0, receiverCount) < 0)
+                        {
+                            receivers[receiverCount++] = receiver;
+                        }
+                    }
+
+                    if (!target.IsAlive)
+                    {
+                        continue;
+                    }
+
+                    if (request.Heat > 0f && target.TryGetComponent(out IHeatReceiver heat))
+                    {
+                        heat.ReceiveHeat(request.Heat, user);
+                    }
+
+                    // After the damage, so that a push is not overridden by the smaller knockback of a stagger.
+                    if (request.PushDistance > 0f && target.TryGetComponent(out IForceReceiver force))
+                    {
+                        force.ReceiveForce(new ForceImpulse(direction, request.PushDistance, user));
+                    }
+                }
+
+                for (int i = 0; i < receiverCount; i++)
+                {
+                    ISpellReceiver receiver = receivers[i];
+                    receivers[i] = null;
+                    receiver?.ReceiveSpell(new SpellImpact(request.Element, origin, shape.Forward, user));
+                }
+            }
+            finally
+            {
+                nesting--;
             }
 
             return hitCount;
@@ -211,8 +252,9 @@ namespace Threefold.Combat
         /// turn towards. Uses the same rules as <see cref="Resolve"/> for who counts.
         /// </summary>
         /// <returns>How many candidates were written.</returns>
-        public static int CollectCandidates(GameObject user, Vector3 origin, float range, LayerMask layers,
-            TargetCandidate[] candidates)
+        /// <param name="verticalReach">Targets further above or below than this are left out.</param>
+        public static int CollectCandidates(GameObject user, Vector3 origin, float range, float verticalReach,
+            LayerMask layers, TargetCandidate[] candidates)
         {
             if (user == null || candidates == null)
             {
@@ -243,11 +285,17 @@ namespace Threefold.Combat
                     continue;
                 }
 
+                // A target the swing could not hit must not attract it: one on a ledge above or below, or
+                // one behind a wall.
+                Vector3 position = FlatClosestPoint(other, origin, target.transform.position.y);
+                bool reachable = target.IsAlive && Mathf.Abs(position.y - origin.y) <= verticalReach &&
+                                 !IsBehindCover(userTransform, userHealth, target, origin + Vector3.up * (verticalReach * 0.5f), layers);
+
                 Found[count] = target;
                 candidates[count] = new TargetCandidate
                 {
-                    Position = FlatClosestPoint(other, origin, target.transform.position.y),
-                    Alive = target.IsAlive,
+                    Position = position,
+                    Alive = reachable,
                     Allied = userHealth != null && userHealth.IsAlliedWith(target),
                     IsSelf = target == userHealth,
                 };
@@ -260,6 +308,24 @@ namespace Threefold.Combat
             }
 
             return count;
+        }
+
+        // Static state survives between Play sessions when domain reload is disabled in the Editor.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            nesting = 0;
+        }
+
+        private static T[][] CreateBuffers<T>(int size)
+        {
+            var buffers = new T[MaxNesting][];
+            for (int i = 0; i < buffers.Length; i++)
+            {
+                buffers[i] = new T[size];
+            }
+
+            return buffers;
         }
 
         private static Vector3 FlatClosestPoint(Collider collider, Vector3 origin, float height)

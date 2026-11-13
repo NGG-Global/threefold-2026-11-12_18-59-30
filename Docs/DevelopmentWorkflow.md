@@ -39,7 +39,7 @@ Unity Editor, Windows tooling or a physical Android device.
 | Animated Mage character (intermediate, CC0 mannequin base) | Written; model built and checked in Blender; not yet imported by Unity. See `Docs/Characters/Mage.md` |
 | Traversal: ledges, climbing, vaulting, edge guarding, training course | Written; rules tested outside Unity; not yet run in Unity. See `Docs/Traversal.md` |
 | Enemy AI: Ruins Guardian, Arcane Wisp, Combat Arena, player defeat | Written; decision logic tested outside Unity (53 tests); not yet run in Unity. See `Docs/EnemyAI.md` |
-| Disciplines LM-02: Arcane, Flame and Aegis melee combos and charged attacks, heat, stagger, push, block, aim preview, Discipline Range | Written; combat rules tested outside Unity (86 tests); not yet compiled by Unity, played, or run on a device. See `Docs/Disciplines.md` |
+| Disciplines LM-02: Arcane, Flame and Aegis melee combos and charged attacks, heat, stagger, push, block, aim preview, Discipline Range | Written; combat rules tested outside Unity (88 tests); not yet compiled by Unity, played, or run on a device. See `Docs/Disciplines.md` |
 | Play Mode tests for movement and camera | Not started |
 | Interaction and puzzles: prompts, doors, plates, switches, spell activators, timers, Sealed Gateway | Written; rules tested outside Unity; not yet run in Unity. See `Docs/Puzzles.md` |
 | Visual style: Illustrated Lit shader, painted materials, lighting presets, contour lines, quality levels, Style Lab | Written; shader checked against the URP shader library with a second compiler, rules tested outside Unity, previews rendered outside Unity; **not yet compiled by Unity, seen in the engine, or measured on a device**. See `Docs/VisualStyle.md` |

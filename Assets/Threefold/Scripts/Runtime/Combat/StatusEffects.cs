@@ -191,7 +191,6 @@ namespace Threefold.Combat
     {
         private readonly HeatMeter meter;
         private Health health;
-        private GameObject igniter;
 
         public HeatCarrier(HeatSettings settings)
         {
@@ -214,7 +213,6 @@ namespace Threefold.Combat
 
             if (meter.Add(amount))
             {
-                igniter = source;
                 CombatEvents.RaiseStatus(new StatusEvent(health.gameObject, StatusKind.Ignited, health.AimPoint,
                     meter.Settings.burnSeconds));
             }
@@ -230,15 +228,16 @@ namespace Threefold.Combat
                 return;
             }
 
+            // No source: a burn hurts and keeps an enemy alert, but it does not tell it where the
+            // attacker is standing now.
             Vector3 point = health.AimPoint;
-            health.ApplyDamage(new DamageInfo(burn, point, Vector3.zero, igniter, 0f, SpellElement.Fire));
+            health.ApplyDamage(new DamageInfo(burn, point, Vector3.zero, null, 0f, SpellElement.Fire));
             CombatEvents.RaiseStatus(new StatusEvent(health.gameObject, StatusKind.BurnTick, point, 0f));
         }
 
         public void Clear()
         {
             meter.Clear();
-            igniter = null;
         }
     }
 }

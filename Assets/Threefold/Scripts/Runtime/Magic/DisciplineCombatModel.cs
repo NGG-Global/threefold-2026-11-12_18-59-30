@@ -109,8 +109,9 @@ namespace Threefold.Magic
     /// Rules:
     /// - A tap asks for the next swing of the selected discipline's combo. A swing in progress
     ///   finishes as the discipline it started with; switching discipline restarts the combo.
-    /// - A charge begins only if the charged attack is affordable and off cooldown. Its strength
-    ///   comes from how long it was held, measured against the discipline selected at release.
+    /// - A charge begins only if the charged attack is affordable and off cooldown. Like a swing, it
+    ///   finishes as the discipline it began with: switching while it is held changes the attack
+    ///   after it, not this one. Its strength comes from how long it was held.
     /// - Blocking abandons a swing that has not landed and allows no new one. Climbing, defeat and
     ///   a heavy hit abandon a swing or a charge; nothing fires.
     /// </summary>
@@ -123,6 +124,7 @@ namespace Threefold.Magic
 
         private int lastSlot = -1;
         private int swingSlot;
+        private int chargeSlot;
         private bool charging;
         private bool ignoreGestureUntilIdle;
         private float chargeStartTime;
@@ -143,6 +145,12 @@ namespace Threefold.Magic
         public MeleeComboMachine Combo => combo;
 
         public bool IsCharging => charging;
+
+        /// <summary>The discipline of the charge being held. Meaningful only while charging.</summary>
+        public int ChargeSlot => chargeSlot;
+
+        /// <summary>Strength of the charge being held, 0 to 1.</summary>
+        public float CurrentChargePower => ChargePower(chargeSlot);
 
         /// <summary>Seconds the current charge has been held, or 0.</summary>
         public float ChargeSeconds => charging ? Mathf.Max(0f, now - chargeStartTime) : 0f;
@@ -185,8 +193,8 @@ namespace Threefold.Magic
             if (!input.Alive || input.HandsBusy)
             {
                 AbandonSwing(commands);
-                BreakCharge(slot, gesture, commands);
-                UpdateMovement(slot, input.BlockHeld);
+                BreakCharge(gesture, commands);
+                UpdateMovement(input.BlockHeld);
                 return;
             }
 
@@ -206,13 +214,13 @@ namespace Threefold.Magic
             combo.Tick(time, data.GetMelee(slot), meleeEvents);
             TranslateMelee(slot, commands);
 
-            UpdateMovement(slot, input.BlockHeld);
+            UpdateMovement(input.BlockHeld);
         }
 
         /// <summary>Stops everything without commands, for when the component is switched off.</summary>
         public void Reset()
         {
-            combo.Cancel(null);
+            combo.Reset();
             charging = false;
             ignoreGestureUntilIdle = false;
             MoveSpeedMultiplier = 1f;
@@ -238,6 +246,7 @@ namespace Threefold.Magic
                 }
 
                 charging = true;
+                chargeSlot = slot;
                 chargeStartTime = now;
                 commands.Add(new CombatCommand(CombatCommandKind.ChargeBegan, slot));
             }
@@ -249,9 +258,9 @@ namespace Threefold.Magic
 
             if (gesture.ChargeReleased)
             {
-                float power = ChargePower(slot);
+                float power = ChargePower(chargeSlot);
                 charging = false;
-                commands.Add(new CombatCommand(CombatCommandKind.ChargedReleased, slot, power: power, aim: gesture.Aim));
+                commands.Add(new CombatCommand(CombatCommandKind.ChargedReleased, chargeSlot, power: power, aim: gesture.Aim));
                 return;
             }
 
@@ -259,28 +268,28 @@ namespace Threefold.Magic
             {
                 // Cancelled by the player, by blocking, or because the controls went away.
                 charging = false;
-                commands.Add(new CombatCommand(CombatCommandKind.ChargeCancelled, slot));
+                commands.Add(new CombatCommand(CombatCommandKind.ChargeCancelled, chargeSlot));
                 return;
             }
 
             if (ChargeInterruptDamage > 0f && input.DamageTaken >= ChargeInterruptDamage)
             {
-                BreakCharge(slot, gesture, commands);
+                BreakCharge(gesture, commands);
             }
         }
 
         /// <summary>Ends a charge from the game's side and tells the input to let go.</summary>
-        private void BreakCharge(int slot, in AttackGestureFrame gesture, List<CombatCommand> commands)
+        private void BreakCharge(in AttackGestureFrame gesture, List<CombatCommand> commands)
         {
             if (charging)
             {
                 charging = false;
-                commands.Add(new CombatCommand(CombatCommandKind.ChargeCancelled, slot));
+                commands.Add(new CombatCommand(CombatCommandKind.ChargeCancelled, chargeSlot));
             }
 
             if (gesture.IsActive && !ignoreGestureUntilIdle)
             {
-                commands.Add(new CombatCommand(CombatCommandKind.InterruptInput, slot));
+                commands.Add(new CombatCommand(CombatCommandKind.InterruptInput, chargeSlot));
                 ignoreGestureUntilIdle = true;
             }
         }
@@ -318,13 +327,13 @@ namespace Threefold.Magic
             meleeEvents.Clear();
         }
 
-        private void UpdateMovement(int slot, bool blockHeld)
+        private void UpdateMovement(bool blockHeld)
         {
             float multiplier = combo.MoveSpeedMultiplier;
 
             if (charging)
             {
-                ChargeProfile charge = data.GetCharge(slot);
+                ChargeProfile charge = data.GetCharge(chargeSlot);
                 if (charge != null)
                 {
                     multiplier = Mathf.Min(multiplier, charge.moveSpeedMultiplier);
