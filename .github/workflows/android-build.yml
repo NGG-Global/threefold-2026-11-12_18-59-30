@@ -77,8 +77,9 @@ jobs:
           restore-keys: |
             Library-Threefold-Android-
 
-      # The build method assembles the playable scene from code, validates it, applies the
-      # Android settings and builds a development APK signed with a debug key.
+      # The build method assembles the playable scenes (playground and combat arena) from code,
+      # validates them, applies the Android settings and builds a development APK signed with a
+      # debug key.
       - name: Build development APK
         id: build
         uses: game-ci/unity-builder@v4

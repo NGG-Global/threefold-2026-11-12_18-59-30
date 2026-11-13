@@ -15,8 +15,11 @@ namespace Threefold.Combat
         public readonly LayerMask HitLayers;
         public readonly PooledObject ImpactEffect;
 
+        /// <summary>How far away the impact can be heard by enemies, in metres. 0 is silent.</summary>
+        public readonly float NoiseRadius;
+
         public ProjectileLaunch(GameObject owner, Vector3 direction, float speed, float maxRange, float radius,
-            float damage, LayerMask hitLayers, PooledObject impactEffect)
+            float damage, LayerMask hitLayers, PooledObject impactEffect, float noiseRadius = 0f)
         {
             Owner = owner;
             Direction = direction;
@@ -26,13 +29,15 @@ namespace Threefold.Combat
             Damage = damage;
             HitLayers = hitLayers;
             ImpactEffect = impactEffect;
+            NoiseRadius = noiseRadius;
         }
     }
 
     /// <summary>
     /// A pooled projectile that flies in a straight line. Each frame it sweeps a sphere along the
     /// distance it is about to travel, so it cannot pass through thin objects at high speed and
-    /// needs no Rigidbody. It never hits the character that launched it.
+    /// needs no Rigidbody. It never hits the character that launched it, and it passes over that
+    /// character's allies, so an enemy's shot does not strike another enemy in its way.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(PooledObject))]
@@ -49,6 +54,7 @@ namespace Threefold.Combat
         private PooledObject pooled;
         private ProjectileLaunch launch;
         private Transform ownerTransform;
+        private CombatTeam ownerTeam;
         private float remainingRange;
         private bool flying;
 
@@ -68,6 +74,9 @@ namespace Threefold.Combat
 
             launch = data;
             ownerTransform = data.Owner != null ? data.Owner.transform : null;
+            ownerTeam = data.Owner != null && data.Owner.TryGetComponent(out Health ownerHealth)
+                ? ownerHealth.Team
+                : CombatTeam.Neutral;
             remainingRange = data.MaxRange;
             flying = true;
 
@@ -82,7 +91,7 @@ namespace Threefold.Combat
 
             for (int i = 0; i < count; i++)
             {
-                if (!IsOwner(overlaps[i]))
+                if (!IsIgnored(overlaps[i]))
                 {
                     Impact(transform.position, -data.Direction, overlaps[i]);
                     return;
@@ -139,7 +148,7 @@ namespace Threefold.Combat
 
             for (int i = 0; i < count; i++)
             {
-                if (IsOwner(hits[i].collider) || hits[i].distance >= nearestDistance)
+                if (hits[i].distance >= nearestDistance || IsIgnored(hits[i].collider))
                 {
                     continue;
                 }
@@ -151,9 +160,22 @@ namespace Threefold.Combat
             return nearestDistance < float.MaxValue;
         }
 
-        private bool IsOwner(Collider other)
+        /// <summary>The owner and the owner's allies are passed through.</summary>
+        private bool IsIgnored(Collider other)
         {
-            return other == null || (ownerTransform != null && other.transform.IsChildOf(ownerTransform));
+            if (other == null || (ownerTransform != null && other.transform.IsChildOf(ownerTransform)))
+            {
+                return true;
+            }
+
+            if (ownerTeam == CombatTeam.Neutral)
+            {
+                return false;
+            }
+
+            // Only reached when the sweep touches something, which is rare per frame.
+            Health health = other.GetComponentInParent<Health>();
+            return health != null && CombatTeams.AreAllied(ownerTeam, health.Team);
         }
 
         private void Impact(Vector3 point, Vector3 normal, Collider other)
@@ -171,6 +193,8 @@ namespace Threefold.Combat
                 Quaternion rotation = normal.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(normal) : Quaternion.identity;
                 Pools.Spawn(launch.ImpactEffect, point, rotation, MaxImpactEffects);
             }
+
+            CombatEvents.RaiseNoise(new NoiseEvent(point, launch.NoiseRadius, launch.Owner));
 
             pooled.ReturnToPool();
         }

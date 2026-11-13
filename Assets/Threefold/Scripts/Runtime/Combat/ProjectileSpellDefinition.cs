@@ -36,12 +36,24 @@ namespace Threefold.Combat
         [Min(1)]
         [SerializeField] private int maxActiveProjectiles = 12;
 
+        [Tooltip("How far away an impact can be heard by enemies, in metres. 0 is silent.")]
+        [Min(0f)]
+        [SerializeField] private float impactNoiseRadius = 9f;
+
         public Projectile ProjectilePrefab => projectilePrefab;
         public PooledObject ImpactEffectPrefab => impactEffectPrefab;
         public float Damage => damage;
         public float Speed => speed;
         public float MaxRange => maxRange;
         public float Radius => radius;
+        public float ImpactNoiseRadius => impactNoiseRadius;
+
+        /// <summary>Sets how many projectiles may exist at once and how far impacts are heard. Called by the setup tooling.</summary>
+        public void ConfigureLimits(int maxProjectiles, float noiseRadius)
+        {
+            maxActiveProjectiles = Mathf.Max(1, maxProjectiles);
+            impactNoiseRadius = Mathf.Max(0f, noiseRadius);
+        }
 
         /// <summary>Sets the projectile values. Called by the setup tooling.</summary>
         public void ConfigureProjectile(Projectile projectile, PooledObject impactEffect, float damageAmount,
@@ -75,7 +87,7 @@ namespace Threefold.Combat
             if (instance != null && instance.TryGetComponent(out Projectile projectile))
             {
                 projectile.Launch(new ProjectileLaunch(context.Caster, context.Direction, speed, maxRange, radius,
-                    damage, hitLayers, impactEffectPrefab));
+                    damage * context.DamageScale, hitLayers, impactEffectPrefab, impactNoiseRadius));
             }
         }
     }

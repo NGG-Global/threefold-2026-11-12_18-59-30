@@ -28,7 +28,8 @@ namespace Threefold.EditorTools
         private static StreamWriter logWriter;
 
         /// <summary>
-        /// Assembles the Fantasy Playground scene, validates it and builds a development APK.
+        /// Assembles the Fantasy Playground and the Combat Arena, validates both and builds a
+        /// development APK that starts in the playground; its south gate leads to the arena.
         /// The output path is taken from the -customBuildPath argument when present. The Editor
         /// exits with code 0 on success and 1 on any failure.
         /// </summary>
@@ -38,13 +39,11 @@ namespace Threefold.EditorTools
 
             try
             {
-                Scene scene = FantasyPlaygroundSetup.BuildForAutomation();
-
-                var problems = new StringBuilder();
-                int problemCount = PrototypeValidator.Validate(scene, problems);
-                if (problemCount > 0)
+                // The arena is assembled first: the playground is then the scene left open, and its
+                // portal to the arena already finds the arena in Build Settings.
+                if (!AssembleAndValidate(CombatArenaSetup.BuildForAutomation) ||
+                    !AssembleAndValidate(FantasyPlaygroundSetup.BuildForAutomation))
                 {
-                    Debug.LogError($"[Threefold] The assembled scene has {problemCount} problem(s); the build was stopped.\n{problems}");
                     Exit(1);
                     return;
                 }
@@ -60,7 +59,7 @@ namespace Threefold.EditorTools
 
                 var options = new BuildPlayerOptions
                 {
-                    scenes = new[] { FantasyPlaygroundSetup.ScenePath },
+                    scenes = new[] { FantasyPlaygroundSetup.ScenePath, CombatArenaSetup.ScenePath },
                     locationPathName = outputPath,
                     target = BuildTarget.Android,
                     targetGroup = BuildTargetGroup.Android,
@@ -87,6 +86,21 @@ namespace Threefold.EditorTools
                 Debug.LogException(exception);
                 Exit(1);
             }
+        }
+
+        private static bool AssembleAndValidate(Func<Scene> assemble)
+        {
+            Scene scene = assemble();
+
+            var problems = new StringBuilder();
+            int problemCount = PrototypeValidator.Validate(scene, problems);
+            if (problemCount > 0)
+            {
+                Debug.LogError($"[Threefold] The assembled scene '{scene.path}' has {problemCount} problem(s); the build was stopped.\n{problems}");
+                return false;
+            }
+
+            return true;
         }
 
         // ------------------------------------------------------------------ logs

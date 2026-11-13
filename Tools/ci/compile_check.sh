@@ -10,8 +10,8 @@
 # How it works: it downloads the Unity Editor archive for the version in
 # ProjectSettings/ProjectVersion.txt from Unity's public download server and extracts only the
 # managed reference assemblies and the bundled package sources. Nothing from the archive is
-# executed. The UI and Input System packages are compiled from their own source. Four render
-# pipeline members are represented by Tools/ci/RenderPipelineStubs.cs.
+# executed. The UI, Input System and AI Navigation packages are compiled from their own source.
+# Four render pipeline members are represented by Tools/ci/RenderPipelineStubs.cs.
 #
 # Requirements: bash, curl, tar with xz, python3, and the .NET 8 SDK (`dotnet`).
 # First run downloads about 4 GB (streamed, about 300 MB kept). Later runs reuse the cache.
@@ -32,12 +32,14 @@ CSC="dotnet $CSC_DLL"
 VERSION="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
 REVISION="$(sed -n 's/^m_EditorVersionWithRevision: .*(\(.*\))/\1/p' ProjectSettings/ProjectVersion.txt)"
 INPUT_VERSION="$(python3 -c "import json;print(json.load(open('Packages/packages-lock.json'))['dependencies']['com.unity.inputsystem']['version'])")"
-echo "Unity $VERSION ($REVISION), Input System $INPUT_VERSION"
+NAV_VERSION="$(python3 -c "import json;print(json.load(open('Packages/packages-lock.json'))['dependencies']['com.unity.ai.navigation']['version'])")"
+echo "Unity $VERSION ($REVISION), Input System $INPUT_VERSION, AI Navigation $NAV_VERSION"
 
 UNITY="$CACHE/unity-$VERSION"
 DATA="$UNITY/Editor/Data"
 BUILTIN="$DATA/Resources/PackageManager/BuiltInPackages"
 INPUT="$CACHE/inputsystem-$INPUT_VERSION"
+NAV="$CACHE/ainavigation-$NAV_VERSION"
 OUT="$CACHE/out"
 mkdir -p "$UNITY" "$OUT"
 
@@ -56,6 +58,12 @@ if [ ! -d "$INPUT/package" ]; then
   echo "Downloading Input System $INPUT_VERSION source..."
   mkdir -p "$INPUT"
   curl -sS -L "https://packages.unity.com/com.unity.inputsystem/-/com.unity.inputsystem-$INPUT_VERSION.tgz" | tar -xz -C "$INPUT"
+fi
+
+if [ ! -d "$NAV/package" ]; then
+  echo "Downloading AI Navigation $NAV_VERSION source..."
+  mkdir -p "$NAV"
+  curl -sS -L "https://packages.unity.com/com.unity.ai.navigation/-/com.unity.ai.navigation-$NAV_VERSION.tgz" | tar -xz -C "$NAV"
 fi
 
 REFS="-r:$DATA/NetStandard/ref/2.1.0/netstandard.dll"
@@ -112,6 +120,10 @@ open(out, 'w').write('\n'.join(paths) + '\n')
 PY
 compile "Unity.InputSystem (Unity package)" "$OUT/Unity.InputSystem.dll" 0 "$EDITOR_DEF;$INPUT_DEF" "$OUT/input.rsp" $REFS -r:"$OUT/UnityEngine.UI.dll" -r:"$OUT/UnityEditor.UI.dll"
 
+# The AI Navigation runtime assembly (NavMeshSurface), used by the Editor setup commands.
+find "$NAV/package/Runtime" -name '*.cs' > "$OUT/navigation.rsp"
+compile "Unity.AI.Navigation (Unity package)" "$OUT/Unity.AI.Navigation.dll" 0 "$EDITOR_DEF;NMC_CAN_ACCESS_TERRAIN" "$OUT/navigation.rsp" $REFS
+
 echo "$ROOT/Tools/ci/RenderPipelineStubs.cs" > "$OUT/stubs.rsp"
 compile "Render pipeline stand-ins" "$OUT/RenderPipelineStubs.dll" 0 "$EDITOR_DEF" "$OUT/stubs.rsp" $REFS
 
@@ -123,8 +135,8 @@ find "$ROOT/Assets/Threefold/Tests/Editor" -name '*.cs' > "$OUT/tests.rsp"
 
 compile "Threefold.Runtime (Editor)" "$OUT/Threefold.Runtime.dll" 4 "$EDITOR_DEF" "$OUT/runtime.rsp" $REFS $PKG
 compile "Threefold.Runtime (Android player defines, no Editor references)" "$OUT/Threefold.Runtime.Player.dll" 4 "$PLAYER_DEF" "$OUT/runtime.rsp" $PLAYER_REFS $PKG
-compile "Threefold.Editor" "$OUT/Threefold.Editor.dll" 4 "$EDITOR_DEF" "$OUT/editor.rsp" $REFS $PKG -r:"$OUT/Threefold.Runtime.dll" -r:"$OUT/RenderPipelineStubs.dll"
-compile "Threefold.Tests.Editor" "$OUT/Threefold.Tests.Editor.dll" 4 "$EDITOR_DEF" "$OUT/tests.rsp" $REFS $SHIMS -r:"$NUNIT_DIR/nunit.framework.dll" -r:"$OUT/Threefold.Runtime.dll" -r:"$OUT/Threefold.Editor.dll"
+compile "Threefold.Editor" "$OUT/Threefold.Editor.dll" 4 "$EDITOR_DEF" "$OUT/editor.rsp" $REFS $PKG -r:"$OUT/Threefold.Runtime.dll" -r:"$OUT/RenderPipelineStubs.dll" -r:"$OUT/Unity.AI.Navigation.dll"
+compile "Threefold.Tests.Editor" "$OUT/Threefold.Tests.Editor.dll" 4 "$EDITOR_DEF" "$OUT/tests.rsp" $REFS $SHIMS -r:"$NUNIT_DIR/nunit.framework.dll" -r:"$OUT/Threefold.Runtime.dll" -r:"$OUT/Threefold.Editor.dll" -r:"$OUT/Unity.AI.Navigation.dll"
 
 if [ "$FAILED" != "0" ]; then
   echo; echo "COMPILE CHECK FAILED"; exit 1

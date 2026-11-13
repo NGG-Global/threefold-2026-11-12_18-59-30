@@ -5,6 +5,7 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Threefold.Runtime",
+        "Unity.AI.Navigation",
         "Threefold.Editor"
     ],
     "includePlatforms": [

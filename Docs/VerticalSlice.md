@@ -130,7 +130,8 @@ Reviewed from the code. None has been measured on a device.
 ## Known limits
 
 - No animation, no character model, no sound.
-- Nothing attacks the Mage, so the player cannot fail. The objective is a test of traversal and aim.
+- Nothing attacks the Mage in the courtyard, so the player cannot fail there. The objective is a
+  test of traversal and aim. Enemies, and defeat, are in the Combat Arena (`Docs/EnemyAI.md`).
 - Text uses Unity's built-in font. If it is unavailable, the markers still show progress and the
   restart button still works, but labels are blank.
 - The restart button cannot be clicked while the mouse is captured; on desktop use the R key.

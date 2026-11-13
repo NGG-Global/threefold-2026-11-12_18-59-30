@@ -9,7 +9,7 @@ namespace Threefold.Combat
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Health))]
-    public sealed class TrainingDummy : MonoBehaviour
+    public sealed class TrainingDummy : MonoBehaviour, IRestorable
     {
         private const int MaxDefeatEffects = 4;
 

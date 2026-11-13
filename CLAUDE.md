@@ -37,11 +37,14 @@ separates approved decisions from proposals; do not present a proposal as decide
 - Every new file and folder under `Assets/` needs a `.meta` file with a new unique GUID, committed
   in the same change. Reuse the existing `.meta` for a folder that another open branch also creates.
 - Avoid namespaces that shadow Unity types: use `Threefold.InputHandling`, `Threefold.Cameras`,
-  `Threefold.Characters`, `Threefold.EditorTools`, not `Threefold.Input`, `.Camera` or `.Editor`.
+  `Threefold.Characters`, `Threefold.Enemies`, `Threefold.EditorTools`, not `Threefold.Input`,
+  `.Camera`, `.AI` or `.Editor`.
 - Runtime code goes in a runtime assembly, Editor-only code in an Editor assembly (`.asmdef`).
 - `Assets/Threefold/Generated/` holds assets produced by the setup commands on the laptop (prefabs,
   materials, spell assets). Never author or edit those files here; change the generating code instead.
 - Gameplay code reads input through `CharacterInputSource`, never from a device directly.
+- Enemy decisions live in plain C# (`EnemyBrain`, `EnemyStates`, `EnemyRules`) that never touches a
+  Unity object, so they can be tested outside Unity. Keep it that way; see `Docs/EnemyAI.md`.
 - No paid assets and no new packages without the owner's agreement.
 
 ## Before opening a pull request
