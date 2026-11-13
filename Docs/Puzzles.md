@@ -51,7 +51,8 @@ around the plate say there is a time limit.
 
 The gateway stays open, the crystal stays lit, the plate stays down and the timer stones stay
 lit for the rest of the play session: through the level's restart (R key, Start button, or the
-restart button), and if the scene is left and loaded again. Leaving Play mode, or closing the
+restart button), and when the player goes through the south gate to the Combat Arena and comes
+back, which loads the playground again. Leaving Play mode, or closing the
 game, forgets it. There is no save system yet, so nothing is written to disk.
 
 ## Controls
