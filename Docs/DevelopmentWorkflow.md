@@ -31,6 +31,7 @@ Unity Editor, Windows tooling or a physical Android device.
 | Scene setup by Editor command (`Threefold > Setup > Mage Prototype`) | Written in pull request #2; not yet run in Unity |
 | Repository checks without Unity (`Tools/ci/check_unity_repo.py`) | Working when run by Claude Code; runs in CI after `CI_ENABLED` is set |
 | Unity compile check and Edit Mode tests in CI | Workflow written; **not yet run**; needs a Unity licence secret |
+| Android touch controls (joystick, camera drag, jump, sprint) | Written; not yet compiled in Unity or run on a device |
 | Play Mode tests for movement and camera | Not started; depends on pull request #2 |
 | Android build (APK) in CI | Not started; planned after the compile job has passed once |
 | Running Editor commands in CI and committing the generated scenes | Not started; planned after the Android build |

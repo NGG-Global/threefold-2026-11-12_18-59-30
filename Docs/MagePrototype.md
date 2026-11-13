@@ -62,11 +62,11 @@ tooltip. The most useful ones:
 
 ## Extending
 
-- **Virtual joystick and action buttons:** the Input System's on-screen controls (`OnScreenStick`,
-  `OnScreenButton`) act as a virtual gamepad and drive the existing actions. No gameplay code changes.
-- **Touch camera:** touchscreen drag is deliberately ignored for look, so a thumb on a joystick
-  does not turn the camera. Touch look needs a dedicated screen region that feeds `LookDelta`,
-  implemented as a new `CharacterInputSource` or as an extension of the existing one.
+- **Virtual joystick and action buttons:** implemented in Sprint 2 as a separate
+  `CharacterInputSource`, merged with the desktop input. No gameplay code changed.
+- **Touch camera:** raw touchscreen drag is deliberately ignored by the desktop input, so a thumb
+  on the joystick does not turn the camera. Touch look comes from a dedicated screen region; see
+  `Docs/TouchControls.md`.
 - **Animation:** `ThirdPersonMotor` exposes `HorizontalSpeed`, `VerticalSpeed`, `IsGrounded`,
   `IsSprinting`, and the `Jumped` and `Landed` events for an Animator driver.
 - **Spellcasting:** set `ThirdPersonMotor.MovementInputEnabled` to false to root the character
@@ -77,4 +77,4 @@ tooltip. The most useful ones:
 - The scripts were written and syntax-checked outside Unity. They have not been compiled or
   run in the Unity Editor yet; the first import on the development PC is the real test.
 - The Mage body is a placeholder capsule. No model or animation is included.
-- There are no touch controls yet, so the prototype is playable in the Editor and with a gamepad only.
+- Touch controls were added in Sprint 2; see `Docs/TouchControls.md`.

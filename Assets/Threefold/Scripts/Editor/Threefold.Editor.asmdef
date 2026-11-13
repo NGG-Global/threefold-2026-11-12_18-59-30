@@ -3,7 +3,8 @@
     "rootNamespace": "Threefold.EditorTools",
     "references": [
         "Threefold.Runtime",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"

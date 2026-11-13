@@ -2,7 +2,8 @@
     "name": "Threefold.Runtime",
     "rootNamespace": "Threefold",
     "references": [
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
