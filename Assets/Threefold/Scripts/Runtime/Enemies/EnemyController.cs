@@ -1,5 +1,6 @@
 using System;
 using Threefold.Combat;
+using Threefold.WorldMagic;
 using Threefold.Pooling;
 using UnityEngine;
 using UnityEngine.AI;
@@ -18,7 +19,7 @@ namespace Threefold.Enemies
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Health))]
     [RequireComponent(typeof(NavMeshAgent))]
-    public sealed class EnemyController : MonoBehaviour, IEnemyBody, IRestorable, IHeatReceiver, IForceReceiver
+    public sealed class EnemyController : MonoBehaviour, IEnemyBody, IRestorable, IMagicEffectReceiver
     {
         private const float NavMeshSearchRadius = 2f;
         private const float StandPointSearchRadius = 1.5f;
@@ -86,6 +87,7 @@ namespace Threefold.Enemies
         private Vector3 lookPoint;
         private Vector3 knockbackVelocity;
         private float knockbackRemaining;
+        private CreatureEffectModel effects;
         private HeatCarrier heat;
         private bool restoring;
         private int id;
@@ -295,7 +297,8 @@ namespace Threefold.Enemies
             TryPlaceOnNavMesh();
             PrepareTelegraph();
 
-            heat = new HeatCarrier(tuning.heat);
+            effects = new CreatureEffectModel(tuning.heat, tuning.pushResistance, true);
+            heat = new HeatCarrier(effects.Thermal);
             heat.Bind(health);
 
             brain = new EnemyBrain(this, tuning, tokens, id);
@@ -569,31 +572,34 @@ namespace Threefold.Enemies
 
         public bool IsBurning => heat != null && heat.Meter.IsBurning;
 
-        /// <summary>Heat from a flame attack. Enemies whose tuning makes them immune refuse it.</summary>
-        public bool ReceiveHeat(float amount, GameObject source)
-        {
-            return heat != null && heat.Receive(amount, source);
-        }
-
         /// <summary>
-        /// A force push: the enemy slides along its navigation surface, as with a stagger, by the
+        /// A magical effect arrives. Enemies take heat (unless their tuning makes them immune) and
+        /// force: a push slides the enemy along its navigation surface, as a stagger does, by the
         /// distance its resistance leaves. It never leaves the walkable area and needs no Rigidbody.
+        /// Arcane charge and bracing mean nothing to an enemy and are refused. The rules are the same
+        /// ones objects in the world use (<see cref="CreatureEffectModel"/>).
         /// </summary>
-        public void ReceiveForce(in ForceImpulse impulse)
+        public EffectResponse ReceiveEffect(in MagicEffect effect)
         {
-            if (brain == null || brain.IsDefeated || tuning == null)
+            if (brain == null || brain.IsDefeated || effects == null)
             {
-                return;
+                return EffectResponse.Spent;
             }
 
-            float distance = impulse.Distance * (1f - Mathf.Clamp01(tuning.pushResistance));
-            if (distance <= 0.01f)
+            EffectResponse response = effects.Apply(effect, out float pushDistance);
+
+            if (effects.IgnitedByLastEffect)
             {
-                return;
+                heat.AnnounceIgnition();
             }
 
-            Knockback(impulse.Direction, distance);
-            CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.Pushed, health.AimPoint, KnockbackSeconds));
+            if (pushDistance > 0f)
+            {
+                Knockback(effect.Direction, pushDistance);
+                CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.Pushed, health.AimPoint, KnockbackSeconds));
+            }
+
+            return response;
         }
 
         public bool TryFindStandPoint(Vector3 targetPosition, float minDistance, float maxDistance, bool needsSight,
@@ -885,7 +891,7 @@ namespace Threefold.Enemies
         private void ResetToHome()
         {
             knockbackRemaining = 0f;
-            heat?.Clear();
+            effects?.Restore();
             hasLook = false;
             SetCollidersEnabled(true);
 

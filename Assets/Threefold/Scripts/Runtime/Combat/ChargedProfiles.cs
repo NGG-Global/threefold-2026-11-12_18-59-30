@@ -1,4 +1,5 @@
 using System;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Combat
@@ -89,6 +90,23 @@ namespace Threefold.Combat
         [Tooltip("How far away the impact can be heard by enemies.")]
         [Min(0f)]
         public float noiseRadius = 10f;
+
+        [Header("Effects on what it strikes, uncharged to fully charged")]
+        [Tooltip("Arcane charge given to a target that can hold it, uncharged.")]
+        [Min(0f)]
+        public float arcaneChargeMin;
+
+        [Min(0f)]
+        public float arcaneChargeMax;
+
+        /// <summary>The magical effects the projectile carries at the given charge, apart from its damage.</summary>
+        public EffectPayload Effects(float power)
+        {
+            return new EffectPayload
+            {
+                arcaneCharge = ChargeScaling.Scale(arcaneChargeMin, arcaneChargeMax, power), targets = EffectTargets.All,
+            };
+        }
     }
 
     /// <summary>A charged attack that hits a sector in front of the caster (Flame Wave, Force Pulse).</summary>
@@ -129,5 +147,16 @@ namespace Threefold.Combat
         [Tooltip("How far away the attack can be heard by enemies.")]
         [Min(0f)]
         public float noiseRadius = 12f;
+
+        /// <summary>The magical effects the attack carries at the given charge, apart from its damage.</summary>
+        public EffectPayload Effects(float power)
+        {
+            return new EffectPayload
+            {
+                heat = ChargeScaling.Scale(heatMin, heatMax, power),
+                force = ChargeScaling.Scale(pushMin, pushMax, power),
+                targets = EffectTargets.All,
+            };
+        }
     }
 }

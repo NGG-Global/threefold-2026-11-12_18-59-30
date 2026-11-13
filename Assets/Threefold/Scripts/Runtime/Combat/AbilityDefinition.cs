@@ -33,8 +33,11 @@ namespace Threefold.Combat
         /// <summary>How far a charged ability was charged, 0 to 1. Abilities that are not charged ignore it.</summary>
         public readonly float Charge;
 
+        /// <summary>The discipline the ability is used with, as its selector slot, or -1 if none.</summary>
+        public readonly int Discipline;
+
         public AbilityContext(GameObject caster, Vector3 origin, Vector3 aimPoint, Vector3 direction, float damageScale = 1f,
-            float charge = 1f)
+            float charge = 1f, int discipline = -1)
         {
             Caster = caster;
             Origin = origin;
@@ -42,6 +45,7 @@ namespace Threefold.Combat
             Direction = direction;
             DamageScale = damageScale;
             Charge = charge;
+            Discipline = discipline;
         }
     }
 

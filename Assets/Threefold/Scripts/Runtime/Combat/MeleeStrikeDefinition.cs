@@ -88,6 +88,7 @@ namespace Threefold.Combat
                 Stagger = -1f,
                 Element = SpellElement.None,
                 MaxTargets = MaxTargets,
+                Discipline = -1,
                 HitLayers = hitLayers,
                 CoverCheckHeight = verticalReach * 0.5f,
             };

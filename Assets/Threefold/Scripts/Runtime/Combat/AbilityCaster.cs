@@ -21,28 +21,32 @@ namespace Threefold.Combat
 
         public readonly Vector3 Direction;
 
-        private CastOptions(float charge, float yaw, float pitch, bool hasDirection, Vector3 direction)
+        /// <summary>The discipline the ability is used with, as its selector slot, or -1 if none.</summary>
+        public readonly int Discipline;
+
+        private CastOptions(float charge, float yaw, float pitch, bool hasDirection, Vector3 direction, int discipline)
         {
             Charge = charge;
             AimYawOffset = yaw;
             AimPitchOffset = pitch;
             HasDirection = hasDirection;
             Direction = direction;
+            Discipline = discipline;
         }
 
         /// <summary>The character's usual aim, fully charged.</summary>
-        public static CastOptions Default => new CastOptions(1f, 0f, 0f, false, Vector3.zero);
+        public static CastOptions Default => new CastOptions(1f, 0f, 0f, false, Vector3.zero, -1);
 
         /// <summary>The character's usual aim, turned and raised by the given angles.</summary>
-        public static CastOptions Aimed(float charge, float yawOffsetDegrees, float pitchOffsetDegrees)
+        public static CastOptions Aimed(float charge, float yawOffsetDegrees, float pitchOffsetDegrees, int discipline = -1)
         {
-            return new CastOptions(charge, yawOffsetDegrees, pitchOffsetDegrees, false, Vector3.zero);
+            return new CastOptions(charge, yawOffsetDegrees, pitchOffsetDegrees, false, Vector3.zero, discipline);
         }
 
         /// <summary>A fixed direction, for attacks aimed along the ground.</summary>
-        public static CastOptions Directed(float charge, Vector3 direction)
+        public static CastOptions Directed(float charge, Vector3 direction, int discipline = -1)
         {
-            return new CastOptions(charge, 0f, 0f, true, direction);
+            return new CastOptions(charge, 0f, 0f, true, direction, discipline);
         }
     }
 
@@ -295,7 +299,7 @@ namespace Threefold.Combat
             {
                 Vector3 fixedDirection = options.Direction.normalized;
                 return new AbilityContext(gameObject, origin, origin + fixedDirection * 50f, fixedDirection,
-                    damageMultiplier, options.Charge);
+                    damageMultiplier, options.Charge, options.Discipline);
             }
 
             Vector3 point;
@@ -320,7 +324,8 @@ namespace Threefold.Combat
                 point = origin + direction * distance;
             }
 
-            return new AbilityContext(gameObject, origin, point, direction, damageMultiplier, options.Charge);
+            return new AbilityContext(gameObject, origin, point, direction, damageMultiplier, options.Charge,
+                options.Discipline);
         }
     }
 }

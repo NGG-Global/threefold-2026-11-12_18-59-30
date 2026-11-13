@@ -15,6 +15,12 @@ namespace Threefold.Magic
 
         /// <summary>Timing and movement of the discipline's charged attack, or null if it has none.</summary>
         ChargeProfile GetCharge(int slot);
+
+        /// <summary>
+        /// Seconds between the effects a discipline's guard sends out while block is held (an Aegis
+        /// guard braces what is nearby), or 0 if its guard has no effect on the world.
+        /// </summary>
+        float GetGuardPulseSeconds(int slot);
     }
 
     /// <summary>Whether a discipline's charged attack could be used right now: mana and cooldown.</summary>
@@ -66,6 +72,9 @@ namespace Threefold.Magic
 
         /// <summary>Tell the input to abandon the attack press, so the controls show the cancellation.</summary>
         InterruptInput,
+
+        /// <summary>The guard of the selected discipline sends out its effect on the world around the character.</summary>
+        GuardPulse,
     }
 
     public readonly struct CombatCommand
@@ -128,6 +137,7 @@ namespace Threefold.Magic
         private bool charging;
         private bool ignoreGestureUntilIdle;
         private float chargeStartTime;
+        private float nextGuardPulse = float.NegativeInfinity;
         private float now;
 
         public DisciplineCombatModel(IDisciplineCombatData data, IChargedAttackGate gate)
@@ -194,6 +204,7 @@ namespace Threefold.Magic
             {
                 AbandonSwing(commands);
                 BreakCharge(gesture, commands);
+                nextGuardPulse = float.NegativeInfinity;
                 UpdateMovement(input.BlockHeld);
                 return;
             }
@@ -201,6 +212,12 @@ namespace Threefold.Magic
             if (input.BlockHeld)
             {
                 AbandonSwing(commands);
+                PulseGuard(slot, commands);
+            }
+            else
+            {
+                // The next guard sends its effect out at once.
+                nextGuardPulse = float.NegativeInfinity;
             }
 
             HandleCharge(slot, gesture, input, commands);
@@ -221,6 +238,7 @@ namespace Threefold.Magic
         public void Reset()
         {
             combo.Reset();
+            nextGuardPulse = float.NegativeInfinity;
             charging = false;
             ignoreGestureUntilIdle = false;
             MoveSpeedMultiplier = 1f;
@@ -275,6 +293,26 @@ namespace Threefold.Magic
             if (ChargeInterruptDamage > 0f && input.DamageTaken >= ChargeInterruptDamage)
             {
                 BreakCharge(gesture, commands);
+            }
+        }
+
+        /// <summary>
+        /// While block is held, the selected discipline's guard acts on the world at a steady interval,
+        /// starting the moment the guard goes up. Disciplines whose guard has no such effect send nothing.
+        /// </summary>
+        private void PulseGuard(int slot, List<CombatCommand> commands)
+        {
+            float interval = data.GetGuardPulseSeconds(slot);
+            if (interval <= 0f)
+            {
+                nextGuardPulse = float.NegativeInfinity;
+                return;
+            }
+
+            if (now + 0.0001f >= nextGuardPulse)
+            {
+                nextGuardPulse = now + interval;
+                commands.Add(new CombatCommand(CombatCommandKind.GuardPulse, slot));
             }
         }
 

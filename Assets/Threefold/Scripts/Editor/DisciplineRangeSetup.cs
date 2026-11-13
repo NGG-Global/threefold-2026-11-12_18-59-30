@@ -18,6 +18,8 @@ namespace Threefold.EditorTools
     ///   sixth behind a wall that the wave must not reach.
     ///   Down the lane stand targets at 22, 30 and 38 metres for the Arcane Arrow; the last is the
     ///   construct that completes the scene's objective.
+    ///   Along the left edge stand the six objects that respond to magic (see MagicalObjectSetup):
+    ///   crystal, barricade, stone barrier, platform, unstable structure and reinforced door.
     ///
     /// Dummies cannot be pushed and have no poise, so stagger and push are tried on the real enemies
     /// in the Combat Arena, where the same disciplines are available. The scene is for testing; it
@@ -74,7 +76,7 @@ namespace Threefold.EditorTools
             if (FantasyPlaygroundSetup.FindEnvironmentRoot(scene, GeneratorName) != null && !EditorUtility.DisplayDialog(
                     DialogTitle,
                     "This scene already contains the Discipline Range.\n\nRebuild its floor and wall? The Mage, the targets, " +
-                    "the HUD and anything you added yourself are kept.", "Rebuild", "Cancel"))
+                    "the magical objects, the HUD and anything you added yourself are kept.", "Rebuild", "Cancel"))
             {
                 return;
             }
@@ -152,6 +154,10 @@ namespace Threefold.EditorTools
             report.AppendLine("Built the Discipline Range: floor, cover wall and markers.");
 
             GameObject mage = MagePrototypeSetup.EnsureCharacterRig(scene, SpawnPosition, Quaternion.identity, Targets, report);
+
+            // The objects that respond to magic stand in a lane along the left edge of the floor.
+            MagicalObjectSetup.ExampleAssets examples = MagicalObjectSetup.EnsureAssets(report);
+            MagicalObjectSetup.EnsureExamples(scene, examples, MagicalObjectSetup.RangeLaneOrigin, 0f, report);
 
             FantasyPlaygroundSetup.EnablePostProcessing(scene, report);
             MagePrototypeSetup.AppendValidation(scene, report);

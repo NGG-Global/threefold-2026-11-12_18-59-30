@@ -1,4 +1,5 @@
 using Threefold.Combat;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Puzzles
@@ -13,7 +14,7 @@ namespace Threefold.Puzzles
     /// While receptive and unlit, aim assist helps to hit it.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class SpellActivator : PuzzleElement, ISpellReceiver, IAimAssistTarget
+    public sealed class SpellActivator : PuzzleElement, IMagicEffectReceiver, IAimAssistTarget
     {
         [Header("Activator")]
         [Tooltip("The kinds of magic that switch it on.")]
@@ -31,6 +32,7 @@ namespace Threefold.Puzzles
         [Tooltip("Point that aim assist aims at, in this object's space.")]
         [SerializeField] private Vector3 aimPointOffset = Vector3.zero;
 
+        private readonly EffectEventLog effectLog = new EffectEventLog();
         private SpellResponse lastResponse;
 
         public SpellElement AcceptedElements
@@ -62,6 +64,55 @@ namespace Threefold.Puzzles
 
         /// <summary>A spell's effect is momentary, so only a locked (solved) state is remembered.</summary>
         protected override bool PersistsUnlockedState => false;
+
+        /// <summary>
+        /// A magical effect arrives. The activator answers the kind of magic the effect stands for:
+        /// arcane charge is arcane, heat is fire, force is force. How strong the effect is does not
+        /// matter here; an object that accumulates charge uses a <see cref="MagicalObject"/> instead.
+        /// </summary>
+        public EffectResponse ReceiveEffect(in MagicEffect effect)
+        {
+            if ((effect.Targets & EffectTargets.Objects) == 0)
+            {
+                return EffectResponse.Filtered;
+            }
+
+            SpellElement element = ElementOf(effect.Kind);
+            if (element == SpellElement.None || effect.Magnitude <= 0f)
+            {
+                return EffectResponse.NoProperty;
+            }
+
+            if (effectLog.CheckAndRecord(effect.EventId, effect.Kind))
+            {
+                return EffectResponse.Duplicate;
+            }
+
+            ReceiveSpell(new SpellImpact(element, effect.Point, effect.Direction, effect.Source));
+
+            switch (lastResponse)
+            {
+                case SpellResponse.Activated:
+                case SpellResponse.Deactivated:
+                    return EffectResponse.Applied;
+                case SpellResponse.RejectedElement:
+                    return EffectResponse.NoProperty;
+                default:
+                    return EffectResponse.Resisted;
+            }
+        }
+
+        /// <summary>The kind of magic an effect stands for. Bracing is not a spell an activator answers.</summary>
+        public static SpellElement ElementOf(MagicEffectKind kind)
+        {
+            switch (kind)
+            {
+                case MagicEffectKind.ArcaneCharge: return SpellElement.Arcane;
+                case MagicEffectKind.Heat: return SpellElement.Fire;
+                case MagicEffectKind.Force: return SpellElement.Force;
+                default: return SpellElement.None;
+            }
+        }
 
         public void ReceiveSpell(in SpellImpact impact)
         {

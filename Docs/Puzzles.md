@@ -144,9 +144,17 @@ whole game; the scene validation reports duplicates within a scene.
 
 `Combat/SpellElement` names the kind of magic a spell carries: Arcane, and, reserved for later
 spells, Fire and Frost. Each projectile prefab carries one (Arcane by default, which covers the
-existing Arcane Bolt prefab without regenerating it). On impact, a projectile tells any
-`ISpellReceiver` it hits. A receptive, unlit `SpellActivator` is also an aim-assist target, so a
-thumb on a touchscreen finds the crystal as easily as a training dummy.
+existing Arcane Bolt prefab without regenerating it). On impact, a projectile delivers its magic
+to whatever it hits that can receive it. Since Sprint LM-03 that is one interface for everything,
+`IMagicEffectReceiver` (`Docs/WorldMagic.md`): a `SpellActivator` reads arcane charge as Arcane
+magic, heat as Fire and force as Force, so its accepted kinds work as before. A receptive, unlit
+`SpellActivator` is also an aim-assist target, so a thumb on a touchscreen finds the crystal as
+easily as a training dummy.
+
+**Properties as puzzle inputs.** `WorldMagic/PropertyStateTrigger` is a puzzle element that is
+active while an object's magical properties meet a condition (activated, burning, destroyed,
+braced and so on). Use it wherever an element is expected: as a door's **Input**, a timer's
+**Trigger** or a step of a sequence.
 
 ### Feedback hooks
 

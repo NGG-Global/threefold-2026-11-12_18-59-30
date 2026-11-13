@@ -191,6 +191,15 @@ Install the APK, then check in this order. Stop at the first failure and report 
 - [ ] Mana falls when attacking and returns when not; with too little, the bar flashes red.
 - [ ] Standing near the crystal restores mana quickly.
 
+**Magical objects** (Discipline Range, along the left edge)
+- [ ] Arcane Arrows make the crystal brighten; a full one lights its beacon and lowers the gate behind it for about ten seconds.
+- [ ] Flame swings set the wooden barricade alight; it burns down to stubs and can then be walked through.
+- [ ] The stone barrier survives Force Pulses while cold; heated by Flame it glows, and a full Force Pulse then shatters it.
+- [ ] A Force Pulse slides the platform along its rail; it stops at the far stop and does not pass through anything.
+- [ ] A full Force Pulse topples the unstable structure. Holding BLOCK with Aegis selected nearby turns it gold and it stands.
+- [ ] The reinforced door opens after two full Arcane Arrows at its lock, or gives way after two full Force Pulses. Flame does nothing to it.
+- [ ] Each object ignores the disciplines it should ignore: the crystal does not burn, the platform does not charge.
+
 **Objective**
 - [ ] The top of the screen shows the objective and three markers.
 - [ ] Defeating a construct (darker, with a glowing gem) lights a marker.

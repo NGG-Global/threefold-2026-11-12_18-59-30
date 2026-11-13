@@ -42,6 +42,12 @@ namespace Threefold.Tests
             public MeleeComboProfile GetMelee(int slot) => Melee[slot];
             public ChargeProfile GetCharge(int slot) => Charged[slot] != null ? Charged[slot].Charge : null;
 
+            public float GetGuardPulseSeconds(int slot)
+            {
+                GuardEffectProfile guard = DisciplineDefaults.Guard((MagicDiscipline)slot);
+                return guard.HasEffect ? guard.pulseSeconds : 0f;
+            }
+
             public CastResult Check(int slot)
             {
                 if (CasterDefeated) return CastResult.CasterDefeated;
@@ -548,6 +554,63 @@ namespace Threefold.Tests
 
             Assert.AreEqual(0, Count(CombatCommandKind.MeleeStepStarted));
             Assert.AreEqual(0, Count(CombatCommandKind.ChargedReleased));
+        }
+
+        // ----------------------------------------------------- guard and world
+
+        [Test]
+        public void AnAegisGuardBracesTheWorldAtOnceAndThenAtASteadyInterval()
+        {
+            slot = Aegis;
+            block = true;
+            Frame();
+            Assert.AreEqual(1, Count(CombatCommandKind.GuardPulse), "The first brace goes out the moment the guard is up.");
+
+            Wait(1f);
+            // Every 0.4 s: at 0, 0.4 and 0.8 within the first second.
+            Assert.AreEqual(3, Count(CombatCommandKind.GuardPulse));
+            Assert.AreEqual(Aegis, Last(CombatCommandKind.GuardPulse).Slot);
+        }
+
+        [Test]
+        public void GuardsOfTheOtherDisciplinesDoNotActOnTheWorld()
+        {
+            foreach (int discipline in new[] { Arcane, Flame })
+            {
+                SetUp();
+                slot = discipline;
+                block = true;
+                Wait(2f);
+                Assert.AreEqual(0, Count(CombatCommandKind.GuardPulse));
+            }
+        }
+
+        [Test]
+        public void RaisingTheGuardAgainBracesAgainAtOnce()
+        {
+            slot = Aegis;
+            block = true;
+            Frame();
+            block = false;
+            Frame();
+            block = true;
+            Frame();
+            Assert.AreEqual(2, Count(CombatCommandKind.GuardPulse));
+        }
+
+        [Test]
+        public void TheGuardDoesNotBraceWhileClimbingOrDefeated()
+        {
+            slot = Aegis;
+            block = true;
+            handsBusy = true;
+            Wait(1f);
+            Assert.AreEqual(0, Count(CombatCommandKind.GuardPulse));
+
+            handsBusy = false;
+            alive = false;
+            Wait(1f);
+            Assert.AreEqual(0, Count(CombatCommandKind.GuardPulse));
         }
 
         // ----------------------------------------------------------- resources

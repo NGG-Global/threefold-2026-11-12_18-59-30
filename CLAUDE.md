@@ -50,6 +50,12 @@ separates approved decisions from proposals; do not present a proposal as decide
   plain C#, and `DisciplineCombat` only carries out their commands. The starting numbers of the
   disciplines are in `DisciplineDefaults`; generated discipline assets are the truth afterwards.
   Input-side decisions likewise stay in plain C# (`AttackGestureRecognizer`, `PointerRouter`).
+- How the world responds to magic (`Docs/WorldMagic.md`) follows from properties and effects, not
+  from a script per object or a table of spell-on-object cases. The rules (`MagicalPropertySet`,
+  the properties in `WorldProperties`, `CreatureEffectModel`, `MagicalObjectRules`) are plain C#;
+  `MagicalObject` only carries them out. A new kind of object is a `MagicalObjectDefinition`
+  asset, not new code. Damage goes to `Health`, effects go to `IMagicEffectReceiver`: keep them
+  apart. The starting values of the examples are in `WorldMagicDefaults`.
 - The visual style (`Docs/VisualStyle.md`) is a proposal until the owner has reviewed it in Unity
   and on a device. Its shader is `Assets/Threefold/Shaders/IllustratedLit.shader`. The shader's
   arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change
