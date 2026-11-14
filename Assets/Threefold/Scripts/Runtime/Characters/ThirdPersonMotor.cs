@@ -129,6 +129,8 @@ namespace Threefold.Characters
         private bool externalControl;
         private float landingRecoveryRemaining;
         private Vector3 blockedDirection;
+        private Vector3 shoveVelocity;
+        private float shoveRemaining;
         private float speedLimit = 1f;
         private bool sprintSuppressed;
         private bool missingCameraWarned;
@@ -260,6 +262,15 @@ namespace Threefold.Characters
             UpdateVerticalSpeed(readInput, deltaTime);
 
             Vector3 displacement = (horizontalVelocity + Vector3.up * verticalSpeed) * deltaTime;
+
+            // A shove from the world adds to the player's own movement for a moment; it is not momentum.
+            if (shoveRemaining > 0f)
+            {
+                float step = Mathf.Min(deltaTime, shoveRemaining);
+                displacement += shoveVelocity * step;
+                shoveRemaining -= step;
+            }
+
             CollisionFlags flags = controller.Move(displacement);
 
             if ((flags & CollisionFlags.Above) != 0 && verticalSpeed > 0f)
@@ -323,6 +334,7 @@ namespace Threefold.Characters
         public void BeginExternalControl()
         {
             externalControl = true;
+            shoveRemaining = 0f;
             horizontalVelocity = Vector3.zero;
             verticalSpeed = 0f;
             yawVelocity = 0f;
@@ -350,6 +362,24 @@ namespace Threefold.Characters
             timeSinceGrounded = grounded ? 0f : TimerExpired;
             timeSinceJumpPressed = TimerExpired;
             risingFromJump = false;
+        }
+
+        /// <summary>
+        /// Moves the character by a horizontal distance over a short time, on top of its own movement:
+        /// a shove from a hazard in the world. The controller's collisions still apply, so it never
+        /// passes through a wall. Ignored while another component controls the character (hanging,
+        /// climbing). A new shove replaces one under way.
+        /// </summary>
+        public void Shove(Vector3 displacement, float seconds)
+        {
+            displacement.y = 0f;
+            if (externalControl || seconds <= 0f || displacement.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            shoveVelocity = displacement / seconds;
+            shoveRemaining = seconds;
         }
 
         /// <summary>Starts a jump with a given velocity, for jumps that begin from traversal.</summary>

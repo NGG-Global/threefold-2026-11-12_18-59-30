@@ -1,4 +1,5 @@
 using Threefold.Pooling;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Combat
@@ -41,10 +42,27 @@ namespace Threefold.Combat
         [Min(0f)]
         [SerializeField] private float noiseRadius = 12f;
 
+        [Header("Magic")]
+        [Tooltip("The magical effects the strike carries apart from its damage, such as force for the objects it lands " +
+                 "on. Which kinds of target take them is part of the payload.")]
+        [SerializeField] private EffectPayload effects;
+
+        // Whether the effects were ever set by the setup tooling, so they are filled once and then left to tuning.
+        [SerializeField, HideInInspector] private bool effectsConfigured;
+
         public float Damage => damage;
         public float Reach => reach;
         public float ArcDegrees => arcDegrees;
         public PooledObject ImpactEffectPrefab => impactEffectPrefab;
+        public EffectPayload Effects => effects;
+        public bool EffectsConfigured => effectsConfigured;
+
+        /// <summary>Sets the effects the strike carries. Called by the setup tooling, once.</summary>
+        public void ConfigureEffects(EffectPayload payload)
+        {
+            effects = payload;
+            effectsConfigured = true;
+        }
 
         /// <summary>Sets the strike values. Called by the setup tooling.</summary>
         public void ConfigureStrike(float damageAmount, float reachMetres, float arc, PooledObject impactEffect)
@@ -88,6 +106,7 @@ namespace Threefold.Combat
                 Stagger = -1f,
                 Element = SpellElement.None,
                 MaxTargets = MaxTargets,
+                Effects = effects,
                 Discipline = -1,
                 HitLayers = hitLayers,
                 CoverCheckHeight = verticalReach * 0.5f,

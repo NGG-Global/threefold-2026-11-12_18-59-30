@@ -54,6 +54,24 @@ namespace Threefold.Combat
 
         /// <summary>The target was shoved by a force impulse.</summary>
         Pushed,
+
+        /// <summary>A projectile was turned aside. The target is whoever turned it; the point is where.</summary>
+        Deflected,
+
+        /// <summary>A creature's armour gave a little: it is weakened or fractured.</summary>
+        ArmourCracked,
+
+        /// <summary>A creature's armour broke. What it covered is exposed.</summary>
+        ArmourBroken,
+
+        /// <summary>A creature's ward was disrupted by arcane charge.</summary>
+        WardDisrupted,
+
+        /// <summary>A creature's disrupted ward formed again.</summary>
+        WardRestored,
+
+        /// <summary>A single strong force took a creature off its feet.</summary>
+        Knocked,
     }
 
     /// <summary>A status effect that started or ticked on a target, for anything that shows it.</summary>

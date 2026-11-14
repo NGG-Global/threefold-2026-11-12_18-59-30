@@ -37,11 +37,15 @@ namespace Threefold.Combat
         /// <summary>Size of the projectile's visuals relative to the prefab. A charged shot is larger.</summary>
         public readonly float VisualScale;
 
+        /// <summary>Whether force can turn the projectile aside. Not designated by default.</summary>
+        public readonly ProjectileDeflection Deflection;
+
         public ProjectileLaunch(GameObject owner, Vector3 direction, float speed, float maxRange, float radius,
             float damage, LayerMask hitLayers, PooledObject impactEffect, float noiseRadius = 0f, float stagger = -1f,
             SpellElement element = SpellElement.None, EffectPayload effects = default, float visualScale = 1f,
-            int discipline = -1)
+            int discipline = -1, ProjectileDeflection deflection = default)
         {
+            Deflection = deflection;
             Stagger = stagger;
             Element = element;
             Effects = effects;
@@ -64,6 +68,10 @@ namespace Threefold.Combat
     /// distance it is about to travel, so it cannot pass through thin objects at high speed and
     /// needs no Rigidbody. It never hits the character that launched it, and it passes over that
     /// character's allies, so an enemy's shot does not strike another enemy in its way.
+    ///
+    /// A projectile designated as deflectable can be turned aside by force (<see cref="DeflectionRules"/>):
+    /// by a guard with force it is about to strike, or by an attack with force whose area it is in. It
+    /// keeps what it carries and changes owner, a set number of times at most.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(PooledObject))]
@@ -77,8 +85,13 @@ namespace Threefold.Combat
         [Tooltip("The kind of magic this projectile carries. Magical activators respond only to the kinds they accept.")]
         [SerializeField] private SpellElement element = SpellElement.Arcane;
 
+        // Projectiles that force could turn aside just now. Few at a time (motes are pooled, 16 at most).
+        private static readonly System.Collections.Generic.List<Projectile> Deflectable =
+            new System.Collections.Generic.List<Projectile>(16);
+
         private readonly RaycastHit[] hits = new RaycastHit[8];
         private readonly Collider[] overlaps = new Collider[8];
+        private int deflections;
 
         private PooledObject pooled;
         private ProjectileLaunch launch;
@@ -95,6 +108,60 @@ namespace Threefold.Combat
         {
             get => element;
             set => element = value;
+        }
+
+        /// <summary>How often this projectile has been turned aside since it was launched.</summary>
+        public int Deflections => deflections;
+
+        /// <summary>The values it flies with now, after any deflection.</summary>
+        public ProjectileLaunch Current => launch;
+
+        /// <summary>
+        /// Turns aside every designated projectile in an attack's area whose demand the attack's force
+        /// meets, away from the attack's origin (or back at its sender, within the assist angle). A
+        /// projectile behind cover is not reached, as a target behind cover is not. Called by
+        /// <see cref="AreaStrike"/> for attacks that carry force.
+        /// </summary>
+        /// <returns>How many were turned.</returns>
+        public static int DeflectWithin(in AreaShape shape, float force, GameObject user, int discipline, Vector3 coverOrigin,
+            LayerMask coverLayers)
+        {
+            if (force <= 0f || user == null || Deflectable.Count == 0)
+            {
+                return 0;
+            }
+
+            CombatTeam team = user.TryGetComponent(out Health userHealth) ? userHealth.Team : CombatTeam.Neutral;
+            int turned = 0;
+
+            // Backwards, so that entries can be removed: one that is gone, or that a turn has used up.
+            for (int i = Deflectable.Count - 1; i >= 0; i--)
+            {
+                Projectile projectile = Deflectable[i];
+                if (projectile == null || !projectile.flying)
+                {
+                    Deflectable.RemoveAt(i);
+                    continue;
+                }
+
+                Vector3 position = projectile.transform.position;
+                Vector3 flat = new Vector3(position.x, shape.Origin.y, position.z);
+                if (Mathf.Abs(position.y - shape.Origin.y) > shape.VerticalReach || !TargetSelection.IsInside(shape, flat) ||
+                    AreaStrike.IsBehindCover(user.transform, projectile.transform, coverOrigin, position, coverLayers))
+                {
+                    continue;
+                }
+
+                Vector3 away = flat - shape.Origin;
+                away = away.sqrMagnitude > 0.0001f ? away.normalized : shape.Forward;
+                var push = new DeflectionPush(user, team, away, force, DeflectionRules.DefaultReturnAssistDegrees, discipline);
+                if (projectile.TryTurn(push))
+                {
+                    turned++;
+                }
+            }
+
+            return turned;
         }
 
         /// <summary>Connects the trail. Called by the setup tooling.</summary>
@@ -121,6 +188,7 @@ namespace Threefold.Combat
             transform.localScale = baseScale * Mathf.Max(0.05f, data.VisualScale);
 
             launch = data;
+            deflections = 0;
             effectEventId = MagicEffectEvents.NextId();
             ownerTransform = data.Owner != null ? data.Owner.transform : null;
             ownerTeam = data.Owner != null && data.Owner.TryGetComponent(out Health ownerHealth)
@@ -128,6 +196,11 @@ namespace Threefold.Combat
                 : CombatTeam.Neutral;
             remainingRange = data.MaxRange;
             flying = true;
+
+            if (data.Deflection.IsDesignated && !Deflectable.Contains(this))
+            {
+                Deflectable.Add(this);
+            }
 
             if (trail != null)
             {
@@ -142,7 +215,11 @@ namespace Threefold.Combat
             {
                 if (!IsIgnored(overlaps[i]))
                 {
-                    Impact(transform.position, -data.Direction, overlaps[i]);
+                    if (!TryDeflectOff(overlaps[i]))
+                    {
+                        Impact(transform.position, -data.Direction, overlaps[i]);
+                    }
+
                     return;
                 }
             }
@@ -151,6 +228,14 @@ namespace Threefold.Combat
         private void OnDisable()
         {
             flying = false;
+            Deflectable.Remove(this);
+        }
+
+        // Static state survives between Play sessions when domain reload is disabled in the Editor.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            Deflectable.Clear();
         }
 
         private void Update()
@@ -174,7 +259,13 @@ namespace Threefold.Combat
                 Vector3 point = hit.distance > 0f ? hit.point : position;
                 Vector3 normal = hit.distance > 0f ? hit.normal : -launch.Direction;
                 transform.position = position + launch.Direction * hit.distance;
-                Impact(point, normal, hit.collider);
+
+                // Force + projectile = deflection: a guard with force turns it instead of taking the hit.
+                if (!TryDeflectOff(hit.collider))
+                {
+                    Impact(point, normal, hit.collider);
+                }
+
                 return;
             }
 
@@ -227,9 +318,65 @@ namespace Threefold.Combat
             return health != null && CombatTeams.AreAllied(ownerTeam, health.Team);
         }
 
+        /// <summary>Asks what the projectile is about to strike whether it turns it aside.</summary>
+        private bool TryDeflectOff(Collider other)
+        {
+            if (!launch.Deflection.IsDesignated || other == null)
+            {
+                return false;
+            }
+
+            // Only reached when the projectile strikes something, which is rare per frame.
+            IProjectileDeflector deflector = other.GetComponentInParent<IProjectileDeflector>();
+            if (deflector == null)
+            {
+                return false;
+            }
+
+            var incoming = new IncomingProjectile(transform.position, launch.Direction, launch.Owner, ownerTeam, launch.Deflection);
+            return deflector.TryDeflect(incoming, out DeflectionPush push) && TryTurn(push);
+        }
+
+        /// <summary>
+        /// Turns the projectile with a push, if the rules allow it. It keeps flying from where it is, with
+        /// a new owner, a new direction, a fresh range and a new event identity: what it does next is the
+        /// deflector's doing, and a target it reaches is struck once.
+        /// </summary>
+        private bool TryTurn(in DeflectionPush push)
+        {
+            if (!flying || !DeflectionRules.CanDeflect(launch.Deflection, deflections, push.Force, ownerTeam, push.Team))
+            {
+                return false;
+            }
+
+            Vector3 position = transform.position;
+            Health senderHealth = launch.Owner != null ? launch.Owner.GetComponent<Health>() : null;
+            bool hasSender = senderHealth != null && senderHealth.IsAlive;
+            Vector3 senderPoint = hasSender ? senderHealth.AimPoint : Vector3.zero;
+            Vector3 direction = DeflectionRules.Redirect(push.Direction, position, hasSender, senderPoint, push.ReturnAssistDegrees);
+
+            SpellElement carried = launch.Element != SpellElement.None ? launch.Element : element;
+            launch = DeflectionRules.Deflected(launch, push, direction, carried);
+            deflections++;
+            effectEventId = MagicEffectEvents.NextId();
+            ownerTransform = push.Deflector != null ? push.Deflector.transform : null;
+            ownerTeam = push.Team;
+            remainingRange = launch.MaxRange;
+            transform.rotation = Quaternion.LookRotation(direction);
+
+            if (deflections >= launch.Deflection.maxDeflections)
+            {
+                Deflectable.Remove(this);
+            }
+
+            CombatEvents.RaiseStatus(new StatusEvent(push.Deflector, StatusKind.Deflected, position, 0f));
+            return true;
+        }
+
         private void Impact(Vector3 point, Vector3 normal, Collider other)
         {
             flying = false;
+            Deflectable.Remove(this);
 
             SpellElement carried = launch.Element != SpellElement.None ? launch.Element : element;
 
@@ -265,6 +412,7 @@ namespace Threefold.Combat
         private void Expire()
         {
             flying = false;
+            Deflectable.Remove(this);
             pooled.ReturnToPool();
         }
     }

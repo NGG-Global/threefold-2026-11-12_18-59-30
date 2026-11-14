@@ -129,8 +129,18 @@ namespace Threefold.Magic
                 return false;
             }
 
-            ProjectileProfile projectile = chargedAbility is ChargedProjectileDefinition shot ? shot.Projectile : null;
-            DisciplineDefaults.FillWorldEffects(discipline, melee, guardEffect, projectile);
+            // Each version's values are filled once, oldest first.
+            if (dataVersion < 1)
+            {
+                ProjectileProfile projectile = chargedAbility is ChargedProjectileDefinition shot ? shot.Projectile : null;
+                DisciplineDefaults.FillWorldEffects(discipline, melee, guardEffect, projectile);
+            }
+
+            if (dataVersion < 2)
+            {
+                DisciplineDefaults.FillCombinations(discipline, guardEffect);
+            }
+
             dataVersion = DisciplineDefaults.DataVersion;
             return true;
         }

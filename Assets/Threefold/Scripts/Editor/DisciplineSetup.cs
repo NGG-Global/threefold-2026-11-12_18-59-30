@@ -186,8 +186,8 @@ namespace Threefold.EditorTools
                     EditorUtility.SetDirty(definition.ChargedAbility);
                 }
 
-                report.AppendLine($"Updated discipline '{info.Name}' with its effects on the world (force, bracing and " +
-                                  "arcane charge where it has them). Its other values were kept.");
+                report.AppendLine($"Updated discipline '{info.Name}' with what later sprints added (force, bracing, " +
+                                  "arcane charge and deflection where it has them). Its other values were kept.");
             }
             DisciplinePresentation look = definition.Presentation;
 
@@ -417,6 +417,14 @@ namespace Threefold.EditorTools
                 guard.BindBody(mage.GetComponent<Health>(), motor);
                 MarkChanged(guard);
                 report.AppendLine("Connected the block to the Mage's health: guarded hits from the front are reduced.");
+            }
+
+            // LM-06: hazards in the world reach the Mage by explicit rules (heat from fires, a shove from a collapse).
+            if (mage.GetComponent<PlayerEffectReceiver>() == null)
+            {
+                Undo.AddComponent<PlayerEffectReceiver>(mage);
+                report.AppendLine("Added the Mage's hazard rules: fire nearby heats the Mage and can set it alight briefly, a " +
+                                  "structure coming down shoves it. The Mage's own attacks never reach it.");
             }
         }
 

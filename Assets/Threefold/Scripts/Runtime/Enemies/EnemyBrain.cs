@@ -255,6 +255,25 @@ namespace Threefold.Enemies
             }
         }
 
+        /// <summary>
+        /// A blow that takes the enemy off its feet whatever its poise: a force at its stagger force, its
+        /// armour breaking, its ward disrupted. It staggers the enemy unless it was staggered a moment ago
+        /// (the same immunity that prevents stun-locking) or is never staggered at all. Either way the
+        /// enemy is alerted, as by a hit, without learning where the attacker stands.
+        /// </summary>
+        /// <returns>True if the enemy was staggered.</returns>
+        public bool TakeImpact(Vector3 direction)
+        {
+            if (IsDefeated)
+            {
+                return false;
+            }
+
+            bool couldStagger = Poise.Threshold > 0f && !Poise.IsImmune;
+            TakeDamage(0f, couldStagger ? Poise.Threshold : 0f, direction, false, Vector3.zero);
+            return couldStagger && State == EnemyStateId.Stagger;
+        }
+
         /// <summary>The enemy has been defeated.</summary>
         public void Defeat()
         {

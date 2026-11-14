@@ -1,5 +1,6 @@
 using System;
 using Threefold.Combat;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Enemies
@@ -205,6 +206,19 @@ namespace Threefold.Enemies
 
         [Tooltip("How this enemy responds to heat from flame attacks. Set susceptibility to 0 for an enemy that cannot burn.")]
         public HeatSettings heat = new HeatSettings();
+
+        [Tooltip("A single force at least this strong staggers the enemy, whatever its poise, unless it was staggered a " +
+                 "moment ago: a Force Pulse, a structure coming down beside it. 0: force alone never staggers it.")]
+        [Min(0f)]
+        public float staggerForce;
+
+        [Tooltip("Armour: a structure that force wears down, faster while the enemy is heated if it is brittle in the " +
+                 "heat. It takes a share of every hit while it holds; broken, it leaves the enemy exposed.")]
+        public ArmourSettings armour = new ArmourSettings();
+
+        [Tooltip("Ward: an arcane mechanism around the enemy. It takes a share of every hit while it holds; arcane " +
+                 "charge at its threshold disrupts it for a time.")]
+        public WardSettings ward = new WardSettings();
 
         [Header("Attacks")]
         [Tooltip("In order of preference: the first one whose conditions are met is used.")]

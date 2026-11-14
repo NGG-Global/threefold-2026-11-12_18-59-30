@@ -58,7 +58,13 @@ namespace Threefold.Magic
         {
             if (discipline == MagicDiscipline.Aegis)
             {
-                return new GuardEffectProfile { stabilize = 1f, stabilizeSeconds = 1.5f, radius = 3.5f, pulseSeconds = 0.4f };
+                // It braces what is near, and sets force against a projectile that strikes it: enough for an
+                // enemy's mote (which yields to 0.5), not for anything heavier.
+                return new GuardEffectProfile
+                {
+                    stabilize = 1f, stabilizeSeconds = 1.5f, radius = 3.5f, pulseSeconds = 0.4f,
+                    deflectForce = 1f, deflectAssistDegrees = 25f,
+                };
             }
 
             return new GuardEffectProfile();
@@ -68,9 +74,28 @@ namespace Threefold.Magic
         /// The version of the values a newly generated discipline holds. It is raised when a release
         /// adds values that assets generated earlier do not have; the setup command then adds them once.
         /// Version 1 added the effects on the world: force on Aegis swings, the brace of the Aegis guard
-        /// and the charge the Arcane Arrow carries.
+        /// and the charge the Arcane Arrow carries. Version 2 (LM-06) added the force the Aegis guard
+        /// sets against projectiles.
         /// </summary>
-        public const int DataVersion = 1;
+        public const int DataVersion = 2;
+
+        /// <summary>
+        /// Gives values generated before version 2 what that version introduced: the guard's deflection.
+        /// Only a value that is still zero is filled, so anything tuned since is kept.
+        /// </summary>
+        /// <returns>True if anything changed.</returns>
+        public static bool FillCombinations(MagicDiscipline discipline, GuardEffectProfile guard)
+        {
+            GuardEffectProfile defaults = Guard(discipline);
+            if (guard == null || guard.deflectForce > 0f || !defaults.Deflects)
+            {
+                return false;
+            }
+
+            guard.deflectForce = defaults.deflectForce;
+            guard.deflectAssistDegrees = defaults.deflectAssistDegrees;
+            return true;
+        }
 
         /// <summary>
         /// Gives values generated before version 1 the effects on the world that version introduced.

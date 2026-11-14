@@ -220,6 +220,10 @@ namespace Threefold.WorldMagic
         [Tooltip("How fast the object glides to where it was pushed, in metres per second.")]
         [Min(0.1f)]
         public float moveSpeed = 5f;
+
+        [Tooltip("A part held by a mechanism: force moves it only while the object meets one of these conditions, " +
+                 "such as Activated. None: force may always move it. Conditions of the movement itself are ignored.")]
+        public PropertyCondition movableOnlyWhen = PropertyCondition.None;
     }
 
     /// <summary>The arithmetic of a push, shared by objects in the world and by enemies.</summary>
@@ -740,6 +744,13 @@ namespace Threefold.WorldMagic
         [Tooltip("A single force of at least this strength breaks a brace before its time. 0: a brace holds against anything.")]
         [Min(0f)]
         public float braceBreakForce;
+
+        [Header("Weight")]
+        [Tooltip("Stress added each second by each creature standing on the object while it is unstable and not " +
+                 "braced: a walkway that gives way under weight. It adds up to the stress limit like force does. " +
+                 "0: weight does nothing.")]
+        [Min(0f)]
+        public float loadStressPerSecond;
     }
 
     /// <summary>
@@ -790,7 +801,34 @@ namespace Threefold.WorldMagic
         /// <summary>True while a brace keeps the object from being moved.</summary>
         public bool ResistsDisplacement => !collapsed && braceRemaining > 0f;
 
-        public bool IsAtRest => collapsed || (braceRemaining <= 0f && Stress <= 0f);
+        /// <summary>How many creatures stand on the object. A physical fact, not a state: nothing resets it but the creatures leaving.</summary>
+        public int Occupants { get; private set; }
+
+        /// <summary>
+        /// True while weight is wearing the object down: someone stands on it, it is unstable, not
+        /// braced and not down, and weight counts for it at all.
+        /// </summary>
+        public bool IsStraining =>
+            Occupants > 0 && settings.loadStressPerSecond > 0f && unstable && !collapsed && braceRemaining <= 0f;
+
+        public bool IsAtRest => collapsed || (braceRemaining <= 0f && Stress <= 0f && !IsStraining);
+
+        /// <summary>
+        /// Says how many creatures stand on the object. While it is unstable and not braced, each adds
+        /// stress every second; at the stress limit it comes down, exactly as if force had added the stress.
+        /// </summary>
+        /// <returns>True if the number changed.</returns>
+        public bool SetOccupants(int count)
+        {
+            count = count < 0 ? 0 : count;
+            if (count == Occupants)
+            {
+                return false;
+            }
+
+            Occupants = count;
+            return true;
+        }
 
         /// <summary>Braces the object. Returns false if the effect was too weak or the object has collapsed.</summary>
         public bool Brace(float magnitude, float seconds)
@@ -896,6 +934,19 @@ namespace Threefold.WorldMagic
                 if (braceRemaining <= 0f)
                 {
                     EndBrace();
+                }
+
+                return;
+            }
+
+            if (IsStraining)
+            {
+                // Weight is force spread over time: it adds stress as a push does, and nothing recovers
+                // while it lasts.
+                Stress += Occupants * settings.loadStressPerSecond * deltaTime;
+                if (settings.stressLimit > 0f && Stress + 0.0001f >= settings.stressLimit)
+                {
+                    collapsed = true;
                 }
 
                 return;

@@ -131,7 +131,9 @@ ground shows the guarded side and flashes when a hit is stopped.
 
 One thing does depend on the discipline: with **Aegis** selected, the guard also braces unstable
 objects within 3.5 m for as long as BLOCK is held (`Docs/WorldMagic.md`). It does nothing to
-creatures and changes nothing about the protection.
+creatures and changes nothing about the protection. Since LM-06 the Aegis guard also sets force
+against a designated projectile that strikes it from the front (an enemy's mote) and turns it
+aside, where the crosshair points or back at its sender (`Docs/Combinations.md`).
 
 ## Presentation
 

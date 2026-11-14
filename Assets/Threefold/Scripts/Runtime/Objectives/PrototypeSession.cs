@@ -87,6 +87,12 @@ namespace Threefold.Objectives
             if (playerHealth != null)
             {
                 playerHealth.Revive();
+
+                // A burn caught from the world does not carry over into the new attempt.
+                if (playerHealth.TryGetComponent(out PlayerEffectReceiver hazards))
+                {
+                    hazards.Restore();
+                }
             }
 
             if (playerMana != null)

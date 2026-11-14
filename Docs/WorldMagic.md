@@ -212,6 +212,11 @@ happens to it while it is switched off; see `Docs/WorldState.md`.
 Since LM-05 an object also hints at what it responds to and answers what is tried on it, through
 a `DiscoveryClues` component that Make Selection Magical adds; see `Docs/Discovery.md`.
 
+Since LM-06 a moving part can be held until a condition holds (**Movable Only When**, such as
+Activated), weight can bring an unstable object down (**Load Stress Per Second**, counted by a
+`LoadZone`), and creatures can wear armour and a ward that follow these same rules; see
+`Docs/Combinations.md`.
+
 ## Set up
 
 1. Pull `main` on the laptop and let Unity import. The Console must show no red errors.
@@ -376,8 +381,9 @@ the setup command until the Unity job runs.
 - Since LM-04 fire spreads, and objects act on each other, only through the reaction rules in
   their definitions, within fixed limits; and what is meant to last is saved
   (`Docs/WorldState.md`).
-- Enemies do not use effects against objects on purpose; an enemy's fire bolt would heat a
-  barricade it happens to hit.
+- Enemies do not use effects against objects on purpose. Since LM-06 the Guardian's strikes carry
+  force for objects and a Cinder Wisp's mote carries heat, so an enemy that happens to strike an
+  object acts on it (`Docs/Combinations.md`).
 - Aim assist draws the Arcane Arrow to an arcane-reactive object that is not yet activated, the
   reinforced door's lock included. Whether that helps or distracts is untested.
 - There is no sound.

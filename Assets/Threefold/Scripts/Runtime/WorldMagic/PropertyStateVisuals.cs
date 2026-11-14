@@ -252,6 +252,7 @@ namespace Threefold.WorldMagic
                 subscribed.StateChanged += HandleStateChanged;
                 subscribed.EffectReceived += HandleEffectReceived;
                 subscribed.Restored += HandleRestored;
+                subscribed.LoadChanged += HandleLoadChanged;
             }
 
             ShowCurrentState(false);
@@ -270,6 +271,7 @@ namespace Threefold.WorldMagic
                 subscribed.StateChanged -= HandleStateChanged;
                 subscribed.EffectReceived -= HandleEffectReceived;
                 subscribed.Restored -= HandleRestored;
+                subscribed.LoadChanged -= HandleLoadChanged;
                 subscribed = null;
             }
         }
@@ -376,6 +378,13 @@ namespace Threefold.WorldMagic
         private void HandleStateChanged(MagicalObject changed, WorldPropertyKind kind, int from, int to)
         {
             // A burst for something nobody is looking at is not worth its particles.
+            ShowCurrentState(!suspendWhenUnseen || IsSeen());
+            enabled = true;
+        }
+
+        /// <summary>Weight came or went: what depends on it (a walkway straining under a load) is shown at once.</summary>
+        private void HandleLoadChanged(MagicalObject changed)
+        {
             ShowCurrentState(!suspendWhenUnseen || IsSeen());
             enabled = true;
         }

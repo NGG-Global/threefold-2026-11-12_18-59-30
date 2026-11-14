@@ -86,6 +86,9 @@ namespace Threefold.WorldMagic
         Unstable = 1 << 9,
         Braced = 1 << 10,
         Collapsed = 1 << 11,
+
+        /// <summary>Someone stands on it while it is unstable and not braced: their weight is bringing it down.</summary>
+        Loaded = 1 << 12,
     }
 
     /// <summary>
@@ -174,10 +177,32 @@ namespace Threefold.WorldMagic
         /// </summary>
         public Func<Vector3, Vector3, float> GlideLimit { get; set; }
 
-        /// <summary>False while the object is braced, has come down or is destroyed: then nothing moves it.</summary>
+        /// <summary>
+        /// True while a mechanism holds the moving part: the kinetic settings name conditions under which
+        /// force may move it, and none of them holds. A rune-locked block slides only once it is activated.
+        /// </summary>
+        public bool IsKineticLocked
+        {
+            get
+            {
+                if (Kinetic == null)
+                {
+                    return false;
+                }
+
+                // The movement's own conditions cannot unlock it: that would be circular.
+                PropertyCondition unlockedWhen = Kinetic.Settings.movableOnlyWhen & ~KineticConditions;
+                return unlockedWhen != PropertyCondition.None && !Meets(unlockedWhen);
+            }
+        }
+
+        /// <summary>The conditions that describe the movement itself.</summary>
+        public const PropertyCondition KineticConditions = PropertyCondition.Moving | PropertyCondition.AtTravelLimit;
+
+        /// <summary>False while the object is braced, locked, has come down or is destroyed: then nothing moves it.</summary>
         private bool CanSlide =>
-            !IsDestroyed && (Stability == null ||
-                             (!Stability.ResistsDisplacement && Stability.State != StabilityState.Collapsed));
+            !IsDestroyed && !IsKineticLocked && (Stability == null ||
+                                                 (!Stability.ResistsDisplacement && Stability.State != StabilityState.Collapsed));
 
         /// <summary>True while nothing will change without a new effect, so time need not be advanced.</summary>
         public bool IsAtRest
@@ -298,9 +323,40 @@ namespace Threefold.WorldMagic
                 if ((conditions & PropertyCondition.Unstable) != 0 && stability == StabilityState.Unstable) return true;
                 if ((conditions & PropertyCondition.Braced) != 0 && stability == StabilityState.Braced) return true;
                 if ((conditions & PropertyCondition.Collapsed) != 0 && stability == StabilityState.Collapsed) return true;
+                if ((conditions & PropertyCondition.Loaded) != 0 && Stability.IsStraining) return true;
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Says how many creatures stand on the object. Weight matters only to an unstable object whose
+        /// stability says so; to anything else this is ignored. Standing on something is the player's
+        /// own doing, so what it brings about is as near to the player's action as an attack.
+        /// </summary>
+        /// <returns>True if the number changed.</returns>
+        public bool SetOccupants(int count)
+        {
+            // The count is a physical fact and is always kept, also on something destroyed: it must be
+            // right again if the object is restored while nobody stands on it.
+            if (Stability == null || !Stability.SetOccupants(count))
+            {
+                return false;
+            }
+
+            if (IsDestroyed)
+            {
+                return true;
+            }
+
+            if (Stability.IsStraining)
+            {
+                causeDepth[(int)WorldPropertyKind.Stability] = 0;
+            }
+
+            AnnounceChanges();
+            CollectEmissions(0);
+            return true;
         }
 
         /// <summary>Takes one effect and says what became of it.</summary>
@@ -695,7 +751,7 @@ namespace Threefold.WorldMagic
                     // that breaks only when hot cannot be harmed by force while it is cold.
                     if (Structural != null && Structural.Settings.forceDamage > 0f)
                     {
-                        bool heated = Thermal != null && Thermal.State >= ThermalState.Heated;
+                        bool heated = CombinationRules.IsHeated(Thermal);
                         float brittleness = heated && Structural.Settings.heatedBrittleness > 0f
                             ? Structural.Settings.heatedBrittleness
                             : Structural.Settings.brittleness;
@@ -711,8 +767,10 @@ namespace Threefold.WorldMagic
                         return true;
                     }
 
-                    // Only if some push could really move it: not along an axis that points up, not without room.
-                    if (Kinetic != null && KineticRules.CanEverBePushed(Kinetic.Settings, kineticAxis) && !collapsed && !braced)
+                    // Only if some push could really move it: not along an axis that points up, not without room,
+                    // and not while a mechanism holds it.
+                    if (Kinetic != null && KineticRules.CanEverBePushed(Kinetic.Settings, kineticAxis) && !collapsed && !braced &&
+                        !IsKineticLocked)
                     {
                         return true;
                     }
@@ -764,8 +822,8 @@ namespace Threefold.WorldMagic
 
             if (Structural != null)
             {
-                bool heated = Thermal != null && Thermal.State >= ThermalState.Heated;
-                changed |= Structural.ApplyForce(magnitude, heated) > 0f;
+                // Heat + force = fracture: the same rule for every structure, armour included.
+                changed |= CombinationRules.ForceOnStructure(Structural, Thermal, magnitude) > 0f;
             }
 
             // Judged after the force has acted on stability and structure: a blow that brings the object
@@ -863,7 +921,8 @@ namespace Threefold.WorldMagic
             const PropertyCondition Structurals = PropertyCondition.Weakened | PropertyCondition.Fractured | PropertyCondition.Destroyed;
             const PropertyCondition Arcanes = PropertyCondition.Charged | PropertyCondition.Activated;
             const PropertyCondition Kinetics = PropertyCondition.Moving | PropertyCondition.AtTravelLimit;
-            const PropertyCondition Stabilities = PropertyCondition.Unstable | PropertyCondition.Braced | PropertyCondition.Collapsed;
+            const PropertyCondition Stabilities = PropertyCondition.Unstable | PropertyCondition.Braced | PropertyCondition.Collapsed |
+                                                  PropertyCondition.Loaded;
 
             if ((when & Thermals) != 0 && Meets(when & Thermals)) depth = Mathf.Max(depth, causeDepth[(int)WorldPropertyKind.Thermal]);
             if ((when & Structurals) != 0 && Meets(when & Structurals)) depth = Mathf.Max(depth, causeDepth[(int)WorldPropertyKind.Structural]);

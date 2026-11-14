@@ -126,7 +126,19 @@ namespace Threefold.Magic
         [Min(0.1f)]
         public float pulseSeconds = 0.4f;
 
+        [Header("Deflection")]
+        [Tooltip("Force the guard sets against a projectile that strikes it from the guarded side. A designated " +
+                 "projectile whose demand this meets is turned aside instead of hitting. 0: the guard turns nothing.")]
+        [Min(0f)]
+        public float deflectForce;
+
+        [Tooltip("A turned projectile goes where the camera looks, or back at its sender if the sender is within this angle of it.")]
+        [Range(0f, 60f)]
+        public float deflectAssistDegrees = 25f;
+
         public bool HasEffect => stabilize > 0f && radius > 0f;
+
+        public bool Deflects => deflectForce > 0f;
 
         /// <summary>The effects each pulse of the guard carries. Objects only: a brace means nothing to a creature.</summary>
         public EffectPayload Effects => new EffectPayload

@@ -53,6 +53,9 @@ namespace Threefold.Combat
     /// <see cref="IMagicEffectReceiver"/>, which a creature and an object without health can both be.
     /// All effects of one attack share one event identity.
     ///
+    /// An attack that carries force also turns aside designated projectiles in its area
+    /// (<see cref="Projectile.DeflectWithin"/>).
+    ///
     /// One overlap query per attack and pre-allocated buffers; no Rigidbody is involved.
     /// </summary>
     public static class AreaStrike
@@ -259,6 +262,15 @@ namespace Threefold.Combat
                     {
                         objectsAffected++;
                     }
+                }
+
+                // Force + projectile = deflection: an attack with force turns aside designated projectiles
+                // in its area, as it shoves what stands there. A projectile is a thing, not a creature: force
+                // meant for creatures only does not turn it, and cover shields it as it shields a target.
+                EffectTargets forceTargets = request.Effects.targets == EffectTargets.None ? EffectTargets.All : request.Effects.targets;
+                if (request.Effects.force > 0f && (forceTargets & EffectTargets.Objects) != 0)
+                {
+                    Projectile.DeflectWithin(shape, request.Effects.force, user, request.Discipline, coverOrigin, request.HitLayers);
                 }
             }
             finally

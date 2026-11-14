@@ -81,7 +81,7 @@ namespace Threefold.Magic
     /// Staff Strike and the placeholder bolt of the previous sprint) are switched off.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class DisciplineCombat : MonoBehaviour, IChargedAttackGate
+    public sealed class DisciplineCombat : MonoBehaviour, IChargedAttackGate, IProjectileDeflector
     {
         [Header("References")]
         [SerializeField] private CharacterInputSource inputSource;
@@ -140,6 +140,8 @@ namespace Threefold.Magic
 
         private DisciplineCombatModel model;
         private TraversalController traversal;
+        private PlayerGuard guard;
+        private AimProvider aimProvider;
         private PlayerAbilityInput legacyInput;
         private Health subscribedHealth;
         private float damageTaken;
@@ -231,6 +233,8 @@ namespace Threefold.Magic
         private void Awake()
         {
             traversal = GetComponent<TraversalController>();
+            guard = GetComponent<PlayerGuard>();
+            aimProvider = GetComponent<AimProvider>();
             legacyInput = GetComponent<PlayerAbilityInput>();
         }
 
@@ -504,6 +508,54 @@ namespace Threefold.Magic
 
             AreaStrike.Resolve(request, null, out int braced);
             GuardPulsed?.Invoke(definition, braced);
+        }
+
+        /// <summary>
+        /// Force + projectile = deflection. While the guard is up, the selected discipline's guard sets
+        /// its force against a projectile that strikes it from the guarded side. The projectile decides
+        /// whether that force turns it (<see cref="DeflectionRules"/>); if it does, it goes where the
+        /// camera looks, or back at its sender when the sender is close to that line. Only the Aegis
+        /// guard has force, so only it deflects. The protection block gives is unchanged.
+        /// </summary>
+        public bool TryDeflect(in IncomingProjectile incoming, out DeflectionPush push)
+        {
+            push = default;
+            if (guard == null || !guard.IsBlocking || disciplines == null || !isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            int slot = disciplines.CurrentSlot;
+            DisciplineDefinition definition = disciplines.GetDefinition(slot);
+            if (definition == null || !definition.GuardEffect.Deflects ||
+                !DeflectionRules.GuardCatches(transform.forward, incoming.Direction, guard.GuardArcDegrees))
+            {
+                return false;
+            }
+
+            // Where the crosshair points, as the Arcane Arrow aims: from the projectile to what the camera
+            // looks at. Without an aim provider, level along the camera's heading.
+            Vector3 aim;
+            if (aimProvider != null)
+            {
+                aim = aimProvider.GetAim(incoming.Position).Direction;
+            }
+            else
+            {
+                Transform view = motor != null ? motor.CameraTransform : null;
+                aim = view != null ? view.forward : transform.forward;
+                aim.y = 0f;
+            }
+
+            if (aim.sqrMagnitude < 0.0001f)
+            {
+                aim = transform.forward;
+            }
+
+            CombatTeam team = health != null ? health.Team : CombatTeam.Player;
+            push = new DeflectionPush(gameObject, team, aim, definition.GuardEffect.deflectForce,
+                definition.GuardEffect.deflectAssistDegrees, slot);
+            return true;
         }
 
         /// <summary>The camera's heading, or the character's own without a camera.</summary>
