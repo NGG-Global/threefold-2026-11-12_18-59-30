@@ -44,7 +44,11 @@ namespace Threefold.WorldMagic
         [Header("Feedback hooks")]
         [SerializeField] private UnityEvent onDestroyed = new UnityEvent();
 
+        // How much smaller than the object the swept box is across its direction of travel.
+        private const float SweepMargin = 0.1f;
+
         private readonly RaycastHit[] sweepHits = new RaycastHit[8];
+        private Func<Vector3, Vector3, float> glideLimit;
         private MagicalPropertySet properties;
         private Vector3 restPosition;
         private bool restKnown;
@@ -131,14 +135,8 @@ namespace Threefold.WorldMagic
                 return EffectResponse.NoProperty;
             }
 
-            Vector3 targetBefore = properties.Kinetic != null ? properties.Kinetic.TargetOffset : Vector3.zero;
+            // A push asks AllowedGlide (below) how far the way is clear before anything is announced.
             EffectResponse response = properties.Apply(effect);
-
-            if (properties.Kinetic != null && properties.Kinetic.TargetOffset != targetBefore)
-            {
-                StopAtObstacles();
-            }
-
             EffectReceived?.Invoke(this, effect, response);
 
             // Wake up for as long as something is changing.
@@ -226,6 +224,14 @@ namespace Threefold.WorldMagic
             properties = new MagicalPropertySet(definition.Properties, EffectTargets.Objects);
             properties.StateChanged += HandleStateChanged;
 
+            // The delegate is made once, so asking it on every push allocates nothing.
+            if (glideLimit == null)
+            {
+                glideLimit = AllowedGlide;
+            }
+
+            properties.GlideLimit = glideLimit;
+
             Transform mover = MoveTarget;
             restPosition = mover.position;
             restKnown = true;
@@ -275,17 +281,17 @@ namespace Threefold.WorldMagic
         }
 
         /// <summary>
-        /// A pushed object stops short of whatever is in its way. One box sweep along the glide, using
-        /// the object's own bounds; its own colliders are ignored.
+        /// How far a glide may go before something is in the way. One box sweep along the glide, using
+        /// the object's own bounds; its own colliders are ignored. The property set asks this when a
+        /// push sets a new glide, before the change is announced.
         /// </summary>
-        private void StopAtObstacles()
+        private float AllowedGlide(Vector3 fromOffset, Vector3 toOffset)
         {
-            KineticProperty kinetic = properties.Kinetic;
-            Vector3 glide = kinetic.TargetOffset - kinetic.Offset;
+            Vector3 glide = toOffset - fromOffset;
             float length = glide.magnitude;
-            if (length < 0.01f || colliders.Length == 0)
+            if (length < 0.01f || colliders == null || colliders.Length == 0)
             {
-                return;
+                return length;
             }
 
             bool hasBounds = false;
@@ -311,24 +317,31 @@ namespace Threefold.WorldMagic
 
             if (!hasBounds)
             {
-                return;
+                return length;
             }
 
-            // Slightly smaller than the object, so resting on the floor or against a rail does not count.
-            Vector3 halfExtents = bounds.extents * 0.9f;
+            // Slightly smaller across the direction of travel, so resting on the floor or beside a rail
+            // does not count. Full size along it, so the object stops at what it meets and not inside it.
             Vector3 direction = glide / length;
+            Vector3 extents = bounds.extents;
+            var halfExtents = new Vector3(
+                extents.x * (1f - SweepMargin * (1f - Mathf.Abs(direction.x))),
+                extents.y * (1f - SweepMargin * (1f - Mathf.Abs(direction.y))),
+                extents.z * (1f - SweepMargin * (1f - Mathf.Abs(direction.z))));
+
             int count = Physics.BoxCastNonAlloc(bounds.center, halfExtents, direction, sweepHits, Quaternion.identity, length,
                 obstacleLayers, QueryTriggerInteraction.Ignore);
 
             float allowed = length;
             Transform self = transform;
+            Transform mover = MoveTarget;
             for (int i = 0; i < count; i++)
             {
                 RaycastHit hit = sweepHits[i];
 
                 // A sweep reports distance 0 for what the box already touches (the floor it rests on, its
                 // rail); only what lies ahead can stop it.
-                if (hit.distance <= 0f || hit.transform.IsChildOf(self) || hit.transform.IsChildOf(MoveTarget))
+                if (hit.distance <= 0f || hit.transform.IsChildOf(self) || hit.transform.IsChildOf(mover))
                 {
                     continue;
                 }
@@ -337,10 +350,7 @@ namespace Threefold.WorldMagic
                 allowed = Mathf.Min(allowed, Mathf.Max(0f, hit.distance - 0.02f));
             }
 
-            if (allowed < length)
-            {
-                kinetic.LimitGlide(allowed);
-            }
+            return allowed;
         }
     }
 }

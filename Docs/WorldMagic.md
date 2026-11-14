@@ -88,7 +88,8 @@ A force moves the object by its magnitude less the share its **resistance** take
 its **minimum force** does not move it at all. The movement is controlled, not simulated: either
 along one **axis** between two limits (a platform on a rail), or across the ground within a
 radius of where it started. The object glides to its new place at a set speed and stops short of
-anything in its way. It needs no Rigidbody.
+anything in its way; a push that is blocked outright counts as resisted and announces nothing. It
+needs no Rigidbody.
 
 ### Arcane-reactive
 
@@ -119,7 +120,8 @@ change:
 | A thermal property burns | The structure loses integrity each second |
 | The object is heated | The structure uses its heated brittleness |
 | The structure reaches a chosen state | The object becomes unstable, or collapses |
-| The object is braced or has collapsed | Force does not move it |
+| The object is braced, has collapsed or is destroyed | Force does not move it, and a glide already under way stops where it is |
+| One force would both bring the object down and push it | It comes down; it is not also pushed |
 | The structure is destroyed | The fire goes out and nothing further is processed |
 
 ### What an object answers
@@ -167,6 +169,8 @@ What changed for creatures in this sprint:
 
 - **Aegis melee now shoves enemies slightly**, because the swings carry force: a Wisp 0.6 m and
   1 m, a Guardian (which resists 60%) 0.24 m and 0.4 m. Before, only the Force Pulse pushed.
+  When the same strike also staggers the enemy, the larger of the two movements applies (the
+  stagger's knockback), never their sum and never the smaller.
 - Burning, ignition, stagger, poise and the Force Pulse's push are otherwise as in LM-02.
 
 ## Making a new object
@@ -264,8 +268,8 @@ at the end of the setup commands. It reports:
 - A pushable object whose moving part is marked static or carries no collider.
 - A definition with no property, or with values under which a property can never do anything: a
   structure nothing can damage, brittleness-when-heated on something that cannot heat, fire
-  damage on something that cannot burn, a platform with no room to travel, a crystal that cannot
-  charge, stability that nothing can unsettle.
+  damage on something that cannot burn, something flammable with no time to burn, a platform with
+  no room to travel, a crystal that cannot charge, stability that nothing can unsettle.
 - A trigger or a visual that waits for a state the object can never reach, such as "Burning" on
   stone.
 
@@ -319,6 +323,13 @@ the combat model.
 - `AreaStrike` (melee, wave, pulse, enemy strikes) and `Projectile` deliver damage and effects
   separately, under one event identity per attack. A projectile that carries no explicit effect,
   such as an enemy's bolt, carries one derived from its kind of magic.
+- **Arcane swings no longer reach puzzle crystals.** In LM-02 any swing with a kind of magic
+  reached the activators in its area, so an Arcane swing could light an Arcane crystal standing
+  within reach, and a crystal of another kind flashed its refusal. Arcane swings carry no effect
+  now, so neither happens. The Arcane Arrow, Flame swings, the Flame Wave, Aegis swings and the
+  Force Pulse reach activators as before. This follows from the design (melee Arcane carries
+  nothing); it is listed because it changes how an existing puzzle part behaves.
+- A puzzle crystal takes one attack as one spell, even if the attack carries two kinds of effect.
 - A melee step has a **force** value; a discipline has a **guard** section; the Arcane Arrow has
   a charge range. `DisciplineCombatModel` issues a guard pulse while BLOCK is held.
 - `HeatSettings` gained the heated share and "flammable"; `HeatMeter` reports the three states.
@@ -330,9 +341,9 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `WorldPropertyTests` (48) | Each property alone: heating, cooling, ignition, burn-out, immunity; integrity, thresholds, brittleness; resistance, minimum force, axis limits, range, glide; charge, decay, the three kinds of activation; collapse by force and by stress, bracing, a pending collapse. Several properties together and each coupling. Exact thresholds. Incompatible effects. The same event twice. Destruction and what is left; restoring. Determinism and the order of announcements |
-| `MagicEffectDeliveryTests` (37) | What each attack of each discipline carries with the default numbers. Each of the six examples against those attacks, including what it must ignore. A creature and an object answering the same effect by the same rules |
-| `MagicalObjectRulesTests` (18) | Every validation rule; the examples are valid; no example answers every effect; no object reaches a state the rules call unreachable; the one-time update of older discipline values |
+| `WorldPropertyTests` (54) | Each property alone: heating, cooling, ignition, burn-out, immunity; integrity, thresholds, brittleness; resistance, minimum force, axis limits, range, glide; charge, decay, the three kinds of activation; collapse by force and by stress, bracing, a pending collapse. Several properties together and each coupling. Exact thresholds. Incompatible effects. The same event twice. Destruction and what is left; restoring. Determinism and the order of announcements. A blow that topples or destroys does not also push; a brace or a collapse stops a glide; a blocked push changes and announces nothing |
+| `MagicEffectDeliveryTests` (40) | What each attack of each discipline carries with the default numbers. Each of the six examples against those attacks, including what it must ignore. A creature and an object answering the same effect by the same rules. The delivery routine reporting whether anything changed; a push against a knockback under way; one attack as one spell to a puzzle crystal |
+| `MagicalObjectRulesTests` (20) | Every validation rule; the examples are valid; no example answers every effect; no object reaches a state the rules call unreachable; the one-time update of older discipline values |
 | `DisciplineCombatTests` (4 added, 52) | The guard pulse: at once when BLOCK goes down, then at its interval; again at once when BLOCK is raised anew; only for a discipline whose guard has an effect; not while climbing or defeated |
 | `MagicalObjectSetupTests` (7) | Needs Unity: the examples generate complete and valid; each prefab answers only through its properties; a destroyed object stops blocking and can be restored; the range holds the examples and a second run adds nothing; Make Selection Magical; the update of an older discipline asset |
 
@@ -349,7 +360,11 @@ the setup command until the Unity job runs.
 - All numbers are first estimates.
 - A character standing on the platform is not carried when it slides. It only moves when pushed.
 - A pushed object is stopped by one box sweep with its overall bounds. An object with a very
-  irregular shape, or one pushed around a corner, is not handled precisely.
+  irregular shape, or one pushed around a corner, is not handled precisely. What the object
+  already touches when the push starts does not stop it, so a pushable object should not be
+  placed touching a wall that lies in its path.
+- A pushable object remembers its resting place in the world. It should not be made a child of
+  something that itself moves.
 - Collapse is a pose the object moves into. Nothing is thrown, and a collapsing object does not
   hurt what it lands on.
 - Fire does not spread from one object to another, and a burning object does not heat creatures

@@ -147,7 +147,8 @@ spells, Fire and Frost. Each projectile prefab carries one (Arcane by default, w
 existing Arcane Bolt prefab without regenerating it). On impact, a projectile delivers its magic
 to whatever it hits that can receive it. Since Sprint LM-03 that is one interface for everything,
 `IMagicEffectReceiver` (`Docs/WorldMagic.md`): a `SpellActivator` reads arcane charge as Arcane
-magic, heat as Fire and force as Force, so its accepted kinds work as before. A receptive, unlit
+magic, heat as Fire and force as Force, so its accepted kinds work as before. One difference:
+Arcane swings carry no effect and no longer reach an activator; the Arcane Arrow does. A receptive, unlit
 `SpellActivator` is also an aim-assist target, so a thumb on a touchscreen finds the crystal as
 easily as a training dummy.
 

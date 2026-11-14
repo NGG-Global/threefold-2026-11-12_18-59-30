@@ -29,7 +29,7 @@ namespace Threefold.WorldMagic
             }
 
             bool canHeat = settings.thermal && settings.thermalSettings != null && settings.thermalSettings.susceptibility > 0f;
-            bool canBurn = canHeat && settings.thermalSettings.flammable;
+            bool canBurn = canHeat && settings.thermalSettings.flammable && settings.thermalSettings.burnSeconds > 0f;
 
             if (settings.thermal)
             {
@@ -40,6 +40,11 @@ namespace Threefold.WorldMagic
                 else if (settings.thermalSettings.capacity <= 0f)
                 {
                     problems.Add("thermal: capacity must be above 0.");
+                }
+                else if (settings.thermalSettings.flammable && settings.thermalSettings.burnSeconds <= 0f)
+                {
+                    problems.Add("thermal: it is flammable but its burn time is 0, so it never burns; at full heat it " +
+                                 "only goes cold again. Give it a burn time or switch flammable off.");
                 }
             }
 
@@ -72,7 +77,8 @@ namespace Threefold.WorldMagic
 
                     if (structure.burnDamagePerSecond > 0f && !canBurn)
                     {
-                        problems.Add("structural: fire damage is set, but the object cannot burn (no flammable thermal property).");
+                        problems.Add("structural: fire damage is set, but the object cannot burn (no flammable thermal " +
+                                     "property with a burn time).");
                     }
                 }
             }
@@ -199,10 +205,12 @@ namespace Threefold.WorldMagic
                 return reachable;
             }
 
-            if (settings.thermal)
+            if (settings.thermal && settings.thermalSettings != null && settings.thermalSettings.susceptibility > 0f)
             {
                 reachable |= PropertyCondition.Heated;
-                if (settings.thermalSettings != null && settings.thermalSettings.flammable)
+
+                // The same condition the heat rule uses: flammable, and with a time to burn for.
+                if (settings.thermalSettings.flammable && settings.thermalSettings.burnSeconds > 0f)
                 {
                     reachable |= PropertyCondition.Burning;
                 }

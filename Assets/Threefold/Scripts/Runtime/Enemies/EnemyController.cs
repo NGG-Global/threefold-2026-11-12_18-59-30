@@ -86,6 +86,7 @@ namespace Threefold.Enemies
         private bool hasLook;
         private Vector3 lookPoint;
         private Vector3 knockbackVelocity;
+        private float knockbackDistance;
         private float knockbackRemaining;
         private CreatureEffectModel effects;
         private HeatCarrier heat;
@@ -564,6 +565,7 @@ namespace Threefold.Enemies
 
             knockbackVelocity = direction.normalized * (distance / KnockbackSeconds);
             knockbackRemaining = KnockbackSeconds;
+            knockbackDistance = distance;
         }
 
         // ------------------------------------------------------ status effects
@@ -593,7 +595,10 @@ namespace Threefold.Enemies
                 heat.AnnounceIgnition();
             }
 
-            if (pushDistance > 0f)
+            // A push takes over only from a weaker movement. The light force of a strike that has just
+            // staggered the enemy must not cut the stagger's longer knockback short.
+            float underWay = knockbackRemaining > 0f ? knockbackDistance : 0f;
+            if (KineticRules.TakesOver(pushDistance, underWay))
             {
                 Knockback(effect.Direction, pushDistance);
                 CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.Pushed, health.AimPoint, KnockbackSeconds));

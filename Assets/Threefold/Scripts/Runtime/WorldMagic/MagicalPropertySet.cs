@@ -131,6 +131,20 @@ namespace Threefold.WorldMagic
         /// <summary>True once the structure is destroyed. A destroyed object takes no more effects.</summary>
         public bool IsDestroyed => Structural != null && Structural.State == StructuralState.Destroyed;
 
+        /// <summary>
+        /// Optional. Asked, when a push sets a new glide, how far the object may go before something
+        /// is in its way: it is given the offset the glide starts from and the offset it aims for, and
+        /// returns the distance allowed. Whoever owns the object in the world answers (one physics
+        /// sweep); without it nothing but the object's own limits stops a glide. Asked before the
+        /// change is announced, so a push that is blocked outright announces nothing.
+        /// </summary>
+        public Func<Vector3, Vector3, float> GlideLimit { get; set; }
+
+        /// <summary>False while the object is braced, has come down or is destroyed: then nothing moves it.</summary>
+        private bool CanSlide =>
+            !IsDestroyed && (Stability == null ||
+                             (!Stability.ResistsDisplacement && Stability.State != StabilityState.Collapsed));
+
         /// <summary>True while nothing will change without a new effect, so time need not be advanced.</summary>
         public bool IsAtRest
         {
@@ -289,7 +303,7 @@ namespace Threefold.WorldMagic
             Arcane?.Tick(deltaTime);
             Stability?.Tick(deltaTime);
 
-            if (Kinetic != null && !(Stability != null && Stability.State == StabilityState.Collapsed))
+            if (Kinetic != null && CanSlide)
             {
                 Kinetic.Tick(deltaTime);
             }
@@ -338,8 +352,6 @@ namespace Threefold.WorldMagic
         private bool ApplyForce(Vector3 direction, float magnitude)
         {
             bool changed = false;
-            bool braced = Stability != null && Stability.ResistsDisplacement;
-            bool down = Stability != null && Stability.State == StabilityState.Collapsed;
 
             if (Stability != null)
             {
@@ -352,10 +364,21 @@ namespace Threefold.WorldMagic
                 changed |= Structural.ApplyForce(magnitude, heated) > 0f;
             }
 
-            // A braced object holds its place, and one that has come down no longer slides.
-            if (Kinetic != null && !braced && !down)
+            // Judged after the force has acted on stability and structure: a blow that brings the object
+            // down or destroys it does not also send it sliding, and a braced object holds its place.
+            if (Kinetic != null && CanSlide)
             {
-                changed |= Kinetic.Push(direction, magnitude, kineticAxis) > 0f;
+                Vector3 before = Kinetic.TargetOffset;
+                if (Kinetic.Push(direction, magnitude, kineticAxis) > 0f)
+                {
+                    if (GlideLimit != null)
+                    {
+                        Kinetic.LimitGlide(GlideLimit(Kinetic.Offset, Kinetic.TargetOffset));
+                    }
+
+                    // A push that is blocked outright has changed nothing.
+                    changed |= (Kinetic.TargetOffset - before).sqrMagnitude > 0.000001f;
+                }
             }
 
             return changed;
@@ -367,6 +390,13 @@ namespace Threefold.WorldMagic
             if (Structural != null && Stability != null)
             {
                 Stability.ObserveStructure(Structural.State);
+            }
+
+            // What is braced, down or destroyed does not move: a glide under way stops where it is. This
+            // also covers a structure that failed, and so collapsed, under the very push that moved it.
+            if (Kinetic != null && !CanSlide)
+            {
+                Kinetic.Halt();
             }
 
             // What is destroyed no longer burns: nothing is left alight, and nothing keeps ticking.

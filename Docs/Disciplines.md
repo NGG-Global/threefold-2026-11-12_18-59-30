@@ -93,7 +93,8 @@ Rigidbody is involved, and nothing leaves the walkable area. Training dummies st
 are not pushed.
 
 Since LM-03 the Aegis swings carry a little force as well (0.6 and 1.0), so they shove an enemy
-slightly: a Wisp 0.6 m and 1 m, a Guardian 0.24 m and 0.4 m. Objects in the world with a kinetic,
+slightly: a Wisp 0.6 m and 1 m, a Guardian 0.24 m and 0.4 m. A strike that also staggers moves
+the enemy by the larger of the two, the stagger's knockback. Objects in the world with a kinetic,
 structural or stability property answer force too.
 
 ### Effects on the world
@@ -110,7 +111,8 @@ their properties. `Docs/WorldMagic.md` describes the model and the example objec
 | Aegis guard | A brace for unstable objects within 3.5 m, while BLOCK is held |
 
 The Arcane Arrow still lights the Arcane crystals of the Sealed Gateway: a puzzle crystal reads
-arcane charge as Arcane magic, heat as Fire and force as Force.
+arcane charge as Arcane magic, heat as Fire and force as Force. Arcane swings carry no effect, so
+unlike in LM-02 they no longer light a crystal that stands within reach of a swing.
 
 ## Block
 

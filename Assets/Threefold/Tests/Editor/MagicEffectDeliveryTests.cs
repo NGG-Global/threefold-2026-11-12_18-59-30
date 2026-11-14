@@ -578,5 +578,68 @@ namespace Threefold.Tests
             Assert.AreEqual(5f, KineticRules.Displacement(5f, 0f), 0.0001f);
             Assert.AreEqual(0f, KineticRules.Displacement(-3f, 0f));
         }
+
+        [Test]
+        public void TheLargerOfAKnockbackAndAPushMovesACreature()
+        {
+            // A Force Palm that staggers a Wisp: the stagger throws it 1.2 m, the palm's own force 0.6 m.
+            Assert.IsFalse(KineticRules.TakesOver(0.6f, 1.2f), "The light push does not cut the knockback short.");
+            Assert.IsTrue(KineticRules.TakesOver(5f, 1.2f), "A Force Pulse outdoes the knockback of its stagger.");
+            Assert.IsTrue(KineticRules.TakesOver(0.6f, 0f), "With nothing under way the push moves it.");
+            Assert.IsFalse(KineticRules.TakesOver(1.2f, 1.2f), "An equal push changes nothing.");
+            Assert.IsFalse(KineticRules.TakesOver(0f, 0f));
+        }
+
+        [Test]
+        public void AnActivatorTakesOneAttackAsOneSpell()
+        {
+            // An attack it has answered: every further kind of effect of that attack is passed over.
+            Assert.IsTrue(SpellActivatorRules.PassesOver(7, 7, 0, true));
+            Assert.IsTrue(SpellActivatorRules.PassesOver(7, 7, 0, false));
+
+            // An attack it has refused: a kind it would refuse again is passed over, one it accepts is not.
+            Assert.IsTrue(SpellActivatorRules.PassesOver(7, 0, 7, false));
+            Assert.IsFalse(SpellActivatorRules.PassesOver(7, 0, 7, true));
+
+            // A new attack, and an attack without an identity, are always heard.
+            Assert.IsFalse(SpellActivatorRules.PassesOver(8, 7, 7, false));
+            Assert.IsFalse(SpellActivatorRules.PassesOver(0, 0, 0, true));
+            Assert.IsFalse(SpellActivatorRules.PassesOver(0, 0, 0, false));
+        }
+
+        /// <summary>Stands in for the component: hands what arrives to the rules.</summary>
+        private sealed class RuleReceiver : IMagicEffectReceiver
+        {
+            private readonly MagicalPropertySet set;
+
+            public RuleReceiver(MagicalPropertySet set)
+            {
+                this.set = set;
+            }
+
+            public EffectResponse ReceiveEffect(in MagicEffect effect)
+            {
+                return set.Apply(effect);
+            }
+        }
+
+        [Test]
+        public void DeliveryReportsWhetherAnythingChanged()
+        {
+            // The real delivery routine that melee, waves, pulses and projectiles all use.
+            bool Send(ExampleObject example, EffectPayload payload)
+            {
+                return AreaStrike.Deliver(new RuleReceiver(Example(example)), payload, Vector3.forward, Vector3.zero, null, 0,
+                    nextEvent++);
+            }
+
+            Assert.IsTrue(Send(ExampleObject.ArcaneCrystal, Arrow(1f)), "Charged.");
+            Assert.IsFalse(Send(ExampleObject.ArcaneCrystal, Wave(1f)), "No thermal property.");
+            Assert.IsFalse(Send(ExampleObject.MovablePlatform, Melee(MagicDiscipline.Aegis, 1)), "Reached, but too light.");
+            Assert.IsTrue(Send(ExampleObject.MovablePlatform, Pulse(1f)), "Moved.");
+            Assert.IsTrue(Send(ExampleObject.UnstableStructure, Guard(MagicDiscipline.Aegis)), "Braced.");
+            Assert.IsFalse(Send(ExampleObject.ReinforcedDoor, Guard(MagicDiscipline.Aegis)), "Nothing to brace.");
+            Assert.IsFalse(AreaStrike.Deliver(null, Pulse(1f), Vector3.forward, Vector3.zero, null, 0, nextEvent++));
+        }
     }
 }

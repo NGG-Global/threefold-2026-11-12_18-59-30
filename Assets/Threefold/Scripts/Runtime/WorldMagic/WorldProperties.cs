@@ -227,6 +227,16 @@ namespace Threefold.WorldMagic
 
             return magnitude * (1f - Mathf.Clamp01(resistance));
         }
+
+        /// <summary>
+        /// Whether a new push takes over from a movement already under way, such as the knockback of a
+        /// stagger. The larger of the two moves the target: never their sum, and never the smaller.
+        /// </summary>
+        /// <param name="distanceInProgress">The full distance of the movement under way, or 0 if there is none.</param>
+        public static bool TakesOver(float pushDistance, float distanceInProgress)
+        {
+            return pushDistance > 0f && pushDistance > distanceInProgress;
+        }
     }
 
     /// <summary>
@@ -333,6 +343,12 @@ namespace Threefold.WorldMagic
             }
 
             TargetOffset = Offset + remaining * (Mathf.Max(0f, allowedDistance) / length);
+        }
+
+        /// <summary>Stops where it is: what is left of a glide is given up.</summary>
+        public void Halt()
+        {
+            TargetOffset = Offset;
         }
 
         /// <summary>Glides towards the target. Returns the current offset.</summary>

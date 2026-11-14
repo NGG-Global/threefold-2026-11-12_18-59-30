@@ -227,6 +227,22 @@ namespace Threefold.Puzzles
 
             return mode == ActivatorMode.Toggle ? SpellResponse.Deactivated : SpellResponse.Ignored;
         }
+
+        /// <summary>
+        /// One attack is one spell to an activator, however many kinds of effect it carries. True if a
+        /// further effect of an attack should be passed over: the activator has already answered that
+        /// attack, or has already refused it and would refuse this kind as well. An attack without an
+        /// identity (0) is never passed over.
+        /// </summary>
+        public static bool PassesOver(int eventId, int answeredEventId, int refusedEventId, bool kindAccepted)
+        {
+            if (eventId == 0)
+            {
+                return false;
+            }
+
+            return eventId == answeredEventId || (!kindAccepted && eventId == refusedEventId);
+        }
     }
 
     public enum SwitchMode

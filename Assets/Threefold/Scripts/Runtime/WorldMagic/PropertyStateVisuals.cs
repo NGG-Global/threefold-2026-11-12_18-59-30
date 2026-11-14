@@ -108,7 +108,7 @@ namespace Threefold.WorldMagic
         private MaterialPropertyBlock block;
         private Color[] tintBase = new Color[0];
         private Color[] chargeBase = new Color[0];
-        private PropertyCondition lastMet;
+        private bool[] effectHeld = new bool[0];
         private MagicalObject subscribed;
         private Quaternion swayRest = Quaternion.identity;
         private bool swayRestKnown;
@@ -329,23 +329,25 @@ namespace Threefold.WorldMagic
                 }
             }
 
-            PropertyCondition met = PropertyCondition.None;
+            // Remembered per entry, not per condition: two entries may share a condition (a small burst
+            // on "fractured or destroyed", a large one on "destroyed"), and each plays when its own starts.
+            if (effectHeld.Length != effects.Length)
+            {
+                effectHeld = new bool[effects.Length];
+            }
+
             for (int i = 0; i < effects.Length; i++)
             {
                 ConditionEffect entry = effects[i];
-                if (entry == null || !properties.Meets(entry.onEnter))
-                {
-                    continue;
-                }
-
-                met |= entry.onEnter;
-                if (playEffects && entry.effect != null && (lastMet & entry.onEnter) != entry.onEnter)
+                bool holds = entry != null && properties.Meets(entry.onEnter);
+                if (holds && !effectHeld[i] && playEffects && entry.effect != null)
                 {
                     Pools.Spawn(entry.effect, source.AimPoint, Quaternion.identity, MaxEffects);
                 }
+
+                effectHeld[i] = holds;
             }
 
-            lastMet = met;
             ApplyColors(properties);
         }
 

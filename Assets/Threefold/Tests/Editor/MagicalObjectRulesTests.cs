@@ -387,5 +387,42 @@ namespace Threefold.Tests
             // Nothing to fill and nothing to break when the values are missing altogether.
             Assert.IsFalse(DisciplineDefaults.FillWorldEffects(MagicDiscipline.Flame, null, null, null));
         }
+
+        [Test]
+        public void SomethingFlammableWithNoTimeToBurnIsReported()
+        {
+            var settings = new MagicalPropertySettings
+            {
+                thermal = true,
+                thermalSettings = new HeatSettings { capacity = 50f, flammable = true, burnSeconds = 0f },
+            };
+
+            AssertOneProblem(settings, "thermal: it is flammable but its burn time is 0");
+            Assert.AreEqual(PropertyCondition.Heated, MagicalObjectRules.Reachable(settings), "It can be heated but never burns.");
+
+            // The rule matches what the object really does: at full heat it goes cold instead of burning.
+            var set = new MagicalPropertySet(settings);
+            set.Apply(MagicEffect.Of(MagicEffectKind.Heat, 500f, 1));
+            Assert.IsFalse(set.Meets(PropertyCondition.Burning));
+
+            // Fire as the only way to damage a structure is then no way at all.
+            settings.structural = true;
+            settings.structuralSettings = new StructuralSettings { forceDamage = 0f, burnDamagePerSecond = 10f };
+            List<string> problems = Problems(settings);
+            Assert.AreEqual(3, problems.Count, string.Join(" | ", problems));
+            StringAssert.StartsWith("structural: nothing can damage it", problems[1]);
+            StringAssert.StartsWith("structural: fire damage is set", problems[2]);
+        }
+
+        [Test]
+        public void SomethingThatCannotHeatReachesNoThermalState()
+        {
+            var settings = new MagicalPropertySettings
+            {
+                thermal = true, thermalSettings = new HeatSettings { susceptibility = 0f, flammable = true },
+            };
+
+            Assert.AreEqual(PropertyCondition.None, MagicalObjectRules.Reachable(settings));
+        }
     }
 }

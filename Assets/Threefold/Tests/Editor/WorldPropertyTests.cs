@@ -838,5 +838,159 @@ namespace Threefold.Tests
             set.Apply(Force(2f, Vector3.forward));
             CollectionAssert.AreEqual(new[] { "Structural:0>2", "Stability:1>3" }, transitions);
         }
+
+        // ------------------------------------------- sliding under other states
+
+        /// <summary>Something that slides freely along one axis and stands only just.</summary>
+        private static MagicalPropertySettings SlidingAndUnstable(float stressLimit = 0f)
+        {
+            return new MagicalPropertySettings
+            {
+                kinetic = true,
+                kineticSettings = new KineticSettings
+                {
+                    resistance = 0f, minimumForce = 0f, mode = KineticMode.Axis, localAxis = Vector3.forward,
+                    minTravel = 0f, maxTravel = 10f, maxStepPerPush = 10f, moveSpeed = 4f,
+                },
+                stability = true,
+                stabilitySettings = new StabilitySettings
+                {
+                    startsUnstable = true, collapseForce = 3f, stressLimit = stressLimit,
+                    unstableWhenStructure = StructuralTrigger.Never, collapseWhenStructure = StructuralTrigger.Never,
+                    braceThreshold = 0.5f, braceSeconds = 2f, maxBraceSeconds = 6f,
+                },
+            };
+        }
+
+        [Test]
+        public void AForceThatBringsAnObjectDownDoesNotAlsoSlideIt()
+        {
+            MagicalPropertySet set = Create(SlidingAndUnstable());
+            set.KineticAxis = Vector3.forward;
+
+            Assert.AreEqual(EffectResponse.Applied, set.Apply(Force(4f, Vector3.forward)));
+
+            Assert.AreEqual(StabilityState.Collapsed, set.Stability.State);
+            Assert.AreEqual(Vector3.zero, set.Kinetic.TargetOffset, "The blow that topples it does not push it.");
+            Assert.AreEqual(KineticState.Resting, set.Kinetic.State);
+            Assert.IsFalse(set.Meets(PropertyCondition.Moving));
+            Assert.IsTrue(set.IsAtRest, "Nothing is left changing, so the object can sleep.");
+            CollectionAssert.AreEqual(new[] { "Stability:1>3" }, transitions);
+        }
+
+        [Test]
+        public void ACollapseStopsAGlideThatIsUnderWay()
+        {
+            MagicalPropertySet set = Create(SlidingAndUnstable(3.5f));
+            set.KineticAxis = Vector3.forward;
+
+            set.Apply(Force(2f, Vector3.forward, 1));
+            Run(set, 0.2f);
+            Assert.AreEqual(KineticState.Moving, set.Kinetic.State);
+            float reached = set.Kinetic.Offset.z;
+
+            // The second push takes the stress over the limit: it brings the object down instead of moving it on.
+            set.Apply(Force(2f, Vector3.forward, 2));
+
+            Assert.AreEqual(StabilityState.Collapsed, set.Stability.State);
+            Assert.AreEqual(KineticState.Resting, set.Kinetic.State);
+            Assert.IsTrue(set.IsAtRest);
+
+            Run(set, 2f);
+            Assert.AreEqual(reached, set.Kinetic.Offset.z, 0.0001f, "It lies where it fell.");
+        }
+
+        [Test]
+        public void ABraceStopsAGlideThatIsUnderWay()
+        {
+            MagicalPropertySet set = Create(SlidingAndUnstable());
+            set.KineticAxis = Vector3.forward;
+
+            set.Apply(Force(2f, Vector3.forward, 1));
+            Run(set, 0.2f);
+            float reached = set.Kinetic.Offset.z;
+            Assert.Greater(reached, 0f);
+            Assert.Less(reached, 2f);
+
+            Assert.AreEqual(EffectResponse.Applied, set.Apply(Brace(1f, 1.5f, 2)));
+
+            Assert.AreEqual(StabilityState.Braced, set.Stability.State);
+            Assert.AreEqual(KineticState.Resting, set.Kinetic.State, "A braced object holds its place at once.");
+            CollectionAssert.Contains(transitions, "Kinetic:1>0");
+
+            Run(set, 1f);
+            Assert.AreEqual(reached, set.Kinetic.Offset.z, 0.0001f);
+
+            // When the brace has run out it stays where it was stopped; the old glide does not resume.
+            Run(set, 2f);
+            Assert.AreEqual(StabilityState.Unstable, set.Stability.State);
+            Assert.AreEqual(reached, set.Kinetic.Offset.z, 0.0001f);
+        }
+
+        [Test]
+        public void AForceThatDestroysAnObjectDoesNotSlideIt()
+        {
+            MagicalPropertySettings settings = Platform();
+            settings.structural = true;
+            settings.structuralSettings = new StructuralSettings { integrity = 50f, forceThreshold = 0f, forceDamage = 100f };
+            MagicalPropertySet set = Create(settings);
+            set.KineticAxis = Vector3.forward;
+
+            Assert.AreEqual(EffectResponse.Applied, set.Apply(Force(5f, Vector3.forward)));
+
+            Assert.IsTrue(set.IsDestroyed);
+            Assert.AreEqual(Vector3.zero, set.Kinetic.TargetOffset);
+            Assert.IsFalse(set.Meets(PropertyCondition.Moving), "What is destroyed is not left 'moving'.");
+            Assert.IsTrue(set.IsAtRest);
+        }
+
+        [Test]
+        public void APushThatIsBlockedOutrightChangesNothingAndAnnouncesNothing()
+        {
+            MagicalPropertySet set = Create(Platform());
+            set.KineticAxis = Vector3.forward;
+            set.GlideLimit = (from, to) => 0f;
+
+            Assert.AreEqual(EffectResponse.Resisted, set.Apply(Force(5f, Vector3.forward)));
+
+            Assert.AreEqual(KineticState.Resting, set.Kinetic.State);
+            Assert.AreEqual(Vector3.zero, set.Kinetic.TargetOffset);
+            Assert.IsEmpty(transitions, "Nothing moved, so nothing is announced.");
+            Assert.IsTrue(set.IsAtRest);
+        }
+
+        [Test]
+        public void APushStopsWhereTheWayIsBlocked()
+        {
+            MagicalPropertySet set = Create(Platform());
+            set.KineticAxis = Vector3.forward;
+
+            Vector3 askedFrom = Vector3.one;
+            Vector3 askedTo = Vector3.one;
+            int asked = 0;
+            set.GlideLimit = (from, to) =>
+            {
+                asked++;
+                askedFrom = from;
+                askedTo = to;
+                return 1.5f;
+            };
+
+            Assert.AreEqual(EffectResponse.Applied, set.Apply(Force(5f, Vector3.forward)));
+
+            Assert.AreEqual(1, asked, "The way is checked once per push.");
+            Assert.AreEqual(Vector3.zero, askedFrom);
+            Assert.AreEqual(4f, askedTo.z, 0.0001f, "It is asked about the glide the push wanted.");
+            Assert.AreEqual(1.5f, set.Kinetic.TargetOffset.z, 0.0001f);
+            CollectionAssert.AreEqual(new[] { "Kinetic:0>1" }, transitions);
+
+            Run(set, 3f);
+            Assert.AreEqual(1.5f, set.Kinetic.Offset.z, 0.0001f);
+            Assert.AreEqual(KineticState.Resting, set.Kinetic.State);
+
+            // A force too weak to move it does not ask at all.
+            set.Apply(Force(0.5f, Vector3.forward));
+            Assert.AreEqual(1, asked);
+        }
     }
 }

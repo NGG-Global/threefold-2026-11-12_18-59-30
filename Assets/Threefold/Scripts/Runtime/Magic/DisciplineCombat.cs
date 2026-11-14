@@ -169,7 +169,7 @@ namespace Threefold.Magic
         /// <summary>A charge could not begin, with the reason.</summary>
         public event Action<DisciplineDefinition, CastResult> ChargeRefused;
 
-        /// <summary>The guard sent its effect out, with the number of objects it reached.</summary>
+        /// <summary>The guard sent its effect out, with the number of objects it braced.</summary>
         public event Action<DisciplineDefinition, int> GuardPulsed;
 
         /// <summary>The rules and their state: combo step, charge time, movement limits.</summary>
@@ -502,8 +502,8 @@ namespace Threefold.Magic
                 CoverCheckHeight = 1f,
             };
 
-            AreaStrike.Resolve(request, null);
-            GuardPulsed?.Invoke(definition, AreaStrike.LastObjectCount);
+            AreaStrike.Resolve(request, null, out int braced);
+            GuardPulsed?.Invoke(definition, braced);
         }
 
         /// <summary>The camera's heading, or the character's own without a camera.</summary>

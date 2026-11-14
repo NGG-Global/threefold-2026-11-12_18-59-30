@@ -77,14 +77,24 @@ namespace Threefold.Combat
         private static readonly Vector3[][] HitObjectPoints = CreateBuffers<Vector3>(MaxObjects);
         private static int nesting;
 
-        /// <summary>How many objects (not creatures) the most recent strike delivered effects to. For feedback and tests.</summary>
-        public static int LastObjectCount { get; private set; }
-
         /// <summary>Carries out the attack.</summary>
         /// <param name="struck">Optional. Receives the creatures that were hit, nearest first.</param>
         /// <returns>How many creatures were hit.</returns>
         public static int Resolve(in AreaStrikeRequest request, List<Health> struck)
         {
+            return Resolve(request, struck, out _);
+        }
+
+        /// <summary>Carries out the attack.</summary>
+        /// <param name="struck">Optional. Receives the creatures that were hit, nearest first.</param>
+        /// <param name="objectsAffected">
+        /// How many objects (not creatures) had a property changed by the attack's effects. One that was
+        /// reached but resisted, or has no matching property, is not counted.
+        /// </param>
+        /// <returns>How many creatures were hit.</returns>
+        public static int Resolve(in AreaStrikeRequest request, List<Health> struck, out int objectsAffected)
+        {
+            objectsAffected = 0;
             struck?.Clear();
 
             GameObject user = request.User;
@@ -204,7 +214,6 @@ namespace Threefold.Combat
             }
 
             int eventId = carriesEffects ? MagicEffectEvents.NextId() : 0;
-            LastObjectCount = objectCount;
 
             nesting++;
             try
@@ -246,7 +255,10 @@ namespace Threefold.Combat
                     }
 
                     Vector3 direction = FlatDirection(origin, objectPoints[i], shape.Forward);
-                    Deliver(receiver, request.Effects, direction, objectPoints[i], user, request.Discipline, eventId);
+                    if (Deliver(receiver, request.Effects, direction, objectPoints[i], user, request.Discipline, eventId))
+                    {
+                        objectsAffected++;
+                    }
                 }
             }
             finally
@@ -261,39 +273,43 @@ namespace Threefold.Combat
         /// Hands a payload to one receiver as separate effects, in a fixed order, all with the same
         /// event identity. Also used by projectiles, so every attack delivers effects the same way.
         /// </summary>
-        public static void Deliver(IMagicEffectReceiver receiver, in EffectPayload payload, Vector3 direction, Vector3 point,
+        /// <returns>True if at least one of the effects changed something on the receiver.</returns>
+        public static bool Deliver(IMagicEffectReceiver receiver, in EffectPayload payload, Vector3 direction, Vector3 point,
             GameObject source, int discipline, int eventId)
         {
             if (receiver == null)
             {
-                return;
+                return false;
             }
 
             EffectTargets targets = payload.targets == EffectTargets.None ? EffectTargets.All : payload.targets;
+            bool applied = false;
 
             if (payload.heat > 0f)
             {
-                receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.Heat, payload.heat, direction, 0f, point, source,
-                    discipline, targets, eventId));
+                applied |= receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.Heat, payload.heat, direction, 0f, point,
+                    source, discipline, targets, eventId)) == EffectResponse.Applied;
             }
 
             if (payload.arcaneCharge > 0f)
             {
-                receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.ArcaneCharge, payload.arcaneCharge, direction, 0f,
-                    point, source, discipline, targets, eventId));
+                applied |= receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.ArcaneCharge, payload.arcaneCharge,
+                    direction, 0f, point, source, discipline, targets, eventId)) == EffectResponse.Applied;
             }
 
             if (payload.force > 0f)
             {
-                receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.Force, payload.force, direction, 0f, point, source,
-                    discipline, targets, eventId));
+                applied |= receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.Force, payload.force, direction, 0f, point,
+                    source, discipline, targets, eventId)) == EffectResponse.Applied;
             }
 
             if (payload.stabilize > 0f)
             {
-                receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.Stabilize, payload.stabilize, direction,
-                    payload.stabilizeSeconds, point, source, discipline, targets, eventId));
+                applied |= receiver.ReceiveEffect(new MagicEffect(MagicEffectKind.Stabilize, payload.stabilize, direction,
+                    payload.stabilizeSeconds, point, source, discipline, targets, eventId)) == EffectResponse.Applied;
             }
+
+            return applied;
         }
 
         /// <summary>
@@ -400,7 +416,6 @@ namespace Threefold.Combat
         private static void ResetStatics()
         {
             nesting = 0;
-            LastObjectCount = 0;
         }
 
         private static T[][] CreateBuffers<T>(int size)

@@ -34,6 +34,8 @@ namespace Threefold.Puzzles
 
         private readonly EffectEventLog effectLog = new EffectEventLog();
         private SpellResponse lastResponse;
+        private int answeredEventId;
+        private int refusedEventId;
 
         public SpellElement AcceptedElements
         {
@@ -83,23 +85,27 @@ namespace Threefold.Puzzles
                 return EffectResponse.NoProperty;
             }
 
-            if (effectLog.CheckAndRecord(effect.EventId, effect.Kind))
+            // One attack is one spell: a swing that carries two kinds of effect must not switch a
+            // toggle on and off again, or be refused twice.
+            bool accepted = SpellElements.Matches(acceptedElements, element);
+            if (SpellActivatorRules.PassesOver(effect.EventId, answeredEventId, refusedEventId, accepted) ||
+                effectLog.CheckAndRecord(effect.EventId, effect.Kind))
             {
                 return EffectResponse.Duplicate;
             }
 
             ReceiveSpell(new SpellImpact(element, effect.Point, effect.Direction, effect.Source));
 
-            switch (lastResponse)
+            if (lastResponse == SpellResponse.RejectedElement)
             {
-                case SpellResponse.Activated:
-                case SpellResponse.Deactivated:
-                    return EffectResponse.Applied;
-                case SpellResponse.RejectedElement:
-                    return EffectResponse.NoProperty;
-                default:
-                    return EffectResponse.Resisted;
+                refusedEventId = effect.EventId;
+                return EffectResponse.NoProperty;
             }
+
+            answeredEventId = effect.EventId;
+            return lastResponse == SpellResponse.Activated || lastResponse == SpellResponse.Deactivated
+                ? EffectResponse.Applied
+                : EffectResponse.Resisted;
         }
 
         /// <summary>The kind of magic an effect stands for. Bracing is not a spell an activator answers.</summary>
