@@ -188,7 +188,8 @@ namespace Threefold.WorldMagic
                           $"{budgets.maxDepth} (World Simulation Budgets)";
                     break;
                 case EnqueueResult.Duplicate:
-                    why = "the target had already taken this kind of effect from the same event by another path";
+                    why = "the target takes each kind of effect once per event, and this one has already reached it, " +
+                          "or is on its way, from the same event by another path";
                     break;
                 case EnqueueResult.InvalidTarget:
                     why = "the target was destroyed, unloaded or switched off before it arrived";

@@ -162,12 +162,7 @@ namespace Threefold.WorldMagic
                 return Refuse(reaction, EnqueueResult.Duplicate);
             }
 
-            if (waiting >= 0)
-            {
-                // A more urgent copy of an effect that already waits: the waiting one gives way.
-                RemoveWaiting(target, effect.Kind, effect.EventId, priority);
-            }
-
+            // Room is checked before a waiting copy gives way, so a full queue never costs both copies.
             Queue<QueuedReaction> queue = QueueFor(priority);
             if (priority == ReactionPriority.Critical)
             {
@@ -181,6 +176,12 @@ namespace Threefold.WorldMagic
             {
                 statistics.Dropped++;
                 return Refuse(reaction, EnqueueResult.QueueFull);
+            }
+
+            if (waiting >= 0)
+            {
+                // A more urgent copy of an effect that already waits: the waiting one gives way.
+                RemoveWaiting(target, effect.Kind, effect.EventId, priority);
             }
 
             nextSequence++;
@@ -385,15 +386,28 @@ namespace Threefold.WorldMagic
             }
         }
 
-        /// <summary>Reports what was taken out, once the queues are whole again, so a listener may safely offer more.</summary>
+        /// <summary>
+        /// Reports what was taken out, once the queues are whole again. The list is copied first, so a
+        /// listener may offer or cancel more without disturbing the report in progress.
+        /// </summary>
         private void ReportGivenUp(EnqueueResult reason)
         {
-            for (int i = 0; i < givenUp.Count; i++)
+            if (givenUp.Count == 0)
             {
-                Refused?.Invoke(givenUp[i], reason);
+                return;
             }
 
+            QueuedReaction[] batch = givenUp.ToArray();
             givenUp.Clear();
+            if (Refused == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < batch.Length; i++)
+            {
+                Refused(batch[i], reason);
+            }
         }
 
         private static bool IsWaitingIn(Queue<QueuedReaction> queue, IMagicEffectReceiver target, MagicEffectKind kind, int eventId)

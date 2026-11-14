@@ -383,6 +383,13 @@ namespace Threefold.Persistence
                 report.UsedBackup = true;
                 problem = "The saved world state was damaged; part of the previous save was used.";
             }
+            else if (pending.Read.Ok)
+            {
+                // A first save that was cut short: what of it could be read is better than nothing.
+                used = pending;
+                report.UsedPendingSave = true;
+                problem = "The last save was interrupted; the part of it that was written has been used.";
+            }
 
             if (used != null)
             {
@@ -398,14 +405,10 @@ namespace Threefold.Persistence
             }
 
             // What this version could not use in full is kept aside, never overwritten by the next save.
-            // A pending save that is ours but cut short is only an interrupted write and is simply replaced.
+            // The pending file is only ever this game's own unfinished write, and the next save replaces it.
             string blocked = string.Empty;
             SetAsideIfUnsound(main, ref report, ref blocked);
             SetAsideIfUnsound(backup, ref report, ref blocked);
-            if (pending.Exists && !pending.Sound && !pending.Read.Ok)
-            {
-                SetAsideIfUnsound(pending, ref report, ref blocked);
-            }
 
             if (report.SetAside > 0)
             {
@@ -415,8 +418,9 @@ namespace Threefold.Persistence
 
             if (report.SaveBlocked)
             {
-                problem = Join(problem, $"'{blocked}' could not be used and could not be set aside, so nothing will be " +
-                                        "saved in this session, to keep it from being overwritten.");
+                problem = Join(problem, $"'{blocked}' could not be read or could not be set aside, so nothing will be " +
+                                        "saved in this session, to keep it from being overwritten. It is tried again " +
+                                        "the next time the game starts.");
             }
 
             report.Problem = problem;
@@ -470,6 +474,15 @@ namespace Threefold.Persistence
         {
             if (!file.Exists || file.Sound)
             {
+                return;
+            }
+
+            // It could not be read at all (locked, a storage error): it may well be sound. It is left
+            // where it is, and nothing is saved over it in this session.
+            if (!string.IsNullOrEmpty(file.Problem))
+            {
+                report.SaveBlocked = true;
+                blocked = file.Path;
                 return;
             }
 

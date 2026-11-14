@@ -381,6 +381,59 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void AFullQueueNeverCostsBothCopiesOfAnEffect()
+        {
+            var journal = new List<string>();
+            var door = new Recorder("door", journal);
+            var filler = new Recorder("filler", journal);
+            var scheduler = new ReactionScheduler(new ReactionBudgets { queueCapacity = 4 });
+
+            Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(door, Queued(7), ReactionPriority.Low));
+            for (int i = 0; i < 4; i++)
+            {
+                scheduler.Enqueue(filler, Queued(100 + i), ReactionPriority.Normal);
+            }
+
+            // A more urgent copy finds its queue full: it is refused, and the waiting copy stays.
+            Assert.AreEqual(EnqueueResult.QueueFull, scheduler.Enqueue(door, Queued(7), ReactionPriority.Normal));
+            scheduler.Process(100);
+            CollectionAssert.Contains(journal, "door:7", "Before, both copies were lost.");
+        }
+
+        [Test]
+        public void AListenerMayOfferMoreWhileReactionsAreReported()
+        {
+            var journal = new List<string>();
+            var leaving = new Recorder("leaving", journal);
+            var other = new Recorder("other", journal);
+            var reported = new List<int>();
+            var scheduler = new ReactionScheduler();
+            bool acted = false;
+            scheduler.Refused += (reaction, reason) =>
+            {
+                reported.Add(reaction.Effect.EventId);
+                if (acted)
+                {
+                    return;
+                }
+
+                // In the middle of a report, a listener offers a more urgent copy (which makes the waiting
+                // one give way, itself a report) and cancels elsewhere (another report).
+                acted = true;
+                scheduler.Enqueue(other, Queued(50), ReactionPriority.Critical);
+                scheduler.Cancel(other);
+            };
+
+            scheduler.Enqueue(other, Queued(50), ReactionPriority.Low);
+            scheduler.Enqueue(leaving, Queued(1), ReactionPriority.Normal);
+            scheduler.Enqueue(leaving, Queued(2), ReactionPriority.Normal);
+            scheduler.Enqueue(leaving, Queued(3), ReactionPriority.Critical);
+
+            Assert.AreEqual(3, scheduler.Cancel(leaving));
+            CollectionAssert.IsSubsetOf(new[] { 3, 1, 2 }, reported, "Every reaction given up is reported, whatever the listener does.");
+        }
+
+        [Test]
         public void EveryReactionThatIsGivenUpIsReported()
         {
             var journal = new List<string>();

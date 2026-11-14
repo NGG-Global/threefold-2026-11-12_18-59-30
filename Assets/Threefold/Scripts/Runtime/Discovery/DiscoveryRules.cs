@@ -402,11 +402,6 @@ namespace Threefold.Discovery
     }
 
     /// <summary>
-    /// Level 2: how strongly an object answers the mere presence of a matching discipline. Resonance
-    /// says "this might work", never "this will work": it depends on kind, not on strength, and it
-    /// is zero for an object nothing offered could change. Plain C#.
-    /// </summary>
-    /// <summary>
     /// The idle clue an object starts with when nobody has chosen one: a faint pulse in a pale arcane
     /// tint only for what takes arcane charge, a mere trace of a neutral tint for an object whose clue
     /// is a built feature (wood, vents, a rail, cracks), and nothing for an object with no clue. A
@@ -439,6 +434,11 @@ namespace Threefold.Discovery
         }
     }
 
+    /// <summary>
+    /// Level 2: how strongly an object answers the mere presence of a matching discipline. Resonance
+    /// says "this might work", never "this will work": it depends on kind, not on strength, and it
+    /// is zero for an object nothing offered could change. Plain C#.
+    /// </summary>
     public static class ResonanceRules
     {
         /// <param name="compatible">Whether any effect of the selected discipline could change the object now.</param>

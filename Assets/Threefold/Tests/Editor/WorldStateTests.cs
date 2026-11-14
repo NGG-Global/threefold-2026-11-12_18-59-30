@@ -417,15 +417,55 @@ namespace Threefold.Tests
             WorldStateLoadReport report = WorldState.Load();
             Assert.IsTrue(report.Loaded && report.UsedBackup);
             Assert.AreEqual(1, report.SetAside);
-            Assert.IsTrue(WorldState.IsDirty, "What was loaded is written soon as a sound main file.");
+            Assert.IsFalse(WorldState.IsDirty, "What was loaded was written at once as a sound main file.");
+            Assert.AreEqual(WorldStateText.Write(first), File.ReadAllText(SavePath));
 
+            WorldState.Current.SetObject("range/stone", Destroyed());
             Assert.IsTrue(WorldState.Save());
 
-            // Before, this save moved the damaged file into the backup's place and deleted the good backup.
+            // Before, a save moved the damaged file into the backup's place and deleted the good backup.
             Assert.AreEqual(WorldStateText.Write(first), File.ReadAllText(SavePath + WorldStateFile.BackupSuffix),
                 "The good backup is still the backup.");
             Assert.IsTrue(File.Exists(SavePath + WorldStateFile.UnreadableSuffix));
             Assert.IsFalse(WorldState.IsDirty);
+        }
+
+        [Test]
+        public void WhatCouldBeReadOfADamagedSaveIsStillThereIfTheGameEndsBeforeTheNextChange()
+        {
+            Assert.IsTrue(WorldStateFile.TrySave(SavePath, SampleStore(), out _));
+            string text = File.ReadAllText(SavePath);
+            File.WriteAllText(SavePath, text.Substring(0, text.LastIndexOf("END", StringComparison.Ordinal)));
+
+            WorldState.FilePath = SavePath;
+            WorldStateLoadReport report = WorldState.Load();
+            Assert.IsTrue(report.Loaded);
+            int records = WorldState.Current.Count;
+            Assert.Greater(records, 0);
+
+            // The game ends now, with nothing changed. The next start must find what was read, not nothing:
+            // the damaged file was set aside, so a sound one was written in its place at once.
+            var next = new WorldStateStore();
+            WorldStateLoadReport again = WorldStateFile.Load(SavePath, next);
+            Assert.IsTrue(again.Loaded);
+            Assert.IsFalse(again.UsedBackup || again.UsedPendingSave || again.NeedsSave, "A sound main file.");
+            Assert.AreEqual(records, next.Count);
+        }
+
+        [Test]
+        public void AnUnfinishedTemporaryFileIsNeverSetAsideOrInTheWay()
+        {
+            Assert.IsTrue(WorldStateFile.TrySave(SavePath, SampleStore(), out _));
+            File.WriteAllText(SavePath + WorldStateFile.TempSuffix, string.Empty);
+
+            var loaded = new WorldStateStore();
+            WorldStateLoadReport report = WorldStateFile.Load(SavePath, loaded);
+
+            Assert.IsTrue(report.Loaded);
+            Assert.IsFalse(report.UsedPendingSave);
+            Assert.AreEqual(0, report.SetAside);
+            Assert.IsFalse(report.SaveBlocked, "The next save simply writes over it.");
+            Assert.IsTrue(WorldStateFile.TrySave(SavePath, loaded, out string problem), problem);
         }
 
         [Test]

@@ -142,8 +142,12 @@ backup. Loading is cautious:
   the next two saves rotated such a file into the backup's place and then deleted it, so a refused
   save from a newer version was lost. If a file can be neither used nor set aside, nothing is
   saved in that session, to keep it from being overwritten.
+- A file that cannot be read at all at that moment (locked, a storage error) may well be sound.
+  It is left where it is, and nothing is saved over it in that session; it is tried again at the
+  next start.
 - What was loaded from anything but a sound main file (the backup, an interrupted save, part of a
-  damaged file) is written again as a sound main file a few seconds later.
+  damaged file) is written again at once as a sound main file, so it is there at the next start
+  even if the game ends before anything changes.
 
 ### Restart, checkpoint, new game
 
@@ -373,9 +377,9 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `WorldStateTests` (30) | The store and its revision; snapshots; the text format written and read back, in a fixed order, with awkward ids; refusal of foreign and newer files; damaged and cut-off text; the file with its backup; repeated saving and loading; restart, checkpoint and new game; objects asked for their present state before a save, a restart and a checkpoint; duplicate ids; an id freed when its owner is gone; an interrupted save used; a file from a newer version and a damaged file set aside and never overwritten; saving stopped when a file can be neither used nor set aside |
+| `WorldStateTests` (32) | The store and its revision; snapshots; the text format written and read back, in a fixed order, with awkward ids; refusal of foreign and newer files; damaged and cut-off text; the file with its backup; repeated saving and loading; restart, checkpoint and new game; objects asked for their present state before a save, a restart and a checkpoint; duplicate ids; an id freed when its owner is gone; an interrupted save used; a file from a newer version and a damaged file set aside and never overwritten; what could be read of a damaged save still there at the next start; an unfinished temporary file never in the way; saving stopped when a file can be neither used nor set aside |
 | `MagicalPersistenceTests` (34) | Each persistent part restored, on each example; temporary state reset; the heat and charge exceptions; loading again and again; loading is silent; records that do not fit; rules between properties after a load; tiers; the three stacking policies; a breakable brace; clean-up on destruction; clearing temporary state; catching up; reaction rules firing once per entry and at their interval; reaction depth; a latch through a restart and through a replaced state; the update of an older definition keeping what was set by hand; the burn policy on a creature; heat and charge exceptions kept when temporary state is cleared or time is made up |
-| `ChainReactionTests` (28) | The queue: order, budget per frame, priorities, overflow, critical never refused, depth limit, duplicates, a more urgent copy taking the place of a waiting one, every reaction given up reported, a critical reaction turned away by its target reported, targets that are gone, cancelling, no nesting. The simulated set: budget, waiting, critical, order, leaving during a step. Whole chains with the examples: a fire along a row to the depth limit, a row of structures toppling, no way back, two paths acting once, a crystal feeding a linked lock, destruction in the middle of a chain, forty simultaneous critical reactions, low priority giving way, and a chain saved half-way and loaded |
+| `ChainReactionTests` (30) | The queue: order, budget per frame, priorities, overflow, critical never refused, depth limit, duplicates, a more urgent copy taking the place of a waiting one, a full queue never costing both copies, every reaction given up reported even while a listener offers more, a critical reaction turned away by its target reported, targets that are gone, cancelling, no nesting. The simulated set: budget, waiting, critical, order, leaving during a step. Whole chains with the examples: a fire along a row to the depth limit, a row of structures toppling, no way back, two paths acting once, a crystal feeding a linked lock, destruction in the middle of a chain, forty simultaneous critical reactions, low priority giving way, and a chain saved half-way and loaded |
 | `WorldStateSetupTests` (5) | Needs Unity: the range's ids, chain row and link; duplicate ids reported; assigning ids; the update of an older definition; an id with nothing to save and a broken link |
 
 The chain tests use a small stand-in world that does what the component does in a scene (finds
@@ -414,3 +418,5 @@ Editor menu commands.
   with scenery on the reaction layers, some objects within reach may not be seen.
 - Two scenes that share a name produce the same ids for objects that share a name. The validation
   checks one scene at a time.
+- Files set aside as unreadable are not cleared by the game or by New Game. If twenty of them have
+  piled up beside the save, the next file that cannot be used stops saving for that session.

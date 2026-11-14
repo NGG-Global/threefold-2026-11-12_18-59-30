@@ -330,7 +330,8 @@ namespace Threefold.WorldMagic
                 if (burningTimer <= 0f)
                 {
                     burningTimer = burningEffectSeconds;
-                    Pools.Spawn(burningEffect, source.AimPoint, Quaternion.identity, MaxEffects);
+                    // The same pool may hold instances a state burst limited; the embers play in full.
+                    BurstParticleShare.Apply(Pools.Spawn(burningEffect, source.AimPoint, Quaternion.identity, MaxEffects), 1f);
                 }
 
                 busy = true;

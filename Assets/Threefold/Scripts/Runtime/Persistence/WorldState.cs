@@ -157,9 +157,14 @@ namespace Threefold.Persistence
             {
                 savedRevision = Current.Revision;
 
-                // Taken from a backup, a pending save or part of a damaged file: written soon as a sound main file.
+                // Taken from a backup, a pending save or part of a damaged file: written at once as a sound
+                // main file, because a damaged one may just have been set aside. If that fails, the saver retries.
                 writeSoon = LastLoad.NeedsSave;
                 Reloaded?.Invoke(WorldReload.StateReplaced);
+                if (writeSoon)
+                {
+                    Save();
+                }
             }
 
             return LastLoad;
