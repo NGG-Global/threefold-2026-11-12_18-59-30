@@ -55,6 +55,8 @@ Unity's own test run they are inconclusive, because Unity's Mono does not count 
 
 | 7 | `076d823` (the fixes for run 6), tests only | **EditMode: 878 tests, 873 passed, 0 failed, 5 inconclusive** (the allocation tests). The run was marked failed only because Unity returns exit code 2 when a test is inconclusive and the script treated that as a failure; the script now decides from the count of failed tests and still fails on a crash or an incomplete run |
 
+| 8 | `be1b39d` (LM-08 branch head), tests only | **Green.** EditMode: 878 tests, **873 passed, 0 failed**, 5 inconclusive (the five allocation tests, listed by name). 13 minutes |
+
 Later runs are recorded below as they complete.
 
 ### Unity: EditMode tests (run 6, the first time they ran in Unity)

@@ -31,7 +31,7 @@ Unity Editor, Windows tooling or a physical Android device.
 | Scene setup by Editor command (`Threefold > Setup > Mage Prototype`) | Written in pull request #2; not yet run in Unity |
 | Compile check without Unity (`Tools/ci/compile_check.sh`) | Working when run by Claude Code: all assemblies compile against Unity 6000.6.0f1 |
 | Repository checks without Unity (`Tools/ci/check_unity_repo.py`) | Working when run by Claude Code; runs in CI after `CI_ENABLED` is set |
-| Unity compile check and Edit Mode tests in CI | GitHub-hosted job (`ci.yml`): written, **never run**, needs a Unity licence secret. Since LM-08 the Edit Mode tests run in Unity on the laptop runner before the APK build; results in `Docs/LivingMagicTesting.md` |
+| Unity compile check and Edit Mode tests in CI | GitHub-hosted job (`ci.yml`): written, **never run**, needs a Unity licence secret. Since LM-08 the Edit Mode tests run in Unity on the laptop runner before the APK build (Android build run 8: 878 tests, 873 passed, 0 failed, 5 inconclusive); results in `Docs/LivingMagicTesting.md` |
 | Mobile controls LM-01: fixed joystick, camera drag, ATTACK (tap, charge, aim, cancel), BLOCK, JUMP, discipline selector, desktop equivalents | Written; input rules tested outside Unity (102 tests); layout checked on ten screen sizes; not yet compiled by Unity or run on a device. See `Docs/TouchControls.md` |
 | Mage combat (spell, health, mana, dummy, HUD, feedback) | Written; compiled by Unity on the laptop runner; not yet played |
 | Fantasy Playground environment (generated level, lighting, modules) | Written; compiled by Unity on the laptop runner; not yet seen |
