@@ -42,18 +42,32 @@ if not exist "%OUT%\editmode-results.xml" (
   exit /b 1
 )
 
-rem Summarise the NUnit results: totals, then the name and message of each failed test.
+rem Summarise the NUnit results: totals, each failed test with its message, and each inconclusive test
+rem (for example the allocation tests, which Unity's runtime cannot measure). The result decides from the
+rem count of failed tests: Unity also returns exit code 2 when a test is only inconclusive. PowerShell
+rem exits with 1 when a test failed or the results cannot be read.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$r = [xml](Get-Content -Raw '%OUT%\editmode-results.xml'); $t = $r.'test-run';" ^
   "Write-Output ('EditMode tests: {0} total, {1} passed, {2} failed, {3} inconclusive, {4} skipped' -f $t.total, $t.passed, $t.failed, $t.inconclusive, $t.skipped);" ^
-  "$r.SelectNodes('//test-case[@result=''Failed'']') | ForEach-Object { Write-Output ('FAILED ' + $_.fullname); Write-Output ('  ' + ($_.SelectSingleNode('failure/message').InnerText -replace '\s+', ' ')) }"
+  "$r.SelectNodes('//test-case[@result=''Failed'']') | ForEach-Object { Write-Output ('FAILED ' + $_.fullname); Write-Output ('  ' + ($_.SelectSingleNode('failure/message').InnerText -replace '\s+', ' ')) };" ^
+  "$r.SelectNodes('//test-case[@result=''Inconclusive'']') | ForEach-Object { Write-Output ('INCONCLUSIVE ' + $_.fullname) };" ^
+  "if ([int]$t.failed -gt 0 -or [int]$t.total -eq 0) { exit 1 } else { exit 0 }"
+set "TESTS_FAILED=%ERRORLEVEL%"
 
-if not "%UNITY_EXIT%"=="0" (
+if not "%TESTS_FAILED%"=="0" (
   echo.
   echo TESTS FAILED ^(Unity exit code %UNITY_EXIT%^). See build\tests\editmode-results.xml.
   exit /b 1
 )
 
+rem 0: all passed. 2: Unity's code for a run with failed or inconclusive tests; none failed, as checked above.
+rem Anything else means the run itself went wrong.
+if not "%UNITY_EXIT%"=="0" if not "%UNITY_EXIT%"=="2" (
+  echo.
+  echo TESTS DID NOT COMPLETE ^(Unity exit code %UNITY_EXIT%^). See build\tests\editmode-tests.log.
+  exit /b 1
+)
+
 echo.
-echo TESTS PASSED
+echo TESTS PASSED ^(no test failed; any inconclusive tests are listed above^)
 exit /b 0
