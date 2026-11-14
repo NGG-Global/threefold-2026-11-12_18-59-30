@@ -51,7 +51,21 @@ Unity's own test run they are inconclusive, because Unity's Mono does not count 
 
 | 5 | `b64de60` (LM-08 branch, with the fix) | **Succeeded** in 34 minutes on the runner (Unity's build step 26 minutes). The Broken Foundry, the Combat Arena and the Fantasy Playground were assembled and each passed validation (the foundry's level checks too); the charged abilities were regenerated with their scripts. 0 errors, 972 warnings (most from the Sentis package's shaders). APK artifact 55.4 MB (zip); Unity's report: 44.4 MB of user assets |
 
+| 6 | `27284d7` (LM-08 branch, after the review fixes) | APK **built** (artifact 54.2 MB zip, build step 48 minutes). **First EditMode test run in Unity**: 878 tests, 870 passed, **3 failed**, 5 inconclusive (see below). The run is marked failed because of the tests |
+
 Later runs are recorded below as they complete.
+
+### Unity: EditMode tests (run 6, the first time they ran in Unity)
+
+878 tests in 96 seconds: 870 passed, 3 failed, 5 inconclusive. The 5 inconclusive are the LM-08
+allocation tests: Unity's Mono does not count allocations, as expected. The 3 failures were all in
+tests that need Unity and had never run before; none was in game code:
+
+| Test | Cause | Fix |
+| --- | --- | --- |
+| `BrokenFoundryAssemblyTests.AssemblingTheFoundryTwiceGivesTheSameScene` ("A tuned value is kept: expected 7, was 25") | The test tuned the hazard without saving, and the setup opens the scene from disk. The setup itself keeps an existing hazard | The test saves the scene after tuning, as a person would |
+| `BrokenFoundryAssemblyTests.FoundryIsCompleteConnectedAndValid` ("Checkpoint 1: the Mage fits there") | The first checkpoint's respawn point is the level's start, where the Mage stands; the test counted the Mage's own collider. The other five checkpoints passed | The test ignores the Mage's colliders and names anything else in the way |
+| `MagicalObjectSetupTests.EveryExampleIsGeneratedCompleteAndValid` ("ArcaneCrystal: a reaction to linked targets only, but none listed") | The validator (LM-04) applied a rule for placed objects to the crystal's prefab template, whose links are given where it is placed | The rule skips prefab assets; a placed crystal without links is still reported (`AnIdentifierWithNothingToSaveAndABrokenLinkAreReported` covers it) |
 
 ### Not tested
 

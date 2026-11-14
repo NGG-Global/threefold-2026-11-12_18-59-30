@@ -241,8 +241,10 @@ namespace Threefold.EditorTools
                 {
                     usesLinks |= rule != null && rule.toLinkedTargets;
 
-                    // With a radius the reaction still reaches something; with links only, it needs them.
-                    if (rule != null && rule.toLinkedTargets && rule.radius <= 0f && magical.LinkedTargetCount == 0)
+                    // With a radius the reaction still reaches something; with links only, it needs them. A prefab asset
+                    // is a template: its links are given where it is placed, so only a placed object is held to this.
+                    if (rule != null && rule.toLinkedTargets && rule.radius <= 0f && magical.LinkedTargetCount == 0 &&
+                        !EditorUtility.IsPersistent(magical.gameObject))
                     {
                         problem($"The magical object '{name}' has a reaction that goes to its linked targets only, but none " +
                                 "are listed on the object. It reaches nothing.");

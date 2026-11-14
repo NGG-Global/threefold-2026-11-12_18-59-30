@@ -117,7 +117,8 @@ Things to know:
 1. Open the repository on GitHub and go to **Actions**.
 2. Choose **Android build** in the list on the left.
 3. Tap **Run workflow**, pick **self-hosted** (or **github-hosted** once licence secrets exist),
-   leave **Run the EditMode tests** ticked, and tap the green button.
+   leave **Run the EditMode tests** ticked, and tap the green button. Untick **Build the APK** to
+   run only the tests (about 15 minutes instead of about an hour).
 4. Open the run when it appears. When it has finished, scroll to **Artifacts**.
 5. Download `threefold-android-development-<number>`. It is a zip containing `Threefold.apk`.
    The test results are in `threefold-editmode-tests-<number>` (`editmode-results.xml`, NUnit format).

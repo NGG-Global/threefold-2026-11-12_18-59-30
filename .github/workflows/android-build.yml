@@ -33,6 +33,10 @@ on:
         description: Run the EditMode tests before building (self-hosted only)
         type: boolean
         default: true
+      build_apk:
+        description: Build the APK (self-hosted only; untick to run only the tests, about 15 minutes)
+        type: boolean
+        default: true
 
 # One Android build at a time for the whole repository. Starting a new one cancels the old one.
 concurrency:
@@ -171,13 +175,14 @@ jobs:
         run: call Tools\build\run-editmode-tests.cmd
 
       - name: Build development APK
+        if: inputs.build_apk
         shell: cmd
         env:
           UNITY_EDITOR: ${{ vars.UNITY_EDITOR_PATH }}
         run: call Tools\build\build-android.cmd
 
       - name: Upload APK
-        if: success()
+        if: success() && inputs.build_apk
         uses: actions/upload-artifact@v4
         with:
           name: threefold-android-development-${{ github.run_number }}
