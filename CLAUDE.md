@@ -83,6 +83,13 @@ separates approved decisions from proposals; do not present a proposal as decide
   arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change
   both together. Style rules (palette, textures, presets) stay in plain C# with no Unity engine
   calls, so they can be tested and previewed here (`Tools/visualstyle/render_previews.sh`).
+- The Broken Foundry (`Docs/BrokenFoundry.md`) is built only from `FoundryLayout`: change the numbers
+  there, never the generated scene, and keep `BrokenFoundryLayoutTests` passing (they check every climb,
+  jump and wall against `TraversalReach`). Its progression is mirrored in `FoundryRoutes`; a new lasting
+  change must keep the softlock test green. Checkpoints and remembered enemy defeats are puzzle records
+  in `WorldState.Current`, and everything the level saves starts with `FoundryLayout.KeyPrefix`, which
+  replaying the level forgets. Structures that stand again by themselves (`recoverSeconds`) never save
+  their collapse.
 - Project rendering settings (`Assets/Settings`, `ProjectSettings`) are not changed by tooling
   without showing the owner what was found and what would change.
 - No paid assets and no new packages without the owner's agreement.

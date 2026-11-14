@@ -76,6 +76,9 @@ namespace Threefold.EditorTools
             // Objects that respond to magic are checked wherever they are, with or without a Mage.
             MagicalObjectValidator.Validate(scene, Problem);
 
+            // So are a level's checkpoints, hazards and remembered enemy defeats.
+            LevelFlowValidator.Validate(scene, Problem);
+
             ThirdPersonMotor motor = FindInScene<ThirdPersonMotor>(scene);
             if (motor == null)
             {
@@ -200,14 +203,28 @@ namespace Threefold.EditorTools
             }
             else
             {
-                if (objective.TotalCount == 0) Problem("The objective has no targets, so it cannot be completed.");
+                if (objective.TotalCount == 0) Problem("The objective has no targets or goals, so it cannot be completed.");
                 foreach (Health target in objective.Targets)
                 {
                     if (target == null) Problem("The objective lists a target that no longer exists.");
                 }
+
+                foreach (Threefold.Puzzles.PuzzleElement goal in objective.Goals)
+                {
+                    if (goal == null) Problem("The objective lists a goal that no longer exists.");
+                }
             }
 
-            if (FindInScene<PrototypeSession>(scene) == null) Problem("There is no session, so the level cannot be restarted.");
+            PrototypeSession session = FindInScene<PrototypeSession>(scene);
+            if (session == null)
+            {
+                Problem("There is no session, so the level cannot be restarted.");
+            }
+            else if (objective != null && objective.Goals.Count > 0 && string.IsNullOrEmpty(session.ReplayScope))
+            {
+                Problem("The objective has goals but the session has no replay scope: once the goals are reached, a restart " +
+                        "would complete the level again at once.");
+            }
 
             ObjectiveHud objectiveHud = FindInScene<ObjectiveHud>(scene);
             if (objectiveHud == null)

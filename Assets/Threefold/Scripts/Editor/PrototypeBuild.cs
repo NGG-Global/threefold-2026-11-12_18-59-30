@@ -28,8 +28,10 @@ namespace Threefold.EditorTools
         private static StreamWriter logWriter;
 
         /// <summary>
-        /// Assembles the Fantasy Playground and the Combat Arena, validates both and builds a
-        /// development APK that starts in the playground; its south gate leads to the arena.
+        /// Assembles the Broken Foundry, the Combat Arena and the Fantasy Playground, validates them and
+        /// builds a development APK that starts in the playground; its south gate leads to the arena.
+        /// The foundry has no portal yet: in a development build the diagnostics (three-finger tap)
+        /// offer "Next scene".
         /// The output path is taken from the -customBuildPath argument when present. The Editor
         /// exits with code 0 on success and 1 on any failure.
         /// </summary>
@@ -41,7 +43,8 @@ namespace Threefold.EditorTools
             {
                 // The arena is assembled first: the playground is then the scene left open, and its
                 // portal to the arena already finds the arena in Build Settings.
-                if (!AssembleAndValidate(CombatArenaSetup.BuildForAutomation) ||
+                if (!AssembleAndValidate(BrokenFoundrySetup.BuildForAutomation) ||
+                    !AssembleAndValidate(CombatArenaSetup.BuildForAutomation) ||
                     !AssembleAndValidate(FantasyPlaygroundSetup.BuildForAutomation))
                 {
                     Exit(1);
@@ -59,7 +62,7 @@ namespace Threefold.EditorTools
 
                 var options = new BuildPlayerOptions
                 {
-                    scenes = new[] { FantasyPlaygroundSetup.ScenePath, CombatArenaSetup.ScenePath },
+                    scenes = new[] { FantasyPlaygroundSetup.ScenePath, CombatArenaSetup.ScenePath, BrokenFoundrySetup.ScenePath },
                     locationPathName = outputPath,
                     target = BuildTarget.Android,
                     targetGroup = BuildTargetGroup.Android,

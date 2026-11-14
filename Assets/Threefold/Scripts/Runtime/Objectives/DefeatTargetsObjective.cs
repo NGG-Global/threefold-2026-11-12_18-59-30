@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 using Threefold.Combat;
+using Threefold.Puzzles;
 using UnityEngine;
 
 namespace Threefold.Objectives
 {
     /// <summary>
-    /// An objective that is complete when every listed target has been defeated. It only watches
-    /// the targets' health, so it works for any character class and any kind of target.
+    /// An objective that is complete when every listed target has been defeated and every listed goal
+    /// is reached. It only watches the targets' health and the goals' state, so it works for any
+    /// character class and any kind of target. A goal is any puzzle element, such as the checkpoint at
+    /// a level's way out; it counts while it is active.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DefeatTargetsObjective : MonoBehaviour
@@ -17,6 +20,9 @@ namespace Threefold.Objectives
 
         [Tooltip("Everything that must be defeated.")]
         [SerializeField] private List<Health> targets = new List<Health>();
+
+        [Tooltip("Puzzle elements that must be active, such as the checkpoint at the way out of a level.")]
+        [SerializeField] private List<PuzzleElement> goals = new List<PuzzleElement>();
 
         private int defeatedCount;
         private bool complete;
@@ -33,7 +39,12 @@ namespace Threefold.Objectives
 
         public string Title => title;
         public IReadOnlyList<Health> Targets => targets;
-        public int TotalCount => targets.Count;
+        public IReadOnlyList<PuzzleElement> Goals => goals;
+
+        /// <summary>Targets and goals together.</summary>
+        public int TotalCount => targets.Count + goals.Count;
+
+        /// <summary>Targets defeated and goals reached.</summary>
         public int DefeatedCount => defeatedCount;
         public bool IsComplete => complete;
 
@@ -75,9 +86,38 @@ namespace Threefold.Objectives
             Refresh();
         }
 
+        /// <summary>Replaces the list of goals. Called by the setup tooling and by tests.</summary>
+        public void SetGoals(IEnumerable<PuzzleElement> newGoals)
+        {
+            bool listening = isActiveAndEnabled;
+            if (listening)
+            {
+                Unsubscribe();
+            }
+
+            goals.Clear();
+            if (newGoals != null)
+            {
+                foreach (PuzzleElement goal in newGoals)
+                {
+                    if (goal != null && !goals.Contains(goal))
+                    {
+                        goals.Add(goal);
+                    }
+                }
+            }
+
+            if (listening)
+            {
+                Subscribe();
+            }
+
+            Refresh();
+        }
+
         /// <summary>
-        /// Recounts the defeated targets and announces any change. Runs automatically whenever a
-        /// target is defeated; public so it can be called by tests.
+        /// Recounts the defeated targets and reached goals and announces any change. Runs automatically
+        /// whenever a target is defeated or a goal changes; public so it can be called by tests.
         /// </summary>
         public void Refresh()
         {
@@ -90,13 +130,22 @@ namespace Threefold.Objectives
                 }
             }
 
+            for (int i = 0; i < goals.Count; i++)
+            {
+                if (goals[i] != null && goals[i].IsActive)
+                {
+                    defeated++;
+                }
+            }
+
+            int total = TotalCount;
             if (defeated != defeatedCount)
             {
                 defeatedCount = defeated;
-                Progressed?.Invoke(defeatedCount, targets.Count);
+                Progressed?.Invoke(defeatedCount, total);
             }
 
-            if (!complete && targets.Count > 0 && defeatedCount >= targets.Count)
+            if (!complete && total > 0 && defeatedCount >= total)
             {
                 complete = true;
                 Completed?.Invoke();
@@ -144,6 +193,14 @@ namespace Threefold.Objectives
                     targets[i].Defeated += Refresh;
                 }
             }
+
+            for (int i = 0; i < goals.Count; i++)
+            {
+                if (goals[i] != null)
+                {
+                    goals[i].StateChanged += HandleGoalChanged;
+                }
+            }
         }
 
         private void Unsubscribe()
@@ -155,6 +212,19 @@ namespace Threefold.Objectives
                     targets[i].Defeated -= Refresh;
                 }
             }
+
+            for (int i = 0; i < goals.Count; i++)
+            {
+                if (goals[i] != null)
+                {
+                    goals[i].StateChanged -= HandleGoalChanged;
+                }
+            }
+        }
+
+        private void HandleGoalChanged(PuzzleElement goal)
+        {
+            Refresh();
         }
     }
 }

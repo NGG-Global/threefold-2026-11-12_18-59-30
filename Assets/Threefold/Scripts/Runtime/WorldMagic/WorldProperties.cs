@@ -751,6 +751,13 @@ namespace Threefold.WorldMagic
                  "0: weight does nothing.")]
         [Min(0f)]
         public float loadStressPerSecond;
+
+        [Header("Recovery")]
+        [Tooltip("Seconds after it came down before it stands again, counted only while nobody stands on it: a " +
+                 "gantry a hoist winds back up. 0: once down, it stays down until a restart or a load. A collapse " +
+                 "that recovers is temporary, so it is never saved and a reload stands the object up again.")]
+        [Min(0f)]
+        public float recoverSeconds;
     }
 
     /// <summary>
@@ -766,6 +773,7 @@ namespace Threefold.WorldMagic
         private bool collapsed;
         private bool collapsePending;
         private float braceRemaining;
+        private float recoverRemaining;
 
         public StabilityProperty(StabilitySettings settings)
         {
@@ -811,7 +819,16 @@ namespace Threefold.WorldMagic
         public bool IsStraining =>
             Occupants > 0 && settings.loadStressPerSecond > 0f && unstable && !collapsed && braceRemaining <= 0f;
 
-        public bool IsAtRest => collapsed || (braceRemaining <= 0f && Stress <= 0f && !IsStraining);
+        public bool IsAtRest => collapsed ? recoverRemaining <= 0f : braceRemaining <= 0f && Stress <= 0f && !IsStraining;
+
+        /// <summary>
+        /// True while the object is down but will stand again by itself (see <see cref="StabilitySettings.recoverSeconds"/>).
+        /// Such a collapse is temporary: it is not saved, and clearing temporary state ends it.
+        /// </summary>
+        public bool IsRecovering => collapsed && recoverRemaining > 0f;
+
+        /// <summary>Seconds until a recovering object stands again, counted while nobody stands on it. 0 when not recovering.</summary>
+        public float RecoverRemaining => collapsed ? recoverRemaining : 0f;
 
         /// <summary>
         /// Says how many creatures stand on the object. While it is unstable and not braced, each adds
@@ -889,7 +906,7 @@ namespace Threefold.WorldMagic
             if (magnitude + 0.0001f >= settings.collapseForce ||
                 (settings.stressLimit > 0f && Stress + 0.0001f >= settings.stressLimit))
             {
-                collapsed = true;
+                Collapse();
             }
 
             return true;
@@ -916,15 +933,31 @@ namespace Threefold.WorldMagic
                 }
                 else
                 {
-                    collapsed = true;
+                    Collapse();
                 }
             }
         }
 
         public void Tick(float deltaTime)
         {
-            if (collapsed || deltaTime <= 0f)
+            if (deltaTime <= 0f)
             {
+                return;
+            }
+
+            if (collapsed)
+            {
+                // A structure that recovers stands again once its time has passed, counted only while nobody
+                // stands on what is left of it, so it never rises under someone.
+                if (recoverRemaining > 0f && Occupants == 0)
+                {
+                    recoverRemaining = Mathf.Max(0f, recoverRemaining - deltaTime);
+                    if (recoverRemaining <= 0f)
+                    {
+                        StandAgain();
+                    }
+                }
+
                 return;
             }
 
@@ -946,7 +979,7 @@ namespace Threefold.WorldMagic
                 Stress += Occupants * settings.loadStressPerSecond * deltaTime;
                 if (settings.stressLimit > 0f && Stress + 0.0001f >= settings.stressLimit)
                 {
-                    collapsed = true;
+                    Collapse();
                 }
 
                 return;
@@ -964,17 +997,24 @@ namespace Threefold.WorldMagic
             collapsed = false;
             collapsePending = false;
             braceRemaining = 0f;
+            recoverRemaining = 0f;
             Stress = 0f;
         }
 
         /// <summary>
         /// Drops what is temporary: a brace and accumulated stress. A collapse that was only being held
-        /// off by the brace happens now; it was a consequence, not a temporary state.
+        /// off by the brace happens now; it was a consequence, not a temporary state. A collapse that
+        /// would recover by itself is temporary, so the object stands again at once.
         /// </summary>
         public void ClearTemporary()
         {
             if (collapsed)
             {
+                if (recoverRemaining > 0f)
+                {
+                    StandAgain();
+                }
+
                 return;
             }
 
@@ -982,12 +1022,22 @@ namespace Threefold.WorldMagic
             Stress = 0f;
         }
 
-        /// <summary>Marks the object as having come down, from a saved state.</summary>
+        /// <summary>
+        /// Keeps the object down for good: a recovery under way is given up. For an object whose structure was
+        /// destroyed, which can never stand again.
+        /// </summary>
+        public void StopRecovering()
+        {
+            recoverRemaining = 0f;
+        }
+
+        /// <summary>Marks the object as having come down, from a saved state. A saved collapse is meant to last, so it does not recover.</summary>
         public void SetCollapsed()
         {
             collapsed = true;
             collapsePending = false;
             braceRemaining = 0f;
+            recoverRemaining = 0f;
             Stress = 0f;
         }
 
@@ -997,8 +1047,25 @@ namespace Threefold.WorldMagic
             if (collapsePending)
             {
                 collapsePending = false;
-                collapsed = true;
+                Collapse();
             }
+        }
+
+        private void Collapse()
+        {
+            collapsed = true;
+            recoverRemaining = settings.recoverSeconds;
+        }
+
+        /// <summary>Stands up again as it started: unstable if it started so, no stress, no brace.</summary>
+        private void StandAgain()
+        {
+            collapsed = false;
+            collapsePending = false;
+            braceRemaining = 0f;
+            recoverRemaining = 0f;
+            Stress = 0f;
+            unstable = settings.startsUnstable;
         }
 
         private static bool Reached(StructuralTrigger trigger, StructuralState structure)

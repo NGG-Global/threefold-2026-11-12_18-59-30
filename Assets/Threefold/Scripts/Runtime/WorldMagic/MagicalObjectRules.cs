@@ -196,6 +196,18 @@ namespace Threefold.WorldMagic
                     {
                         problems.Add("stability: weight adds stress, but the stress limit is 0, so weight can never bring it down.");
                     }
+
+                    if (stability.recoverSeconds > 0f && settings.structural)
+                    {
+                        problems.Add("stability: it stands again by itself after coming down, but it also has a structure, which " +
+                                     "can be destroyed or bring it down again at once; recovery is for an object with stability alone.");
+                    }
+
+                    if (stability.recoverSeconds > 0f && (settings.persisted & PersistedState.Collapse) != 0)
+                    {
+                        problems.Add("stability: it stands again by itself after coming down, so its collapse is temporary; " +
+                                     "Collapse under Persisted is contradictory and is never saved.");
+                    }
                 }
             }
 
