@@ -12,7 +12,12 @@ name: Android build
 #                  activated. Needs no secrets and uses no Actions minutes.
 #
 # Read Docs/CloudBuild.md first: it covers licensing, secrets, cost and setup for both.
-# Neither route has completed a build yet.
+# The self-hosted route has built APKs (Docs/CloudBuild.md lists the runs); the GitHub-hosted
+# route has no licence secrets and has never run.
+#
+# On the self-hosted runner the EditMode tests can run first (input "editmode_tests"). A test
+# failure does not stop the APK from being built, but it marks the run as failed, and the results
+# are uploaded either way.
 
 on:
   workflow_dispatch:
@@ -24,6 +29,10 @@ on:
         options:
           - github-hosted
           - self-hosted
+      editmode_tests:
+        description: Run the EditMode tests before building (self-hosted only)
+        type: boolean
+        default: true
 
 # One Android build at a time for the whole repository. Starting a new one cancels the old one.
 concurrency:
@@ -152,6 +161,15 @@ jobs:
           lfs: true
           clean: false
 
+      - name: Run EditMode tests
+        id: tests
+        if: inputs.editmode_tests
+        continue-on-error: true
+        shell: cmd
+        env:
+          UNITY_EDITOR: ${{ vars.UNITY_EDITOR_PATH }}
+        run: call Tools\build\run-editmode-tests.cmd
+
       - name: Build development APK
         shell: cmd
         env:
@@ -177,3 +195,19 @@ jobs:
             build/android-build.log
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Upload test results
+        if: always() && inputs.editmode_tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: threefold-editmode-tests-${{ github.run_number }}
+          path: build/tests
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Fail the run if the tests failed
+        if: steps.tests.outcome == 'failure'
+        shell: cmd
+        run: |
+          echo The EditMode tests failed or did not run. The APK, if any, was still built. See the test results artifact.
+          exit /b 1
