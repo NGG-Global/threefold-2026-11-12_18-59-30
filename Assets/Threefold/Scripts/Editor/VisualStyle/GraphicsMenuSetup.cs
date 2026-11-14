@@ -61,13 +61,14 @@ namespace Threefold.EditorTools
             // rebuilds only its own geometry.
             RectTransform panel = TouchControlsSetup.CreateRect("Panel", safeArea);
             panel.gameObject.AddComponent<Canvas>();
-            Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(330f, 360f));
+            // 300 units tall: the canvas can be as short as 340 units on a dense screen (DensityCanvasScaler).
+            Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(330f, 300f));
             Image background = panel.gameObject.AddComponent<Image>();
             background.color = PanelColor;
             background.raycastTarget = false;
 
-            Text heading = CreateText("Heading", panel, "Graphics", 24, AccentColor);
-            Anchor(heading.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -18f), new Vector2(300f, 32f));
+            Text heading = CreateText("Heading", panel, "Graphics", 22, AccentColor);
+            Anchor(heading.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(300f, 30f));
 
             string[] names = { "Performance", "Balanced", "Quality" };
             var presets = new TapButton[names.Length];
@@ -75,17 +76,17 @@ namespace Threefold.EditorTools
             var labels = new Text[names.Length];
             for (int i = 0; i < names.Length; i++)
             {
-                presets[i] = CreateButton(panel, names[i], names[i], 18, new Vector2(0.5f, 1f), new Vector2(0f, -62f - i * 58f),
-                    new Vector2(270f, 48f), out backgrounds[i], out labels[i]);
+                presets[i] = CreateButton(panel, names[i], names[i], 17, new Vector2(0.5f, 1f), new Vector2(0f, -48f - i * 52f),
+                    new Vector2(270f, 44f), out backgrounds[i], out labels[i]);
             }
 
-            Text note = CreateText("Note", panel, string.Empty, 13, TextColor);
+            Text note = CreateText("Note", panel, string.Empty, 12, TextColor);
             note.horizontalOverflow = HorizontalWrapMode.Wrap;
             note.alignment = TextAnchor.UpperCenter;
-            Anchor(note.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -240f), new Vector2(290f, 54f));
+            Anchor(note.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -206f), new Vector2(300f, 42f));
 
-            TapButton close = CreateButton(panel, "CloseButton", "Close", 16, new Vector2(0.5f, 0f), new Vector2(0f, 16f),
-                new Vector2(140f, 44f), out _, out _);
+            TapButton close = CreateButton(panel, "CloseButton", "Close", 16, new Vector2(0.5f, 0f), new Vector2(0f, 8f),
+                new Vector2(140f, 40f), out _, out _);
 
             panel.gameObject.SetActive(false);
 

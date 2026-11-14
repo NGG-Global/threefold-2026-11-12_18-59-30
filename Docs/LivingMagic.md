@@ -118,6 +118,8 @@ device checklist.
   others waiting if more than 32 were active at once.
 - The frame pacing guard's thresholds (5-second windows, 15%) and the preset values are proposals.
 - Optimized Frame Pacing is off until the owner turns it on (see `Docs/MobilePerformance.md`).
+- In the Editor with mouse and keyboard, the Graphics button (like every on-screen tap button) does
+  not take clicks while the mouse is captured for the camera; use F6 there, or the touch preview.
 
 ## Future extension points
 

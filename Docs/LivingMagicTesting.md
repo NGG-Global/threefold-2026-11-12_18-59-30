@@ -22,7 +22,7 @@ compiled, assembled and packaged the game, not that it plays well.
 | --- | --- |
 | `check_unity_repo.py` | 0 errors, 0 warnings |
 | `compile_check.sh`: compilation | All assemblies compile, Editor and Android player defines. One warning, already on `main` (`ThirdPersonCamera.invertVertical` never assigned) |
-| `compile_check.sh`: tests | 876 tests: **758 passed, 0 failed**, 118 need the Unity engine and were not run there |
+| `compile_check.sh`: tests | 878 tests: **760 passed, 0 failed**, 118 need the Unity engine and were not run there |
 | `compile_check.sh`: shaders | 54 compilations passed (glslang; not Unity's compiler) |
 
 The 758 cover, among others: the attack gesture and pointer routing (input), discipline
@@ -31,14 +31,16 @@ chain reactions, persistence (save file, reload, checkpoints, forgetting a level
 rules, the Broken Foundry's routes, layout and softlock exploration, and LM-08's presets, frame
 pacing guard, diagnostics warnings and allocation tests.
 
-**LM-08 tests (19, all passed):** preset names and frame-rate targets; the starting preset; the
-one-time upgrade of older presets; every preset keeps the contour lines and shadows; the frame
-pacing guard (kept 60 not lowered, unkept 60 lowered once after two slow windows, loading hitches
-ignored, slow windows must be consecutive, a new choice gives 60 another chance, 30 not watched,
-nonsense frame times ignored, no allocation); the diagnostics warnings; and zero allocation per
-frame for the reaction queue, the six example objects, the simulation step and a creature with
-armour and ward. An allocation injected into the queue and into the property set was caught by
-these tests (576,000 bytes each) before being removed.
+**LM-08 tests (21):** preset names and frame-rate targets; the starting preset; the one-time
+upgrade of older presets; every preset keeps the contour lines and shadows; the frame pacing guard
+(kept 60 not lowered, unkept 60 lowered once after two slow windows, loading hitches ignored,
+isolated hitches never decide a window, a long loading frame does not use up the warm-up, slow
+windows must be consecutive, a new choice gives 60 another chance, 30 not watched, nonsense frame
+times ignored, no allocation); the diagnostics warnings; and zero allocation per frame for the
+reaction queue, the six example objects, the simulation step and a creature with armour and ward.
+An allocation injected into the queue and into the property set was caught by these tests
+(576,000 bytes each) before being removed. The allocation results hold for the .NET runner; in
+Unity's own test run they are inconclusive, because Unity's Mono does not count allocations.
 
 ### Unity: Android builds on the laptop runner
 

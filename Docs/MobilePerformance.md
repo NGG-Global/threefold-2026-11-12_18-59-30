@@ -20,7 +20,7 @@ tests; each says which.
 | Change | Why | Where |
 | --- | --- | --- |
 | **Frame-rate targets.** Each graphics preset sets one: Performance 30, Balanced 60, Quality 60 | Nothing set `Application.targetFrameRate` before, so Android ran at Unity's platform default. Unity's documentation gives 30 fps as that default on Android; it was not measured here | `GraphicsPresets`, `VisualStyleController.ApplyFrameRate` |
-| **Frame pacing guard.** On a phone, a 60 target is watched in 5-second windows after a 3-second warm-up; after two windows in a row averaging more than 15% over 16.7 ms it is lowered to 30 for the session | An even 30 is easier to play than a rate that wavers between 40 and 60. It never steps back up by itself; choosing a preset again gives 60 a new chance | `FramePacingGuard` (plain C#, 7 tests) |
+| **Frame pacing guard.** On a phone, a 60 target is watched in 5-second windows after a 3-second warm-up; after two windows in a row averaging more than 15% over 16.7 ms it is lowered to 30 for the session. A frame longer than two target frames counts as two, so isolated hitches (a shader compiled on first use, a loading frame) neither decide a window nor use up the warm-up | An even 30 is easier to play than a rate that wavers between 40 and 60. It never steps back up by itself; choosing a preset again gives 60 a new chance | `FramePacingGuard` (plain C#, 9 tests) |
 | **Player-facing presets.** Performance, Balanced, Quality, chosen from a Graphics button in every styled level, kept between launches | The brief asks for player selection | `GraphicsMenu`, `GraphicsMenuSetup`, `PlayerPrefs` key `Threefold.GraphicsPreset` |
 | **Contour lines kept on Performance** (were off on Low) | The Art Bible's illustrated identity depends on them; they cost one extra draw of the few outlined meshes | `VisualQualityPreset.Low()`, upgraded once in existing scenes |
 | **Nested canvases** for the HUD bars, the joystick and the ATTACK button | Each moves its graphics on every frame while in use; a change inside a canvas rebuilds the whole canvas. A canvas of their own limits the rebuild to them | `CombatSetup.GiveBarsTheirOwnCanvas`, `TouchControlsSetup.GiveMovingPartsTheirOwnCanvas` |
@@ -50,7 +50,12 @@ Balanced. These values are proposals carried over from Sprint 11 and have not be
 ## Audit
 
 Each area: what the project does now (read from the code and settings), and what remains open.
-"Checked by test" means an automated test covers it; everything else was read, not measured.
+"Checked by test" means an automated test covers it; everything else was read, not measured. The
+allocation tests count with `GC.GetAllocatedBytesForCurrentThread` and give their result in the
+.NET 8 runner of `compile_check.sh`. Unity's Mono runtime is reported to return 0 from that counter
+whatever is allocated, so in Unity's own test run these tests are inconclusive rather than passed.
+Neither runtime is IL2CPP: the tests show that the C# allocates nothing, which IL2CPP does not
+change, but they are not a measurement on the device.
 
 | Area | Found | Open |
 | --- | --- | --- |

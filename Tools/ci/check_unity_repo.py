@@ -188,10 +188,15 @@ def check_conflict_markers(index: dict[str, str], sizes: dict[str, int], lfs_pat
 
 CLASS_PATTERN = re.compile(
     r"^[ \t]*(?:\[[^\]\n]*\][ \t]*)*((?:(?:public|internal|private|protected|sealed|abstract|static|partial)[ \t]+)*)"
-    r"class[ \t]+(\w+)(?:<[^>\n]*>)?[ \t]*(?::[ \t]*([\w.<>, \t]+))?",
+    r"class[ \t]+(\w+)(?:<[^>\n]*>)?\s*(?::\s*([\w.<>, \t]+))?",
     re.MULTILINE,
 )
-UNITY_SCRIPT_BASES = {"MonoBehaviour", "ScriptableObject", "StateMachineBehaviour", "EditorWindow", "Editor", "ScriptableSingleton"}
+# Unity types whose subclasses Unity serializes by script. Custom inspectors (Editor) are left out:
+# Unity creates them itself and does not need them in files of their own name.
+UNITY_SCRIPT_BASES = {
+    "MonoBehaviour", "ScriptableObject", "StateMachineBehaviour", "EditorWindow", "ScriptableSingleton",
+    "UIBehaviour", "Graphic", "MaskableGraphic", "Selectable", "BaseMeshEffect", "LayoutGroup",
+}
 
 
 def check_script_file_names(index: dict[str, str], sizes: dict[str, int]) -> None:

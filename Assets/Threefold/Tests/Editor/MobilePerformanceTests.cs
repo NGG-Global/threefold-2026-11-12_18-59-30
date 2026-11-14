@@ -15,12 +15,28 @@ namespace Threefold.Tests
     /// simulation's per-frame work. Allocations are counted with the runtime's own counter for the
     /// current thread; they say nothing about time, which only a device can measure. The counter is
     /// read into a local before asserting: Assert.AreEqual(0L, ...) boxes its first argument, and that
-    /// box would otherwise be counted.
+    /// box would otherwise be counted. Unity's Mono runtime is reported to return 0 from that counter
+    /// whatever is allocated, so each allocation test first checks that the counter moves and is
+    /// inconclusive where it does not: the guarantee comes from the .NET runner of compile_check.sh.
     /// </summary>
     public sealed class MobilePerformanceTests
     {
         private const float Frame60 = 1f / 60f;
         private int nextEvent = 90000;
+        private static object probe;
+
+        /// <summary>Makes the test inconclusive on a runtime whose allocation counter does not count.</summary>
+        private static void RequireAllocationCounter()
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            probe = new object[8];
+            long after = GC.GetAllocatedBytesForCurrentThread();
+            if (after == before)
+            {
+                Assert.Inconclusive("This runtime does not count allocations (GC.GetAllocatedBytesForCurrentThread did not move). " +
+                                    "The allocation result comes from the .NET runner of Tools/ci/compile_check.sh.");
+            }
+        }
 
         // ------------------------------------------------------------ presets
 
@@ -161,6 +177,39 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void IsolatedHitchesNeverDecideAWindow()
+        {
+            var guard = new FramePacingGuard(windowSeconds: 5f, warmUpSeconds: 3f);
+            guard.Request(60);
+            Feed(guard, 3.1f, Frame60);
+
+            for (int window = 0; window < 4; window++)
+            {
+                // A shader compiled on first use and a few first spawns, in every window.
+                Assert.IsFalse(guard.Observe(3f));
+                for (int i = 0; i < 3; i++)
+                {
+                    Assert.IsFalse(guard.Observe(0.3f));
+                }
+
+                Assert.AreEqual(0, Feed(guard, 5f, Frame60));
+            }
+
+            Assert.IsFalse(guard.FellBack, "Only sustained slowness lowers the target.");
+        }
+
+        [Test]
+        public void ALongLoadingFrameDoesNotUseUpTheWarmUp()
+        {
+            var guard = new FramePacingGuard(windowSeconds: 1f, warmUpSeconds: 3f, windowsNeeded: 1);
+            guard.Request(60);
+            guard.Rewarm();
+            Assert.IsFalse(guard.Observe(5f), "The frame that loaded the scene.");
+            Assert.AreEqual(0, Feed(guard, 2f, 1f / 30f), "Still warming up: the long frame counted as two target frames.");
+            Assert.AreEqual(1, Feed(guard, 3f, 1f / 30f), "Sustained slowness after the warm-up still steps down.");
+        }
+
+        [Test]
         public void ASlowWindowFollowedByAGoodOneDoesNotStepDown()
         {
             var guard = new FramePacingGuard(windowSeconds: 5f, warmUpSeconds: 0f);
@@ -215,6 +264,7 @@ namespace Threefold.Tests
         [Test]
         public void TheGuardAllocatesNothingPerFrame()
         {
+            RequireAllocationCounter();
             var guard = new FramePacingGuard(windowSeconds: 0.5f, warmUpSeconds: 0f, windowsNeeded: 1000);
             guard.Request(60);
             guard.Observe(Frame60);
@@ -329,6 +379,7 @@ namespace Threefold.Tests
         [Test]
         public void TheReactionQueueAllocatesNothingOnceWarm()
         {
+            RequireAllocationCounter();
             var scheduler = new ReactionScheduler(new ReactionBudgets());
             var targets = new Sink[12];
             for (int i = 0; i < targets.Length; i++)
@@ -374,6 +425,7 @@ namespace Threefold.Tests
         [Test]
         public void TheExampleObjectsAllocateNothingWhileTheyReactAndTime()
         {
+            RequireAllocationCounter();
             var sets = new List<MagicalPropertySet>();
             foreach (ExampleObject example in Enum.GetValues(typeof(ExampleObject)))
             {
@@ -420,6 +472,7 @@ namespace Threefold.Tests
         [Test]
         public void AdvancingTheBudgetOfObjectsAllocatesNothing()
         {
+            RequireAllocationCounter();
             var budgets = new ReactionBudgets();
             var simulation = new SimulationSet(budgets);
             var objects = new Restless[budgets.maxActiveObjects + 8];
@@ -453,6 +506,7 @@ namespace Threefold.Tests
         [Test]
         public void ACreatureWithArmourAndWardAllocatesNothingWhileItTakesEffects()
         {
+            RequireAllocationCounter();
             var creature = new CreatureEffectModel(new HeatSettings(), 0.5f, true, 3f,
                 new ArmourSettings { enabled = true }, new WardSettings { enabled = true });
             MagicEffectKind[] kinds = { MagicEffectKind.Heat, MagicEffectKind.ArcaneCharge, MagicEffectKind.Force };

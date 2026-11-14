@@ -206,7 +206,8 @@ jobs:
           retention-days: 14
 
       - name: Fail the run if the tests failed
-        if: steps.tests.outcome == 'failure'
+        # !cancelled() instead of the implicit success(): the test failure is reported even if the build failed too.
+        if: ${{ !cancelled() && steps.tests.outcome == 'failure' }}
         shell: cmd
         run: |
           echo The EditMode tests failed or did not run. The APK, if any, was still built. See the test results artifact.

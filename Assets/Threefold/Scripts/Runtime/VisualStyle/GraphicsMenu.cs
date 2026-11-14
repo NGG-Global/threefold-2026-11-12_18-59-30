@@ -18,6 +18,10 @@ namespace Threefold.VisualStyle
     /// While the panel is open the touch controls are hidden, so a tap on the panel does not also move
     /// the Mage or the camera; they come back once every finger has left the screen. The game is not
     /// paused. The Back button (Escape) closes the panel.
+    ///
+    /// Like every TapButton, it does not take mouse clicks while the mouse is captured for the camera
+    /// (the desktop scheme captures it on a click). In the Editor use F6 to change the preset, or the
+    /// touch preview.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GraphicsMenu : MonoBehaviour
@@ -112,9 +116,13 @@ namespace Threefold.VisualStyle
             }
 
             Watch(null);
+
+            // The panel is left alone here: while this object is being switched off or destroyed, changing a
+            // child's active state is refused. Awake hides it again when the menu next starts.
             if (open)
             {
-                Close();
+                open = false;
+                restoreTouchControls = touchControls != null;
             }
 
             ShowTouchControls();
@@ -167,6 +175,7 @@ namespace Threefold.VisualStyle
             open = true;
             panel.SetActive(true);
             Watch(VisualStyleController.Active);
+            FindMissingControls();
 
             if (touchControls != null)
             {
@@ -212,6 +221,23 @@ namespace Threefold.VisualStyle
             }
 
             Refresh();
+        }
+
+        /// <summary>
+        /// Fills links the setup could not (the style was applied before the touch controls existed). Only when
+        /// the panel opens, which is rare, so the search costs nothing during play.
+        /// </summary>
+        private void FindMissingControls()
+        {
+            if (touchControls == null)
+            {
+                touchControls = FindAnyObjectByType<TouchControlsInput>();
+            }
+
+            if (controlScheme == null)
+            {
+                controlScheme = FindAnyObjectByType<ControlSchemeSelector>();
+            }
         }
 
         private void ShowTouchControls()

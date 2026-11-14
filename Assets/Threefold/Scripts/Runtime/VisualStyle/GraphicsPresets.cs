@@ -131,9 +131,11 @@ namespace Threefold.VisualStyle
     /// Lowers a 60 frames-per-second target to a steady 30 when the phone cannot keep 60, because an
     /// even 30 feels better than a frame rate that wavers between 40 and 60. It watches the time each
     /// frame takes in windows of a few seconds, after a warm-up that skips the hitches of loading, and
-    /// steps down only after two windows in a row run clearly slower than the target. It never steps
-    /// back up by itself, so the frame rate does not swing; choosing a preset again gives 60 another
-    /// chance. Plain C#.
+    /// steps down only after two windows in a row run clearly slower than the target. A frame longer
+    /// than two target frames counts as two, so an isolated hitch (a shader compiled on first use, a
+    /// first spawn) cannot decide a window or use up the warm-up; only sustained slowness does. It never
+    /// steps back up by itself, so the frame rate does not swing; choosing a preset again gives 60
+    /// another chance. Plain C#.
     /// </summary>
     public sealed class FramePacingGuard
     {
@@ -198,13 +200,15 @@ namespace Threefold.VisualStyle
                 return false;
             }
 
+            // Capped at two target frames: a long hitch counts like a merely slow frame.
+            float counted = Math.Min(deltaSeconds, 2f / Requested);
             if (warmUpLeft > 0f)
             {
-                warmUpLeft -= deltaSeconds;
+                warmUpLeft -= counted;
                 return false;
             }
 
-            windowTime += deltaSeconds;
+            windowTime += counted;
             windowFrames++;
             if (windowTime < windowSeconds)
             {
