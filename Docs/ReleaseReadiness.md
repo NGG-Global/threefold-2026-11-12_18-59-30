@@ -210,6 +210,18 @@ Install the APK, then check in this order. Stop at the first failure and report 
 - [ ] On a device: the same after closing and reopening the app, and after sending it to the background while something burns.
 - [ ] The Console shows no warning about dropped reactions during any of this.
 
+**Discovery** (Discipline Range)
+- [ ] No object is outlined, labelled or marked with an icon. The crystal and the door's lock pulse faintly; the stone has vents, the barricade straw, the structure cracks.
+- [ ] With Arcane selected, looking at the crystal makes it stir; the barricade and the platform do not. With Flame the barricade and the stone stir; with Aegis everything but the crystal.
+- [ ] After the door's lock has opened it no longer stirs for Arcane.
+- [ ] An uncharged Force Pulse makes the door lean and ease back without damage. A Flame swing makes the crystal give two small shakes.
+- [ ] Each answer can be told from the others with the sound off, and in a screenshot converted to grey.
+- [ ] Standing by the unbroken stone for half a minute without doing anything makes its marks a little more noticeable, then it rests. It does not happen while fighting.
+- [ ] Holding BLOCK with Aegis next to the barricade does not make it twitch.
+- [ ] Clue Intensity 0 removes clues and resonance but attempts are still answered. Reduced Particles removes the motes and the repeating embers.
+- [ ] On the lowest quality level the answers look the same apart from the motes.
+- [ ] Clues, resonance and answers are readable on the phone at arm's length, and none of them is distracting.
+
 **Objective**
 - [ ] The top of the screen shows the objective and three markers.
 - [ ] Defeating a construct (darker, with a glowing gem) lights a marker.

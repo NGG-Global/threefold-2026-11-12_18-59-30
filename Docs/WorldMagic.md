@@ -209,6 +209,9 @@ and every effect received.
 Since LM-04 a definition also says what is saved, what the object sets off in others, and what
 happens to it while it is switched off; see `Docs/WorldState.md`.
 
+Since LM-05 an object also hints at what it responds to and answers what is tried on it, through
+a `DiscoveryClues` component that Make Selection Magical adds; see `Docs/Discovery.md`.
+
 ## Set up
 
 1. Pull `main` on the laptop and let Unity import. The Console must show no red errors.

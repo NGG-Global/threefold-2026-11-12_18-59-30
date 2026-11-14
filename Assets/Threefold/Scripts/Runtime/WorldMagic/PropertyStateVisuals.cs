@@ -120,6 +120,10 @@ namespace Threefold.WorldMagic
         private float collapseAmount;
         private float burningTimer;
         private bool unseen;
+        private Color accentColor = Color.white;
+        private float accentStrength;
+        private float swayScale = 1f;
+        private bool chargeAccented;
 
         /// <summary>Connects the object and the renderers. Called by the setup tooling.</summary>
         public void Bind(MagicalObject magicalObject, Renderer[] tinted, Renderer[] charged)
@@ -148,8 +152,47 @@ namespace Threefold.WorldMagic
             collapsePart = new MovingPart(collapsing, collapseOffset, collapseRotation);
         }
 
+        /// <summary>
+        /// A player option, set by the discovery director: with it, the embers that repeat while
+        /// something burns are left out. The single burst at a change of state stays, and so does
+        /// everything that is not a particle.
+        /// </summary>
+        public static bool ReducedParticles { get; set; }
+
         public MagicalObject Source => source;
         public int TintRendererCount => tintRenderers.Length;
+
+        /// <summary>
+        /// A light wash of colour over everything this component colours, from outside: the discovery
+        /// system uses it for clues and resonance. It goes through here because one renderer can only
+        /// have one writer of its colour. It shows on top of the state and changes nothing about it.
+        /// </summary>
+        /// <param name="strength">0 for none, up to 1.</param>
+        public void SetAccent(Color color, float strength)
+        {
+            strength = Mathf.Clamp01(strength);
+            if (Mathf.Abs(strength - accentStrength) < 0.004f && (strength <= 0f || color == accentColor))
+            {
+                return;
+            }
+
+            accentColor = color;
+            accentStrength = strength;
+            if (source != null && source.Properties != null && block != null)
+            {
+                ApplyColors(source.Properties);
+            }
+        }
+
+        /// <summary>Makes the sway of an unstable object larger or smaller: 1 is as authored.</summary>
+        public void SetSwayScale(float scale)
+        {
+            swayScale = Mathf.Clamp(scale, 0f, 4f);
+            if (swayScale > 1.001f && swayTarget != null && swayDegrees > 0f)
+            {
+                enabled = true;
+            }
+        }
 
         /// <summary>
         /// Every condition this component waits for. One the object can never reach (see
@@ -274,7 +317,7 @@ namespace Threefold.WorldMagic
                 busy = true;
             }
 
-            if (burningEffect != null && properties.Meets(PropertyCondition.Burning))
+            if (burningEffect != null && !ReducedParticles && properties.Meets(PropertyCondition.Burning))
             {
                 burningTimer -= deltaTime;
                 if (burningTimer <= 0f)
@@ -305,7 +348,7 @@ namespace Threefold.WorldMagic
 
                 if (!collapsed && properties.Meets(PropertyCondition.Unstable))
                 {
-                    float angle = Mathf.Sin(Time.time * swaySpeed) * swayDegrees;
+                    float angle = Mathf.Sin(Time.time * swaySpeed) * swayDegrees * swayScale;
                     swayTarget.localRotation = swayRest * Quaternion.Euler(angle, 0f, angle * 0.6f);
                     busy = true;
                 }
@@ -478,23 +521,40 @@ namespace Threefold.WorldMagic
                     color = Color.Lerp(color, heatColor, heat);
                 }
 
+                if (accentStrength > 0f)
+                {
+                    color = Color.Lerp(color, accentColor, accentStrength * 0.5f);
+                }
+
                 SetColor(tintRenderers[i], color);
             }
 
-            if (properties.Arcane == null)
+            bool hasArcane = properties.Arcane != null;
+            if (!hasArcane && accentStrength <= 0f && !chargeAccented)
             {
                 return;
             }
 
-            bool activated = properties.Arcane.State == ArcaneState.Activated;
-            float charge = properties.Arcane.Fraction;
+            bool activated = hasArcane && properties.Arcane.State == ArcaneState.Activated;
+            float charge = hasArcane ? properties.Arcane.Fraction : 0f;
             for (int i = 0; i < chargeRenderers.Length && i < chargeBase.Length; i++)
             {
-                if (chargeRenderers[i] != null)
+                if (chargeRenderers[i] == null)
                 {
-                    SetColor(chargeRenderers[i], activated ? activatedColor : Color.Lerp(chargeBase[i], chargeColor, charge));
+                    continue;
                 }
+
+                Color color = activated ? activatedColor : Color.Lerp(chargeBase[i], chargeColor, charge);
+                if (accentStrength > 0f)
+                {
+                    // The parts that show charge are where an accent reads best, so it is fuller here.
+                    color = Color.Lerp(color, accentColor, accentStrength);
+                }
+
+                SetColor(chargeRenderers[i], color);
             }
+
+            chargeAccented = accentStrength > 0f;
         }
 
         private void SetColor(Renderer target, Color color)
@@ -514,6 +574,13 @@ namespace Threefold.WorldMagic
             }
 
             return colors;
+        }
+
+        // Static state survives between Play sessions when domain reload is disabled in the Editor.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            ReducedParticles = false;
         }
     }
 }
