@@ -3,18 +3,21 @@ using Threefold.Characters;
 using Threefold.Combat;
 using Threefold.Magic;
 using Threefold.Pooling;
+using Threefold.VisualStyle;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.CombatFeedback
 {
     /// <summary>
-    /// Shows the disciplines' attacks: the arc of each melee swing, a burst on every target struck,
-    /// the sweep of a Flame Wave or Force Pulse, embers on a burning target, a spark where the guard
-    /// stops a hit, a little camera shake, and the attack animation where the character has one.
+    /// Shows the disciplines' attacks: oriented melee slashes, the ground arc of each swing, a burst
+    /// on every target struck, charge buildup at the hands, the sweep of a Flame Wave or Force Pulse,
+    /// embers on a burning target, a spark where the guard stops or deflects a hit, light camera shake,
+    /// and the attack animation where the character has one.
     ///
     /// It listens to <see cref="DisciplineCombat"/>, the caster, the guard and the combat events and
-    /// changes nothing in the rules. Effects are pooled, short, unlit and few: a handful of soft
-    /// particles and one flat shape per attack, tinted with the discipline's colour.
+    /// changes nothing in the rules. Effects are pooled and short. Interrupted swings and cancelled
+    /// charges stop their looping or in-flight presentation so nothing keeps playing after the action.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DisciplineFeedback : MonoBehaviour
@@ -22,6 +25,8 @@ namespace Threefold.CombatFeedback
         private const int MaxSweeps = 6;
         private const int MaxImpacts = 10;
         private const int MaxStatusEffects = 8;
+        private const int MaxSwingEffects = 4;
+        private const int MaxChargeEffects = 2;
 
         [SerializeField] private DisciplineCombat combat;
 
@@ -31,8 +36,14 @@ namespace Threefold.CombatFeedback
         [Tooltip("Optional. Receives the attack animation triggers.")]
         [SerializeField] private CharacterAnimationDriver animationDriver;
 
+        [Tooltip("Optional. Hand sockets for charge loops. Resolved from the Mage when empty.")]
+        [SerializeField] private DisciplineVfxSockets sockets;
+
         [Tooltip("Optional. A spark is shown where the guard stops a hit.")]
         [SerializeField] private PlayerGuard guard;
+
+        [Tooltip("Optional. Scales particle counts with the player's graphics preset.")]
+        [SerializeField] private VisualStyleController style;
 
         [Header("Shared effects")]
         [Tooltip("Small burst of embers on a target that ignites and on each burn tick.")]
@@ -64,6 +75,8 @@ namespace Threefold.CombatFeedback
         private DisciplineCombat subscribedCombat;
         private AbilityCaster subscribedCaster;
         private PlayerGuard subscribedGuard;
+        private PooledObject activeSwing;
+        private PooledObject activeCharge;
 
         /// <summary>Connects the component. Called by the setup tooling.</summary>
         public void Bind(DisciplineCombat disciplineCombat, ThirdPersonCamera rig, CharacterAnimationDriver driver,
@@ -81,6 +94,13 @@ namespace Threefold.CombatFeedback
             burnEffect = burn;
             pushEffect = push;
             guardEffect = guardSpark;
+        }
+
+        /// <summary>Optional sockets and style. Called by the setup tooling.</summary>
+        public void BindPresentation(DisciplineVfxSockets vfxSockets, VisualStyleController styleController)
+        {
+            sockets = vfxSockets;
+            style = styleController;
         }
 
         /// <summary>
@@ -112,8 +132,33 @@ namespace Threefold.CombatFeedback
             return changed;
         }
 
+        /// <summary>Replaces the burn effect. Used by setup when a richer prefab should win over SoftGlow.</summary>
+        public bool ReplaceBurnEffect(PooledObject burn)
+        {
+            if (burn == null || burnEffect == burn)
+            {
+                return false;
+            }
+
+            burnEffect = burn;
+            return true;
+        }
+
+        /// <summary>Replaces the guard spark. Used by setup when a richer prefab should win over SoftGlow.</summary>
+        public bool ReplaceGuardEffect(PooledObject guardSpark)
+        {
+            if (guardSpark == null || guardEffect == guardSpark)
+            {
+                return false;
+            }
+
+            guardEffect = guardSpark;
+            return true;
+        }
+
         public DisciplineCombat Combat => combat;
         public PooledObject BurnEffect => burnEffect;
+        public PooledObject GuardEffect => guardEffect;
 
         private void OnEnable()
         {
@@ -122,7 +167,9 @@ namespace Threefold.CombatFeedback
             {
                 subscribedCombat.SwingStarted += HandleSwingStarted;
                 subscribedCombat.SwingLanded += HandleSwingLanded;
-
+                subscribedCombat.SwingInterrupted += HandleSwingInterrupted;
+                subscribedCombat.ChargeBegan += HandleChargeBegan;
+                subscribedCombat.ChargeEnded += HandleChargeEnded;
                 subscribedCaster = subscribedCombat.Caster;
                 if (subscribedCaster != null)
                 {
@@ -141,10 +188,16 @@ namespace Threefold.CombatFeedback
 
         private void OnDisable()
         {
+            StopSwingEffect();
+            StopChargeEffect();
+
             if (subscribedCombat != null)
             {
                 subscribedCombat.SwingStarted -= HandleSwingStarted;
                 subscribedCombat.SwingLanded -= HandleSwingLanded;
+                subscribedCombat.SwingInterrupted -= HandleSwingInterrupted;
+                subscribedCombat.ChargeBegan -= HandleChargeBegan;
+                subscribedCombat.ChargeEnded -= HandleChargeEnded;
                 subscribedCombat = null;
             }
 
@@ -175,11 +228,18 @@ namespace Threefold.CombatFeedback
 
             DisciplinePresentation look = discipline.Presentation;
 
-            // The arc sweeps out during the start-up, so its edge arrives as the hit lands.
             Color color = discipline.Color;
             color.a = swingOpacity;
             PlaySweep(look.sweepEffect, swing.Origin, swing.Direction, swing.Step.reach, swing.Step.arcDegrees, color,
                 swing.Step.startupSeconds + 0.14f);
+
+            StopSwingEffect();
+            if (look.meleeSwingEffect != null)
+            {
+                Vector3 point = EffectPoint(swing.Origin, look.effectHeight);
+                Quaternion rotation = LookAlong(swing.Direction);
+                activeSwing = SpawnShared(look.meleeSwingEffect, point, rotation, MaxSwingEffects);
+            }
 
             if (animationDriver != null && !animationDriver.TrySetTrigger(swing.Step.animationTrigger) &&
                 look.castGestureForMelee)
@@ -190,6 +250,9 @@ namespace Threefold.CombatFeedback
 
         private void HandleSwingLanded(MeleeSwing swing)
         {
+            // The slash is a start-up beat; once the hit lands it should not linger into recovery.
+            StopSwingEffect(0.05f);
+
             if (swing.HitCount <= 0 || swing.Discipline == null)
             {
                 return;
@@ -203,7 +266,7 @@ namespace Threefold.CombatFeedback
                 {
                     if (struck[i] != null)
                     {
-                        Pools.Spawn(impact, struck[i].AimPoint, Quaternion.identity, MaxImpacts);
+                        SpawnShared(impact, struck[i].AimPoint, Quaternion.identity, MaxImpacts);
                     }
                 }
             }
@@ -214,7 +277,39 @@ namespace Threefold.CombatFeedback
             }
         }
 
+        private void HandleSwingInterrupted(MeleeSwing swing)
+        {
+            StopSwingEffect();
+        }
+
         // ------------------------------------------------------------- charged
+
+        private void HandleChargeBegan(DisciplineDefinition discipline)
+        {
+            StopChargeEffect();
+            if (discipline == null || discipline.Presentation.chargeLoopEffect == null)
+            {
+                return;
+            }
+
+            DisciplinePresentation look = discipline.Presentation;
+            Vector3 point = HandsPoint(look.effectHeight);
+            activeCharge = SpawnShared(look.chargeLoopEffect, point, Quaternion.identity, MaxChargeEffects);
+
+            DisciplineVfxSockets hands = ResolveSockets();
+            if (activeCharge != null && hands != null)
+            {
+                activeCharge.transform.SetParent(hands.RightHand, true);
+                activeCharge.transform.localPosition = Vector3.zero;
+                activeCharge.transform.localRotation = Quaternion.identity;
+            }
+        }
+
+        private void HandleChargeEnded(bool fired)
+        {
+            // Release FX are spawned from CastSucceeded when the shot actually fires.
+            StopChargeEffect(fired ? 0.04f : 0.1f);
+        }
 
         private void HandleCastSucceeded(AbilityDefinition ability, AbilityContext context)
         {
@@ -242,7 +337,8 @@ namespace Threefold.CombatFeedback
 
             if (look.releaseEffect != null)
             {
-                Pools.Spawn(look.releaseEffect, context.Origin, Quaternion.LookRotation(context.Direction), MaxImpacts);
+                Vector3 origin = look.chargeLoopEffect != null ? HandsPoint(look.effectHeight) : context.Origin;
+                SpawnShared(look.releaseEffect, origin, Quaternion.LookRotation(context.Direction), MaxImpacts);
             }
 
             if (cameraRig != null)
@@ -250,7 +346,6 @@ namespace Threefold.CombatFeedback
                 cameraRig.AddTrauma(charged.Charge.releaseTrauma * Mathf.Lerp(0.6f, 1f, context.Charge));
             }
 
-            // The caster's own cast event already plays the casting gesture; a different trigger is set here.
             if (animationDriver != null && look.chargedAnimationTrigger != CharacterAnimationDriver.CastParameter)
             {
                 animationDriver.TrySetTrigger(look.chargedAnimationTrigger);
@@ -287,7 +382,7 @@ namespace Threefold.CombatFeedback
                 case StatusKind.BurnTick:
                     if (burnEffect != null)
                     {
-                        Pools.Spawn(burnEffect, status.Point, Quaternion.identity, MaxStatusEffects);
+                        SpawnShared(burnEffect, status.Point, Quaternion.identity, MaxStatusEffects);
                     }
 
                     break;
@@ -297,20 +392,15 @@ namespace Threefold.CombatFeedback
                 case StatusKind.ArmourCracked:
                     if (pushEffect != null)
                     {
-                        Pools.Spawn(pushEffect, status.Point, Quaternion.identity, MaxStatusEffects);
+                        SpawnShared(pushEffect, status.Point, Quaternion.identity, MaxStatusEffects);
                     }
 
                     break;
 
-                // The combinations of LM-06: a turned shot, armour breaking, a ward giving way or forming
-                // again. Each is marked where it happens, so no change of state goes unseen.
                 case StatusKind.Deflected:
                 case StatusKind.WardDisrupted:
                 case StatusKind.WardRestored:
-                    if (guardEffect != null)
-                    {
-                        Pools.Spawn(guardEffect, status.Point, Quaternion.identity, MaxStatusEffects);
-                    }
+                    SpawnDeflectOrGuard(status.Point);
 
                     if (status.Kind == StatusKind.Deflected && cameraRig != null && combat != null &&
                         status.Target == combat.gameObject)
@@ -323,29 +413,75 @@ namespace Threefold.CombatFeedback
                 case StatusKind.ArmourBroken:
                     if (pushEffect != null)
                     {
-                        Pools.Spawn(pushEffect, status.Point, Quaternion.identity, MaxStatusEffects);
+                        SpawnShared(pushEffect, status.Point, Quaternion.identity, MaxStatusEffects);
                     }
 
-                    if (guardEffect != null)
-                    {
-                        Pools.Spawn(guardEffect, status.Point, Quaternion.identity, MaxStatusEffects);
-                    }
-
+                    SpawnDeflectOrGuard(status.Point);
                     break;
             }
         }
 
         private void HandleBlocked(BlockedHit hit)
         {
-            if (guardEffect != null)
-            {
-                Pools.Spawn(guardEffect, hit.Point, Quaternion.identity, MaxStatusEffects);
-            }
+            SpawnDeflectOrGuard(hit.Point);
 
             if (cameraRig != null)
             {
                 cameraRig.AddTrauma(blockTrauma);
             }
+        }
+
+        private void SpawnDeflectOrGuard(Vector3 point)
+        {
+            PooledObject deflect = null;
+            if (subscribedCombat != null && subscribedCombat.Disciplines != null)
+            {
+                DisciplineDefinition current = subscribedCombat.Disciplines.CurrentDefinition;
+                if (current != null)
+                {
+                    deflect = current.Presentation.deflectEffect;
+                }
+            }
+
+            PooledObject prefab = deflect != null ? deflect : guardEffect;
+            if (prefab != null)
+            {
+                SpawnShared(prefab, point, Quaternion.identity, MaxStatusEffects);
+            }
+        }
+
+        // --------------------------------------------------------------- helpers
+
+        private PooledObject SpawnShared(PooledObject prefab, Vector3 position, Quaternion rotation, int maxInstances)
+        {
+            PooledObject instance = Pools.Spawn(prefab, position, rotation, maxInstances);
+            if (instance == null)
+            {
+                return null;
+            }
+
+            float share = CurrentBurstShare();
+            if (share < 0.999f)
+            {
+                BurstParticleShare.Apply(instance, share);
+            }
+
+            return instance;
+        }
+
+        private float CurrentBurstShare()
+        {
+            if (style == null)
+            {
+                style = FindAnyObjectByType<VisualStyleController>();
+            }
+
+            if (style == null || style.QualityLevelCount <= 0)
+            {
+                return 1f;
+            }
+
+            return MagicVfxQuality.BurstShare(style.QualityLevel, style.QualityLevelCount);
         }
 
         private static void PlaySweep(PooledObject prefab, Vector3 origin, Vector3 direction, float reach, float arcDegrees,
@@ -364,6 +500,78 @@ namespace Threefold.CombatFeedback
             {
                 sweep.Play(reach, arcDegrees, color, seconds);
             }
+        }
+
+        private void StopSwingEffect(float drainSeconds = 0.08f)
+        {
+            StopTracked(ref activeSwing, drainSeconds);
+        }
+
+        private void StopChargeEffect(float drainSeconds = 0.1f)
+        {
+            StopTracked(ref activeCharge, drainSeconds);
+        }
+
+        private static void StopTracked(ref PooledObject tracked, float drainSeconds)
+        {
+            if (tracked == null)
+            {
+                return;
+            }
+
+            if (tracked.TryGetComponent(out PooledEffect effect))
+            {
+                effect.StopEarly(drainSeconds);
+            }
+            else if (tracked.isActiveAndEnabled)
+            {
+                tracked.ReturnToPool();
+            }
+
+            tracked = null;
+        }
+
+        private Vector3 EffectPoint(Vector3 origin, float height)
+        {
+            return origin + Vector3.up * Mathf.Max(0f, height);
+        }
+
+        private Vector3 HandsPoint(float height)
+        {
+            DisciplineVfxSockets hands = ResolveSockets();
+            if (hands != null)
+            {
+                return hands.HandsMidpoint;
+            }
+
+            if (subscribedCombat != null)
+            {
+                return EffectPoint(subscribedCombat.transform.position, height);
+            }
+
+            return EffectPoint(transform.position, height);
+        }
+
+        private DisciplineVfxSockets ResolveSockets()
+        {
+            if (sockets != null)
+            {
+                return sockets;
+            }
+
+            if (subscribedCombat != null)
+            {
+                sockets = subscribedCombat.GetComponent<DisciplineVfxSockets>()
+                    ?? subscribedCombat.GetComponentInChildren<DisciplineVfxSockets>(true);
+            }
+
+            return sockets;
+        }
+
+        private static Quaternion LookAlong(Vector3 direction)
+        {
+            direction.y = 0f;
+            return direction.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(direction, Vector3.up) : Quaternion.identity;
         }
     }
 }

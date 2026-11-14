@@ -638,4 +638,21 @@ Principles:
 
 ## Approval gate
 
-This document is the deliverable. **No VFX integration should proceed until the owner approves:** shader policy (pack shaders vs Unlit-only), the Arcane vertical slice, and the Soft Illustrated Realism adaptation direction.
+This document began as assessment-only. **Implementation status (2026-11-14):** presentation fields,
+`DisciplineFeedback` interrupt-safe wiring, hand sockets, quality particle shares, and
+`Threefold/Setup/Magic VFX` (procedural SoftGlow FX + optional pack adaptation into
+`Generated/VFX`) are in the project. Owner still needs to run the setup in Unity, pull LFS,
+visually review Soft Illustrated Realism fit, and profile on a device before treating the look
+as final.
+
+### What was implemented
+
+| Item | Where |
+| --- | --- |
+| `meleeSwingEffect`, `chargeLoopEffect`, `deflectEffect`, `effectHeight` | `DisciplinePresentation` |
+| Swing / charge / interrupt / deflect presentation | `DisciplineFeedback` |
+| Hand sockets | `DisciplineVfxSockets` |
+| Early stop for cancelled FX | `PooledEffect.StopEarly` |
+| Pool reparent on release | `Pool.Release` |
+| Quality particle share | `MagicVfxQuality` + `BurstParticleShare` |
+| Setup command | `MagicVfxSetup` (`Threefold/Setup/Magic VFX`), also from Disciplines setup |

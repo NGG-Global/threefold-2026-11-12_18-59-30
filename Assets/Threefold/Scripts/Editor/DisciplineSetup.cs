@@ -95,6 +95,7 @@ namespace Threefold.EditorTools
 
             EnsureMageDisciplines(scene, mage, definitions, report);
             EnsureVisuals(scene, mage, effects, shapeMaterial, report);
+            MagicVfxSetup.Ensure(scene, mage, report);
         }
 
         // --------------------------------------------------------------- assets

@@ -45,6 +45,8 @@ namespace Threefold.Tests
                 Assert.Greater(definition.ChargedAbility.ManaCost, 0f);
                 Assert.IsNotNull(definition.Presentation.sweepEffect);
                 Assert.IsNotNull(definition.Presentation.meleeImpactEffect);
+                Assert.IsNotNull(definition.Presentation.meleeSwingEffect);
+                Assert.IsNotNull(definition.Presentation.chargeLoopEffect);
             }
 
             Assert.IsInstanceOf<ChargedProjectileDefinition>(disciplines.GetDefinition(0).ChargedAbility);

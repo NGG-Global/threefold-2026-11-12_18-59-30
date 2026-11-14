@@ -29,7 +29,15 @@ CACHE="${THREEFOLD_COMPILE_CACHE:-$HOME/.cache/threefold-compile}"
 cd "$ROOT"
 
 command -v dotnet >/dev/null || { echo "The .NET SDK (dotnet) is required."; exit 2; }
-CSC_DLL="$(ls /usr/lib/dotnet/sdk/*/Roslyn/bincore/csc.dll "$(dirname "$(readlink -f "$(command -v dotnet)")")"/sdk/*/Roslyn/bincore/csc.dll 2>/dev/null | head -1)"
+# Prefer a concrete SDK path. Do not fail the script when a glob misses (pipefail + ls).
+CSC_DLL=""
+for candidate in /usr/lib/dotnet/sdk/*/Roslyn/bincore/csc.dll \
+    "$(dirname "$(readlink -f "$(command -v dotnet)")")"/sdk/*/Roslyn/bincore/csc.dll; do
+  if [ -f "$candidate" ]; then
+    CSC_DLL="$candidate"
+    break
+  fi
+done
 [ -n "$CSC_DLL" ] || { echo "The C# compiler was not found inside the .NET SDK."; exit 2; }
 CSC="dotnet $CSC_DLL"
 
