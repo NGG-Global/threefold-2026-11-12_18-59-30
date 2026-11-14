@@ -90,6 +90,15 @@ separates approved decisions from proposals; do not present a proposal as decide
   in `WorldState.Current`, and everything the level saves starts with `FoundryLayout.KeyPrefix`, which
   replaying the level forgets. Structures that stand again by themselves (`recoverSeconds`) never save
   their collapse.
+- Graphics presets and mobile performance (`Docs/MobilePerformance.md`): the style's three quality
+  levels are the player's presets Performance, Balanced and Quality, with frame-rate targets 30, 60 and
+  60 (`GraphicsPresets`, plain C#). Every preset keeps the illustrated look, contour lines included.
+  A 60 target the phone cannot keep is lowered to 30 by `FramePacingGuard`; never add smoothing to
+  input. The magic's per-frame rules must allocate nothing: `MobilePerformanceTests` measures it in the .NET
+  runner of `compile_check.sh` (Unity's Mono does not count allocations; there the tests are inconclusive). The
+  development overlay is in every level through the character rig and off in release builds.
+- A class deriving from `MonoBehaviour` or `ScriptableObject` (directly or not) must be alone in a
+  file of its own name, or Unity saves its assets without a script. `check_unity_repo.py` checks it.
 - Project rendering settings (`Assets/Settings`, `ProjectSettings`) are not changed by tooling
   without showing the owner what was found and what would change.
 - No paid assets and no new packages without the owner's agreement.

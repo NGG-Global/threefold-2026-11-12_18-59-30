@@ -64,7 +64,10 @@ namespace Threefold.Tests
                 Assert.AreEqual(NavMeshPathStatus.PathComplete, path.status, "The patrol can be walked.");
             }
 
-            // Every place the player comes back to has solid ground under it and room above it.
+            // Every place the player comes back to has solid ground under it and room above it. The Mage itself
+            // stands at the first checkpoint (the level's start), so its own colliders are not counted.
+            ThirdPersonMotor mage = Object.FindAnyObjectByType<ThirdPersonMotor>();
+            Assert.IsNotNull(mage);
             foreach (Checkpoint checkpoint in gameplay.Checkpoints)
             {
                 Vector3 respawn = checkpoint.RespawnPosition;
@@ -72,8 +75,17 @@ namespace Threefold.Tests
                     QueryTriggerInteraction.Ignore), $"'{checkpoint.name}' has ground under its respawn point.");
                 Assert.AreEqual(respawn.y, ground.point.y, 0.15f);
                 // The Mage's own capsule (radius 0.35, height 1.8), lifted clear of the floor by a few centimetres.
-                Assert.IsFalse(Physics.CheckCapsule(respawn + Vector3.up * 0.4f, respawn + Vector3.up * 1.5f, 0.35f, Physics.DefaultRaycastLayers,
-                    QueryTriggerInteraction.Ignore), $"'{checkpoint.name}': the Mage fits there.");
+                var inTheWay = new List<string>();
+                foreach (Collider other in Physics.OverlapCapsule(respawn + Vector3.up * 0.4f, respawn + Vector3.up * 1.5f, 0.35f,
+                             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                {
+                    if (!other.transform.IsChildOf(mage.transform))
+                    {
+                        inTheWay.Add(other.name);
+                    }
+                }
+
+                Assert.AreEqual(0, inTheWay.Count, $"'{checkpoint.name}': the Mage fits there. In the way: {string.Join(", ", inTheWay)}");
             }
 
             // The pieces that last are saved under the level's prefix, so a replay forgets exactly them.
@@ -98,8 +110,11 @@ namespace Threefold.Tests
             BrokenFoundrySetup.Gameplay before = BrokenFoundrySetup.Find(first);
             string crystalId = before.Crystal.PersistentId;
 
-            // A value tuned by hand, which a second run must keep.
+            // A value tuned by hand, which a second run must keep. Saved, as a person would: the setup opens the
+            // scene from disk, so an unsaved change would be gone whatever the setup did.
             before.Hazard.Configure(before.Hazard.Size, 7f);
+            EditorUtility.SetDirty(before.Hazard);
+            Assert.IsTrue(UnityEditor.SceneManagement.EditorSceneManager.SaveScene(first));
 
             Scene scene = BrokenFoundrySetup.BuildForAutomation();
             BrokenFoundrySetup.Gameplay after = BrokenFoundrySetup.Find(scene);

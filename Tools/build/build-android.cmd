@@ -4,12 +4,12 @@ rem
 rem Usage: close the Unity Editor, then double-click this file (or run it from a terminal).
 rem The APK is written to build\Android\Threefold.apk and the log to build\android-build.log.
 rem
-rem The build assembles the Fantasy Playground scene from code first. It creates or updates
-rem Assets\Scenes\FantasyPlayground.unity and Assets\Threefold\Generated. It does not touch any
-rem other scene.
+rem The build assembles the Broken Foundry, the Combat Arena and the Fantasy Playground from code
+rem first. It creates or updates those scenes and Assets\Threefold\Generated. It does not touch
+rem any other scene.
 rem
-rem The same script is used by the "Android build" workflow on a self-hosted runner.
-rem It has not been run yet; see Docs\CloudBuild.md.
+rem The same script is used by the "Android build" workflow on a self-hosted runner; see
+rem Docs\CloudBuild.md and the list of runs in Docs\LivingMagicTesting.md.
 
 setlocal
 set "PROJECT=%~dp0..\.."

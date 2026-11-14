@@ -10,6 +10,9 @@ Editor, and that Unity would otherwise only reveal on the next import:
   * a large binary committed outside Git LFS
   * invalid JSON in assembly definitions and the package manifest
   * unresolved merge conflict markers
+  * a MonoBehaviour or ScriptableObject class (directly or through a base class) that is not
+    in a file of the same name: Unity cannot link a component or asset to such a class, so
+    assets created from it lose their script (found by the first Unity build of LM-01 to LM-07)
 
 Only files tracked by Git are inspected, so ignored folders such as Library/ are never read.
 Run from anywhere inside the repository:
@@ -183,6 +186,47 @@ def check_conflict_markers(index: dict[str, str], sizes: dict[str, int], lfs_pat
             error(path, "contains unresolved merge conflict markers")
 
 
+CLASS_PATTERN = re.compile(
+    r"^[ \t]*(?:\[[^\]\n]*\][ \t]*)*((?:(?:public|internal|private|protected|sealed|abstract|static|partial)[ \t]+)*)"
+    r"class[ \t]+(\w+)(?:<[^>\n]*>)?\s*(?::\s*([\w.<>, \t]+))?",
+    re.MULTILINE,
+)
+# Unity types whose subclasses Unity serializes by script. Custom inspectors (Editor) are left out:
+# Unity creates them itself and does not need them in files of their own name.
+UNITY_SCRIPT_BASES = {
+    "MonoBehaviour", "ScriptableObject", "StateMachineBehaviour", "EditorWindow", "ScriptableSingleton",
+    "UIBehaviour", "Graphic", "MaskableGraphic", "Selectable", "BaseMeshEffect", "LayoutGroup",
+}
+
+
+def check_script_file_names(index: dict[str, str], sizes: dict[str, int]) -> None:
+    """A concrete class that Unity serializes as a script must be in a file of the same name."""
+    classes: dict[str, list[tuple[str, bool, str | None]]] = defaultdict(list)
+    for path, blob in sorted(index.items()):
+        if not (path.startswith(ASSET_ROOT) and path.endswith(".cs")) or sizes[blob] > MAX_REGULAR_FILE_BYTES:
+            continue
+        source = re.sub(r"//[^\n]*", "", read_blob(blob).decode("utf-8-sig", errors="replace"))
+        for match in CLASS_PATTERN.finditer(source):
+            bases = [b.strip().split("<")[0].split(".")[-1] for b in (match.group(3) or "").split(",") if b.strip()]
+            classes[match.group(2)].append((path, "abstract" in match.group(1).split(), bases[0] if bases else None))
+
+    def is_unity_script(name: str, seen: frozenset[str] = frozenset()) -> bool:
+        if name in UNITY_SCRIPT_BASES:
+            return True
+        if name in seen or name not in classes:
+            return False
+        return any(base is not None and is_unity_script(base, seen | {name}) for _, _, base in classes[name])
+
+    for name, declarations in sorted(classes.items()):
+        for path, abstract, base in declarations:
+            # Test helpers are only created in memory by the tests and never saved, so they may share a file.
+            if abstract or base is None or "/Tests/" in path or not is_unity_script(base):
+                continue
+            if os.path.splitext(os.path.basename(path))[0] != name:
+                error(path, f"class {name} derives from a Unity script type but is not in {name}.cs; "
+                            "Unity cannot link components or assets to it")
+
+
 def check_project_layout(index: dict[str, str]) -> None:
     version_file = "ProjectSettings/ProjectVersion.txt"
     if version_file not in index:
@@ -231,6 +275,7 @@ def main() -> int:
     check_lfs(index, sizes)
     check_json(index)
     check_conflict_markers(index, sizes, read_lfs_paths(sorted(index)))
+    check_script_file_names(index, sizes)
     return report()
 
 

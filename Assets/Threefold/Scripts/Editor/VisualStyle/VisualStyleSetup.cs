@@ -203,6 +203,7 @@ namespace Threefold.EditorTools
 
             ApplyLighting(controller, sun, assets, report);
             EnsureTestPanel(scene, controller, report);
+            GraphicsMenuSetup.Ensure(scene, report);
             EnsureProps(scene, assets, props, report);
 
             List<RenderingSettingsCheck.Finding> findings = RenderingSettingsCheck.Inspect();
@@ -264,7 +265,7 @@ namespace Threefold.EditorTools
             foreach (GameObject added in new[]
                      {
                          FindObject<VisualStyleTestPanel>(scene), FindObject<VisualStyleController>(scene),
-                         StyleProps.Find(scene),
+                         FindObject<GraphicsMenu>(scene), StyleProps.Find(scene),
                      })
             {
                 if (added != null)
@@ -273,7 +274,7 @@ namespace Threefold.EditorTools
                 }
             }
 
-            report.AppendLine("Removed the style controller, the test panel and the style props.");
+            report.AppendLine("Removed the style controller, the test panel, the graphics menu and the style props.");
         }
 
         /// <summary>Reports problems with an applied style. Called by the scene validator.</summary>
@@ -452,11 +453,16 @@ namespace Threefold.EditorTools
                 var host = new GameObject(ControllerName);
                 Undo.RegisterCreatedObjectUndo(host, DialogTitle);
                 controller = host.AddComponent<VisualStyleController>();
-                report.AppendLine("Added the style controller: quality levels Low, Medium and High; lighting Golden Afternoon and Overcast Morning.");
+                report.AppendLine("Added the style controller: graphics presets Performance, Balanced and Quality; lighting Golden Afternoon and Overcast Morning.");
             }
 
             Undo.RecordObject(controller, DialogTitle);
             controller.BindMissing(sun, viewCamera);
+            if (controller.UpgradePresets())
+            {
+                report.AppendLine("Brought the quality levels up to date: named Performance, Balanced and Quality, with frame-rate targets " +
+                                  "30, 60 and 60 where none was set, and contour lines kept on Performance. Other values are unchanged.");
+            }
             MarkChanged(controller);
 
             if (sun == null)
