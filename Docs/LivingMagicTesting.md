@@ -57,6 +57,13 @@ Unity's own test run they are inconclusive, because Unity's Mono does not count 
 
 | 8 | `be1b39d` (LM-08 branch head), tests only | **Green.** EditMode: 878 tests, **873 passed, 0 failed**, 5 inconclusive (the five allocation tests, listed by name). 13 minutes |
 
+| 9 | `ed638fa` (`main`, merge of PR #22), tests and APK | **Interrupted**, not a code failure: 12 minutes into the EditMode tests the log reads "The runner has received a shutdown signal" (the laptop or its runner service stopped) |
+| 10 | `ed638fa` (`main`), tests and APK | Started again at 17:48 UTC on 14 November; **queued** until the laptop runner is online |
+
+Until run 10 completes, the latest APK is run 6's (`27284d7`). Its game code is the same as `main`'s: the
+runtime scripts and shaders are identical; `main` differs only in an Editor validation rule, tests, the
+workflow and documentation.
+
 Later runs are recorded below as they complete.
 
 ### Unity: EditMode tests (run 6, the first time they ran in Unity)
