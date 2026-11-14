@@ -152,6 +152,12 @@ Arcane swings carry no effect and no longer reach an activator; the Arcane Arrow
 `SpellActivator` is also an aim-assist target, so a thumb on a touchscreen finds the crystal as
 easily as a training dummy.
 
+**Saving.** Since Sprint LM-04 the remembered state of puzzle elements is part of the world
+state, together with the lasting state of magical objects (`Docs/WorldState.md`). Nothing changes
+for a puzzle: a persistence key works as before. In a build the world state is also written to
+disk, so a solved puzzle stays solved after the game is closed; in the Editor it is kept for the
+Play session only, unless that is switched on in the Threefold > World State menu.
+
 **Properties as puzzle inputs.** `WorldMagic/PropertyStateTrigger` is a puzzle element that is
 active while an object's magical properties meet a condition (activated, burning, destroyed,
 braced and so on). Use it wherever an element is expected: as a door's **Input**, a timer's

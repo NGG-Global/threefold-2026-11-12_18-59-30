@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Threefold.Combat;
+using Threefold.Persistence;
 using Threefold.WorldMagic;
 using UnityEditor;
 using UnityEngine;
@@ -83,6 +84,39 @@ namespace Threefold.EditorTools
             // The values of a definition are reported once, however many objects share it.
             var checkedDefinitions = new HashSet<MagicalObjectDefinition>();
 
+            // Two objects with one identifier would overwrite each other's saved state.
+            var ids = new List<string>();
+            var owners = new Dictionary<string, List<string>>();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                foreach (MagicalObject magical in root.GetComponentsInChildren<MagicalObject>(true))
+                {
+                    string id = magical.PersistentId;
+                    ids.Add(id);
+                    if (string.IsNullOrEmpty(id))
+                    {
+                        continue;
+                    }
+
+                    if (!owners.TryGetValue(id, out List<string> names))
+                    {
+                        names = new List<string>();
+                        owners.Add(id, names);
+                    }
+
+                    names.Add(magical.name);
+                }
+            }
+
+            var duplicates = new List<string>();
+            PersistentIdRegistry.FindDuplicates(ids, duplicates);
+            foreach (string id in duplicates)
+            {
+                problem($"The persistent id '{id}' is used by {owners[id].Count} objects ('{string.Join("', '", owners[id])}'). " +
+                        "Only the first would be saved. Clear the id on the copies and run Threefold > World Magic > " +
+                        "Assign Persistent Ids.");
+            }
+
             foreach (GameObject root in scene.GetRootGameObjects())
             {
                 foreach (MagicalObject magical in root.GetComponentsInChildren<MagicalObject>(true))
@@ -140,6 +174,11 @@ namespace Threefold.EditorTools
                         "own scripts; use one or the other.");
             }
 
+            if (definition != null)
+            {
+                ValidateWorldState(magical, definition.Properties, problem);
+            }
+
             if (definition != null && definition.Properties.kinetic)
             {
                 Transform mover = magical.MoveTarget;
@@ -153,6 +192,55 @@ namespace Threefold.EditorTools
                     problem($"The magical object '{name}' can be pushed, but its moving part '{mover.name}' carries no " +
                             "collider, so the object would move without what blocks and what is hit.");
                 }
+            }
+        }
+
+        /// <summary>What LM-04 added: the identifier, and where the object's reactions go.</summary>
+        private static void ValidateWorldState(MagicalObject magical, MagicalPropertySettings settings, Action<string> problem)
+        {
+            string name = magical.name;
+            if (!string.IsNullOrEmpty(magical.PersistentId) && settings.persisted == PersistedState.None)
+            {
+                problem($"The magical object '{name}' has a persistent id, but its definition saves nothing. " +
+                        "Either tick what is to be kept in the definition, or clear the id.");
+            }
+
+            bool usesLinks = false;
+            if (settings.emissions != null)
+            {
+                foreach (ReactionEmission rule in settings.emissions)
+                {
+                    usesLinks |= rule != null && rule.toLinkedTargets;
+
+                    // With a radius the reaction still reaches something; with links only, it needs them.
+                    if (rule != null && rule.toLinkedTargets && rule.radius <= 0f && magical.LinkedTargetCount == 0)
+                    {
+                        problem($"The magical object '{name}' has a reaction that goes to its linked targets only, but none " +
+                                "are listed on the object. It reaches nothing.");
+                    }
+                }
+            }
+
+            for (int i = 0; i < magical.LinkedTargetCount; i++)
+            {
+                GameObject linked = magical.GetLinkedTarget(i);
+                if (linked == null)
+                {
+                    problem($"The magical object '{name}' lists a linked target that no longer exists.");
+                }
+                else if (linked.GetComponent<IMagicEffectReceiver>() == null)
+                {
+                    problem($"The magical object '{name}' is linked to '{linked.name}', which cannot receive magical effects.");
+                }
+                else if (linked == magical.gameObject)
+                {
+                    problem($"The magical object '{name}' is linked to itself.");
+                }
+            }
+
+            if (magical.LinkedTargetCount > 0 && !usesLinks)
+            {
+                problem($"The magical object '{name}' lists linked targets, but none of its reactions goes to them.");
             }
         }
 

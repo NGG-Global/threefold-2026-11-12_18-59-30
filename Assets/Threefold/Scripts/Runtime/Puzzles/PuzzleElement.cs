@@ -1,4 +1,5 @@
 using System;
+using Threefold.Persistence;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -31,6 +32,7 @@ namespace Threefold.Puzzles
 
         private bool active;
         private bool locked;
+        private bool listensToWorld;
 
         /// <summary>Raised when the element becomes active or inactive.</summary>
         public event Action<PuzzleElement> StateChanged;
@@ -63,6 +65,90 @@ namespace Threefold.Puzzles
         protected virtual void Awake()
         {
             RestoreFromSession();
+
+            // An element with a key follows the saved world when it is put back as a whole.
+            if (!string.IsNullOrEmpty(persistenceKey) && Application.isPlaying)
+            {
+                WorldState.Reloaded += HandleWorldReloaded;
+                listensToWorld = true;
+            }
+        }
+
+        protected virtual void OnDestroy()
+        {
+            if (listensToWorld)
+            {
+                WorldState.Reloaded -= HandleWorldReloaded;
+                listensToWorld = false;
+            }
+        }
+
+        /// <summary>
+        /// The world state was put back as a whole (a checkpoint, a new game, a load from disk). The
+        /// element takes what is remembered for it; with nothing remembered it goes back to how it
+        /// starts. A plain restart changes nothing here.
+        /// </summary>
+        private void HandleWorldReloaded(WorldReload reload)
+        {
+            // A restart leaves puzzle elements as they are, as it always has.
+            if (reload != WorldReload.StateReplaced)
+            {
+                return;
+            }
+
+            if (PuzzleSessionState.TryGet(persistenceKey, out PuzzleRecord record))
+            {
+                if (!record.Locked && !PersistsUnlockedState)
+                {
+                    return;
+                }
+
+                if (active == record.Active && locked == record.Locked)
+                {
+                    return;
+                }
+
+                active = record.Active;
+                locked = record.Locked;
+            }
+            else if (PersistsUnlockedState)
+            {
+                // Its state is remembered whenever it differs from the start, so nothing remembered
+                // means the start.
+                if (!active && !locked)
+                {
+                    return;
+                }
+
+                active = false;
+                locked = false;
+            }
+            else
+            {
+                // Only a locked (solved) state of this kind of element is ever remembered: its unlocked
+                // state follows from its inputs. With nothing remembered it is no longer locked, and what
+                // it shows is worked out again from the inputs. An element that was not locked is left alone.
+                if (!locked)
+                {
+                    OnWorldStateReplaced();
+                    return;
+                }
+
+                locked = false;
+                active = false;
+            }
+
+            OnRestored();
+            StateChanged?.Invoke(this);
+            OnWorldStateReplaced();
+        }
+
+        /// <summary>
+        /// Called after the saved world was replaced as a whole and this element has taken what is
+        /// remembered for it. An element whose state follows from others works it out again here.
+        /// </summary>
+        protected virtual void OnWorldStateReplaced()
+        {
         }
 
         /// <summary>

@@ -56,6 +56,14 @@ separates approved decisions from proposals; do not present a proposal as decide
   `MagicalObject` only carries them out. A new kind of object is a `MagicalObjectDefinition`
   asset, not new code. Damage goes to `Health`, effects go to `IMagicEffectReceiver`: keep them
   apart. The starting values of the examples are in `WorldMagicDefaults`.
+- What the world remembers (`Docs/WorldState.md`) is in one store, `WorldState.Current`, which
+  `PuzzleSessionState` also uses: do not add a second save mechanism. A state is saved only if
+  the definition names it under Persisted and the object has a Persistent Id; heat and charge are
+  temporary unless named as an exception. Loading is silent: it announces nothing and sends no
+  reaction. No magical object has an update or a coroutine of its own; time passes through the
+  one `WorldSimulation`. One object acts on another only through a reaction rule in its
+  definition, offered to the `ReactionScheduler`, never by calling the other object directly.
+  The budgets (depth 3, 8 per frame, 32 active objects) are provisional, not measured.
 - The visual style (`Docs/VisualStyle.md`) is a proposal until the owner has reviewed it in Unity
   and on a device. Its shader is `Assets/Threefold/Shaders/IllustratedLit.shader`. The shader's
   arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change

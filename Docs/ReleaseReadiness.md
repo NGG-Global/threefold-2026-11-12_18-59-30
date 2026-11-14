@@ -200,6 +200,16 @@ Install the APK, then check in this order. Stop at the first failure and report 
 - [ ] The reinforced door opens after two full Arcane Arrows at its lock, or gives way after two full Force Pulses. Flame does nothing to it.
 - [ ] Each object ignores the disciplines it should ignore: the crystal does not burn, the platform does not charge.
 
+**World state and chain reactions** (Discipline Range)
+- [ ] Lighting the first barricade of the row of five sets the next three alight one after another; the fifth stays untouched.
+- [ ] After burning the lane's barricade, Restart (R) leaves it burnt down; the row of five comes back whole.
+- [ ] A heated stone barrier is cold again after Restart; a platform that was pushed stays where it was left.
+- [ ] Activating the crystal makes the reinforced door's lock glow partly; one full Arcane Arrow at the lock within about five seconds then opens the door.
+- [ ] Threefold > World State > New Game puts everything back: barricade, stone, platform, structure and door.
+- [ ] With Keep Saved State Between Play Sessions ticked: destroy the barricade, stop Play, press Play; it is still destroyed.
+- [ ] On a device: the same after closing and reopening the app, and after sending it to the background while something burns.
+- [ ] The Console shows no warning about dropped reactions during any of this.
+
 **Objective**
 - [ ] The top of the screen shows the objective and three markers.
 - [ ] Defeating a construct (darker, with a glowing gem) lights a marker.

@@ -459,7 +459,7 @@ namespace Threefold.Combat
         /// True if a wall, a column or other scenery lies between the attacker and the point on the
         /// target. Creatures are not cover: an area attack reaches the second rank as well as the first.
         /// </summary>
-        private static bool IsBehindCover(Transform userTransform, Transform targetTransform, Vector3 from, Vector3 to,
+        public static bool IsBehindCover(Transform userTransform, Transform targetTransform, Vector3 from, Vector3 to,
             LayerMask layers)
         {
             Vector3 offset = to - from;

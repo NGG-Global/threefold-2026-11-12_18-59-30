@@ -105,6 +105,11 @@ namespace Threefold.WorldMagic
         [Min(0.05f)]
         [SerializeField] private float collapseSeconds = 0.7f;
 
+        [Header("Performance")]
+        [Tooltip("While none of the listed renderers is drawn, colours, sway and bursts are not computed. The object's " +
+                 "state is unaffected and is shown again the moment it is seen.")]
+        [SerializeField] private bool suspendWhenUnseen = true;
+
         private MaterialPropertyBlock block;
         private Color[] tintBase = new Color[0];
         private Color[] chargeBase = new Color[0];
@@ -114,6 +119,7 @@ namespace Threefold.WorldMagic
         private bool swayRestKnown;
         private float collapseAmount;
         private float burningTimer;
+        private bool unseen;
 
         /// <summary>Connects the object and the renderers. Called by the setup tooling.</summary>
         public void Bind(MagicalObject magicalObject, Renderer[] tinted, Renderer[] charged)
@@ -199,6 +205,12 @@ namespace Threefold.WorldMagic
             }
 
             ShowCurrentState(false);
+
+            // A state loaded from the saved world is shown as it is: a structure that had come down lies down.
+            if (source != null && source.Properties != null)
+            {
+                SnapMotion(source.Properties);
+            }
         }
 
         private void OnDestroy()
@@ -223,8 +235,40 @@ namespace Threefold.WorldMagic
             float deltaTime = Time.deltaTime;
             bool busy = false;
 
+            // Out of sight, nothing here is worth computing. The object's state carries on regardless:
+            // it lives in its properties, not in what is shown. What is shown is brought up to date once
+            // if the object has settled, and again the moment it is seen.
+            if (suspendWhenUnseen && !IsSeen())
+            {
+                if (!unseen)
+                {
+                    unseen = true;
+                    ShowCurrentState(false);
+                    SnapMotion(properties);
+                }
+
+                bool sways = swayTarget != null && swayDegrees > 0f && properties.Meets(PropertyCondition.Unstable);
+                if (!source.IsAwake && !sways)
+                {
+                    // It has settled out of sight. What is shown is brought up to date one last time,
+                    // because a component that is switched off cannot notice being looked at again.
+                    ShowCurrentState(false);
+                    SnapMotion(properties);
+                    enabled = false;
+                }
+
+                return;
+            }
+
+            if (unseen)
+            {
+                unseen = false;
+                ShowCurrentState(false);
+                SnapMotion(properties);
+            }
+
             // Heat and charge change without a change of state, so the colours follow them while the object is awake.
-            if (source.enabled)
+            if (source.IsAwake)
             {
                 ApplyColors(properties);
                 busy = true;
@@ -280,7 +324,8 @@ namespace Threefold.WorldMagic
 
         private void HandleStateChanged(MagicalObject changed, WorldPropertyKind kind, int from, int to)
         {
-            ShowCurrentState(true);
+            // A burst for something nobody is looking at is not worth its particles.
+            ShowCurrentState(!suspendWhenUnseen || IsSeen());
             enabled = true;
         }
 
@@ -292,12 +337,53 @@ namespace Threefold.WorldMagic
             }
         }
 
-        private void HandleRestored(MagicalObject restored)
+        private void HandleRestored(MagicalObject restored, StateReset reason)
         {
-            collapseAmount = 0f;
-            collapsePart.Apply(0f);
+            // The state was set as a whole: show it as it is, without playing how it came about.
             ShowCurrentState(false);
+            if (source != null && source.Properties != null)
+            {
+                SnapMotion(source.Properties);
+            }
+
             enabled = true;
+        }
+
+        /// <summary>Puts the moving parts where the state says they are, at once.</summary>
+        private void SnapMotion(MagicalPropertySet properties)
+        {
+            collapseAmount = properties.Meets(PropertyCondition.Collapsed) ? 1f : 0f;
+            collapsePart.Apply(collapseAmount);
+
+            if (swayTarget != null && swayRestKnown)
+            {
+                swayTarget.localRotation = swayRest;
+            }
+        }
+
+        /// <summary>True if any renderer this component colours is being drawn. With none listed it counts as seen.</summary>
+        private bool IsSeen()
+        {
+            bool any = false;
+            for (int i = 0; i < tintRenderers.Length; i++)
+            {
+                if (tintRenderers[i] != null)
+                {
+                    any = true;
+                    if (tintRenderers[i].isVisible) return true;
+                }
+            }
+
+            for (int i = 0; i < chargeRenderers.Length; i++)
+            {
+                if (chargeRenderers[i] != null)
+                {
+                    any = true;
+                    if (chargeRenderers[i].isVisible) return true;
+                }
+            }
+
+            return !any;
         }
 
         /// <summary>Shows and hides parts, plays the effects of conditions that have just started, and sets the colours.</summary>

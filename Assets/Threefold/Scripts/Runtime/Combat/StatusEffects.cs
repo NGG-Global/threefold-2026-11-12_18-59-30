@@ -56,6 +56,26 @@ namespace Threefold.Combat
         [Tooltip("Seconds between burn damage ticks.")]
         [Min(0.05f)]
         public float burnTickSeconds = 0.5f;
+
+        [Tooltip("What more heat does to a target that is already burning. Ignore: nothing, so it cannot be kept " +
+                 "alight without pause. Refresh: the burn starts its time again. Extend: the burn lasts one burn time " +
+                 "longer, up to twice the burn time in all.")]
+        public StackPolicy burnStacking = StackPolicy.Ignore;
+    }
+
+    /// <summary>
+    /// What happens when an effect arrives while the same temporary state is already running.
+    /// </summary>
+    public enum StackPolicy
+    {
+        /// <summary>The state starts its time again. It never lasts longer than one full time.</summary>
+        Refresh = 0,
+
+        /// <summary>The time is added to what is left, up to a stated limit.</summary>
+        Extend = 1,
+
+        /// <summary>Nothing: the state runs its course.</summary>
+        Ignore = 2,
     }
 
     /// <summary>
@@ -109,11 +129,29 @@ namespace Threefold.Combat
         /// <summary>True if the target can be heated at all.</summary>
         public bool CanHeat => settings.susceptibility > 0f;
 
+        /// <summary>True if more heat does anything to the target while it burns (see <see cref="HeatSettings.burnStacking"/>).</summary>
+        public bool RenewsWhileBurning => settings.burnStacking != StackPolicy.Ignore;
+
         /// <summary>Adds heat. Returns true if this ignited the target.</summary>
         public bool Add(float amount)
         {
-            if (amount <= 0f || !CanHeat || IsBurning)
+            if (amount <= 0f || !CanHeat)
             {
+                return false;
+            }
+
+            if (IsBurning)
+            {
+                // Already alight: what more heat does is a matter of policy. It never ignites twice.
+                if (settings.burnStacking == StackPolicy.Refresh)
+                {
+                    burnRemaining = settings.burnSeconds;
+                }
+                else if (settings.burnStacking == StackPolicy.Extend)
+                {
+                    burnRemaining = Mathf.Min(burnRemaining + settings.burnSeconds, settings.burnSeconds * 2f);
+                }
+
                 return false;
             }
 
@@ -188,6 +226,17 @@ namespace Threefold.Combat
             Heat = 0f;
             burnRemaining = 0f;
             sinceLastHeat = 0f;
+        }
+
+        /// <summary>
+        /// Sets the heat held, for a saved state that names heat as an exception. The target is not
+        /// alight afterwards, whatever the amount: a fire does not survive a reload.
+        /// </summary>
+        public void SetHeat(float amount)
+        {
+            burnRemaining = 0f;
+            sinceLastHeat = 0f;
+            Heat = float.IsNaN(amount) ? 0f : Mathf.Clamp(amount, 0f, settings.capacity);
         }
     }
 
