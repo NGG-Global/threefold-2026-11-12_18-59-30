@@ -6,7 +6,7 @@ left through a sealed exit. It is a gameplay prototype, not a production level. 
 playthrough is five to ten minutes; that figure is a design estimate, not a measurement.
 
 **Status:** the code compiles against the Unity 6000.6.0f1 assemblies, for the Editor and with
-Android player defines, and the level's rules pass 43 tests outside Unity (see Tests). **Nothing has
+Android player defines, and the level's rules pass 46 tests outside Unity (see Tests). **Nothing has
 run inside the Unity Editor or on a device.** The scene has not been generated, nobody has seen or
 played it, the Guardian has not walked its navigation mesh, no checkpoint has been reached in a real
 scene, and no frame time has been measured. The look follows the approved direction of the Art Bible
@@ -116,7 +116,8 @@ sprinting jump covers about 4.9 m (`TraversalReach`). Every wall is high enough 
 can stand on (floor, ledge, prop, scaffold, lift, gantry) leads onto a wall top or a column top.
 
 **Checkpoints.** Six, in order: forecourt, Ore Hall (beyond the barricade, before the bridge), Lift
-Hall, the doorway to the stair, exit court, way out.
+Hall, the doorway to the stair, exit court, way out. Each one behind a door spans its room from wall
+to wall, so it cannot be walked past, and counts the player's feet up to 0.3 m below the floor.
 
 | Event | What happens |
 | --- | --- |
@@ -125,14 +126,19 @@ Hall, the doorway to the stair, exit court, way out.
 | Falling into the slag | 25 damage, and back to the last checkpoint with nothing else reset. Four falls from full health defeat the Mage, and the restart follows |
 | Closing and reopening the game (a build) | The furthest checkpoint is remembered; the player starts there, and the level is as it was left |
 | Reaching the way out | The level is complete. Restart now replays the foundry from the start: everything the foundry saved is forgotten, other levels' saved state is kept |
-| Retry from checkpoint (diagnostics) | The world state goes back to the last checkpoint and the player restarts there. A plug broken after it stands again: one way to try the other exits |
+| Retry from checkpoint (diagnostics) | The world state goes back to the last checkpoint and the player restarts there. A plug broken after it stands again: one way to try the other exits. The way out does not take a checkpoint of its own, so after the level is complete a retry returns to the exit court; it never replays the whole level |
+| New game (Editor menu) | Everything is forgotten, checkpoints included, and the player starts at the forecourt |
 
 **Recovery.** The slag bridge and the gantry use a new property value, **Recover Seconds** on
 stability: five seconds after they came down, counted while nobody stands on them, they stand again.
+Their weight is counted over the deck only: on the sloped gantry the trigger starts far enough up the
+deck that standing at its foot to brace it is not standing on it, and a fallen gantry lies beyond its
+foot, not where the player stood (its far end goes under the wall).
 A failed crossing is therefore tried again at once, never a dead end and never a reason to restart.
 It is off (0) by default and on no earlier object, so the LM-03 structure and the LM-06 walkway
 behave as before. A collapse that recovers is temporary: it is never saved, and clearing temporary
-state stands the object up again. The validation reports a definition that both recovers and saves its collapse.
+state stands the object up again. Something destroyed never stands again. The validation reports a
+definition that recovers and also saves its collapse, or that recovers and has a structure.
 
 **No softlocks.** Every lasting change in the level only opens a way. The tests explore every lasting
 state the level can reach, in every order, and every place the player can stand in each, and check
@@ -238,14 +244,14 @@ portal leads to it yet. In a development build, open the diagnostics (three-fing
 | --- | --- |
 | `StabilitySettings`, `StabilityProperty` | **Recover Seconds** (default 0, off). A recovering collapse is temporary: not saved, ended by clearing temporary state, keeps the object simulated until it stands |
 | `MagicalPropertySet.Capture` | Does not save a collapse that will recover |
-| `MagicalObjectRules` | Reports a definition that recovers and also saves its collapse |
-| `PrototypeSession` | A respawn point set by checkpoints; `Respawn()` without a reset; `RetryFromCheckpoint()`; a replay scope: after the objective is complete, a restart forgets that level's saved state and starts it from the beginning |
+| `MagicalObjectRules` | Reports a definition that recovers and also saves its collapse, or recovers and has a structure |
+| `PrototypeSession` | A respawn point set by checkpoints; `Respawn()` without a reset; `RetryFromCheckpoint()`, which never replays; a replay scope: after the objective is complete, a restart forgets that level's saved state and starts it from the beginning; `NewGame()` also forgets the respawn point |
 | `DefeatTargetsObjective` | Goals: puzzle elements that count while active, besides targets to defeat |
 | `ObjectiveHud` | A count of one is not shown ("Find the way out of the foundry", not "… 0 / 1") |
 | `EnemyController` | `StaysDefeated`: a restart leaves such an enemy defeated |
 | `WorldState`, `WorldStateStore` | `ForgetScope(prefix)` / `RemoveWithPrefix`: forget one level, keep the rest |
 | `ObjectiveSetup` | Goals in the objective options |
-| `PrototypeValidator` | Goals; the level-flow checks |
+| `PrototypeValidator` | Goals; an objective with goals needs a replay scope; the level-flow checks |
 | `PrototypeBuild`, `android-build.yml` | The Android build also assembles and includes the foundry |
 | `MagicalObjectSetup` | Its part helpers are internal, for reuse |
 
@@ -259,9 +265,13 @@ is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `BrokenFoundryLayoutTests` (10) | Jump and reach figures; every opening fits the Mage; the stair and the gantry's slope; the ledge needs the lift at its stop; the pit cannot be jumped and is crossed on the bridge, its edge is guarded, the slag covers it; the breach needs the gantry and its way down is walkable both ways; **no wall top or column top can be reached from anything the player can stand on**; checkpoints and respawn points stand on floors and are clear; the objects fit where they stand; the furnace's heat misses the Guardian's patrol and a scaffold can fall on it |
-| `BrokenFoundryTests` (33) | The order of the progression; three complete exit solutions, each alone, genuinely different; **no softlock in any reachable state, in any order, from any checkpoint**; which disciplines the level needs; the crystal; the barricade by Flame and by force; the bridge unbraced, braced, and against two sprinting jumps; recovery, its persistence rules, and that it is off for earlier objects; the lift and its lock going dark half-way; the furnace's heat and the Guardian's plates; the shockwave and the scaffolds; the plug and its heating window; the counterweight and the gate; what lasts and what resets across a reload, for every object; the save file; forgetting one level; checkpoint rules; the hazard rule; frame timing; state text; the new definitions' validity |
-| `BrokenFoundryAssemblyTests` (5) | Needs Unity. Two in batch mode only: the level builds, validates and passes its own checks, the objective has its goal, the Guardian is on its mesh and cannot leave the casting floor, every respawn point has ground under it and room above; a second run adds nothing. Three in any Edit Mode session: `TraversalReach` equals the components' defaults, an objective completes on a goal, a checkpoint's box |
+| `BrokenFoundryLayoutTests` (12) | Jump and reach figures; every opening fits the Mage; the stair and the gantry's slope; the ledge needs the lift at its stop; the pit cannot be jumped and is crossed on the bridge, its edge is guarded, the slag covers it; the breach needs the gantry and its way down is walkable both ways; **no wall top or column top can be reached from anything the player can stand on**; checkpoints and respawn points stand on floors and are clear; the objects fit where they stand; the furnace's heat misses the Guardian's patrol and a scaffold can fall on it; the gantry's weight trigger stays over its deck, standing and fallen; the checkpoints behind doors span their rooms |
+| `BrokenFoundryTests` (34) | The order of the progression; three complete exit solutions, each alone, genuinely different; **no softlock in any reachable state, in any order, from any checkpoint**; which disciplines the level needs; the crystal; the barricade by Flame and by force; the bridge unbraced, braced, and against two sprinting jumps; recovery, its persistence rules, that it never stands up something destroyed, and that it is off for earlier objects; the lift and its lock going dark half-way; the furnace's heat and the Guardian's plates; the shockwave and the scaffolds; the plug and its heating window; the counterweight and the gate; what lasts and what resets across a reload, for every object; the save file; forgetting one level; checkpoint rules; the hazard rule; frame timing; state text; the new definitions' validity |
+| `BrokenFoundryAssemblyTests` (6) | Needs Unity. Two in batch mode only: the level builds, validates and passes its own checks, the objective has its goal, the Guardian is on its mesh and cannot leave the casting floor (stair foot, gate), every respawn point has ground under it and room for the Mage's capsule; a second run adds no object or component and keeps a value tuned by hand. Four in any Edit Mode session: `TraversalReach` equals the components' defaults, an objective completes on a goal, a new game and a retry put the player in the right place and a retry never replays, a checkpoint's box |
+
+**Not covered by any test:** what runs frame by frame in a scene: the checkpoint route noticing the
+player, the slag putting the player back, a remembered defeat hiding its Guardian on a load, the
+diagnostics overlay. These need Play Mode tests, which the project does not have yet.
 
 Two deliberate faults were put into the layout to see that the reachability test fails: walls lowered
 to 3.5 m, and a scaffold moved next to a column. Both were caught; the layout was restored.
@@ -272,7 +282,7 @@ to 3.5 m, and a scaffold moved next to a column. Both were caught; the layout wa
 | --- | --- |
 | Compiles for the Editor and with Android player defines | Passed (`Tools/ci/compile_check.sh`) |
 | Repository checks | Passed (`Tools/ci/check_unity_repo.py`) |
-| Progression paths, all three exit solutions, no softlocks, checkpoint recovery, save and reload, temporary state expiry: **as rules** | 43 tests passed outside Unity |
+| Progression paths, all three exit solutions, no softlocks, checkpoint recovery, save and reload, temporary state expiry: **as rules** | 46 tests passed outside Unity |
 | Combat interactions: **as rules** | Tested with the Guardian's real values (heat, plates, stagger) |
 | **The setup command, the scene, its validation** | Not run. Needs the Unity Editor |
 | **Anything in Play mode**: movement through the level, climbing, the camera in the stair and culvert, the Guardian's behaviour, checkpoints firing, the slag, the diagnostics | Not verified. Needs the Unity Editor |
@@ -299,3 +309,11 @@ to 3.5 m, and a scaffold moved next to a column. Both were caught; the layout wa
   diagnostics.
 - The level needs Arcane (the crystal) and Aegis (the bridge); Flame is always optional.
 - Restart after completion replays the whole level; there is no level select or menu.
+- **For the owner to decide:** in a build, loading a game in which the foundry was already finished
+  puts the player at the way out with the completion panel showing, because both the checkpoint and the
+  goal are saved. Restart then replays the level. Whether a finished level should instead start fresh
+  when it is opened again is a design choice; it has not been changed.
+- A fallen gantry's far end goes under the exit wall and the descent block behind it; a sunken bridge's
+  ends go into the pit's walls under the slag. Both are hidden, but would show if the walls were thinner.
+- While hidden, the diagnostics overlay still receives Unity's GUI calls each frame (development builds
+  only); they return at once.

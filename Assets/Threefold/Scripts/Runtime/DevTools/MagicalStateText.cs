@@ -123,7 +123,7 @@ namespace Threefold.DevTools
                     Separate(text).Append("braced ").Append(Number(set.Stability.BraceRemaining)).Append(" s");
                 }
 
-                if (set.Stability.Stress > 0f)
+                if (set.Stability.Stress > 0f && set.Stability.State != StabilityState.Collapsed)
                 {
                     Separate(text).Append("stress ").Append(Number(set.Stability.Stress)).Append('/')
                         .Append(Number(set.Stability.Settings.stressLimit));

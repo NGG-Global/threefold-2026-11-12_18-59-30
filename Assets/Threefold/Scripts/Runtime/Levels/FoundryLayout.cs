@@ -385,6 +385,30 @@ namespace Threefold.Levels
         /// <summary>The width of a bridge or gantry deck.</summary>
         public const float DeckWidth = 1.8f;
 
+        /// <summary>The trigger that counts who stands on a deck begins this far above it and is this tall, at right angles to the deck.</summary>
+        public const float LoadZoneLift = 0.1f;
+        public const float LoadZoneHeight = 1.6f;
+
+        /// <summary>
+        /// How far along a sloped deck its weight trigger must start. The trigger stands at right angles to the
+        /// deck, so on a slope its lower end leans back over the floor before the foot; started this far up the
+        /// deck, no part of it reaches back past the foot, and nobody standing at the foot (to brace it) counts
+        /// as standing on it.
+        /// </summary>
+        public static float LoadZoneFootInset(float pitchDegrees)
+        {
+            return (LoadZoneLift + LoadZoneHeight) * Mathf.Tan(Mathf.Max(0f, pitchDegrees) * Mathf.Deg2Rad);
+        }
+
+        /// <summary>
+        /// How far a fallen ramp slides forward as it drops flat, so that it lies wholly beyond its foot and not
+        /// where the player stood to brace it. Its far end goes under the wall it leaned against.
+        /// </summary>
+        public static float CollapsedRampShift(float length, float run)
+        {
+            return (length - run) * 0.5f + 0.05f;
+        }
+
         // ------------------------------------------------------------ zones
 
         public static readonly LayoutZone SlagHazard =
@@ -397,13 +421,13 @@ namespace Threefold.Levels
         {
             new CheckpointLayout("Forecourt", 0, new LayoutZone(new Vector3(0f, 0f, -34.5f), new Vector3(6f, 3f, 4f)),
                 Spawn, FoundryPlace.Forecourt),
-            new CheckpointLayout("Ore Hall", 1, new LayoutZone(new Vector3(0f, 0f, -13.6f), new Vector3(6f, 3f, 2.4f)),
+            new CheckpointLayout("Ore Hall", 1, new LayoutZone(new Vector3(0f, 0f, -13.6f), new Vector3(OreHallX.y - OreHallX.x, 3f, 2.6f)),
                 new LayoutPoint(new Vector3(3f, 0f, -13f), 0f), FoundryPlace.OreHallLanding),
-            new CheckpointLayout("Lift Hall", 2, new LayoutZone(new Vector3(0f, 0f, 1.6f), new Vector3(3f, 3f, 2f)),
+            new CheckpointLayout("Lift Hall", 2, new LayoutZone(new Vector3(0f, 0f, 1.5f), new Vector3(LiftHallX.y - LiftHallX.x, 3f, 2f)),
                 new LayoutPoint(new Vector3(0f, 0f, 2f), 0f), FoundryPlace.LiftHall),
             new CheckpointLayout("Upper Stair", 3, new LayoutZone(new Vector3(5.3f, LiftLedgeHeight, 14.5f), new Vector3(2.6f, 3f, 1f)),
                 new LayoutPoint(new Vector3(5.3f, LiftLedgeHeight, 12.6f), 0f), FoundryPlace.LiftLedge),
-            new CheckpointLayout("Exit Court", 4, new LayoutZone(new Vector3(0f, 0f, 44.4f), new Vector3(4f, 3f, 1.6f)),
+            new CheckpointLayout("Exit Court", 4, new LayoutZone(new Vector3(0f, 0f, 44.4f), new Vector3(ExitCourtX.y - ExitCourtX.x, 3f, 2f)),
                 new LayoutPoint(new Vector3(0f, 0f, 44.8f), 0f), FoundryPlace.ExitCourt),
             new CheckpointLayout("Way Out", 5, new LayoutZone(new Vector3(0f, 0f, 64.5f), new Vector3(18f, 4f, 7f)),
                 new LayoutPoint(new Vector3(0f, 0f, 63f), 0f), FoundryPlace.ExitYard),

@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Threefold.Combat;
 using Threefold.Persistence;
+using Threefold.Puzzles;
 using UnityEngine;
 
 namespace Threefold.Objectives
@@ -14,7 +16,8 @@ namespace Threefold.Objectives
     /// - When the level loads, the furthest checkpoint remembered in the saved world state is current
     ///   again and the player starts there.
     /// - When the saved state is replaced as a whole (a new game, a replay, a return to a checkpoint), the
-    ///   current checkpoint is worked out again from what is remembered.
+    ///   current checkpoint and the session's respawn point are worked out again at once from what the
+    ///   store remembers, so a restart that follows puts the player in the right place.
     ///
     /// It looks only at the player's position against a few boxes: no physics and no allocation per frame.
     /// </summary>
@@ -33,7 +36,6 @@ namespace Threefold.Objectives
         private CheckpointProgress progress;
         private Checkpoint[] byOrder = new Checkpoint[0];
         private bool started;
-        private bool replaced;
 
         /// <summary>Raised when the player reaches a checkpoint for the first time.</summary>
         public event Action<Checkpoint> CheckpointReached;
@@ -72,6 +74,54 @@ namespace Threefold.Objectives
             Index();
         }
 
+        /// <summary>
+        /// Fills what is missing and keeps what is set: empty references are filled, checkpoints and hazards
+        /// that are not listed yet are added, and entries whose object was deleted are dropped. Called by the
+        /// setup tooling. Returns true if anything changed.
+        /// </summary>
+        public bool FillMissing(PrototypeSession owningSession, Transform playerTransform, Health health, Checkpoint[] levelCheckpoints,
+            HazardVolume[] levelHazards)
+        {
+            bool changed = false;
+            if (session == null && owningSession != null) { session = owningSession; changed = true; }
+            if (player == null && playerTransform != null) { player = playerTransform; changed = true; }
+            if (playerHealth == null && health != null) { playerHealth = health; changed = true; }
+
+            Checkpoint[] mergedCheckpoints = Merge(checkpoints, levelCheckpoints, ref changed);
+            HazardVolume[] mergedHazards = Merge(hazards, levelHazards, ref changed);
+            checkpoints = mergedCheckpoints;
+            hazards = mergedHazards;
+            Index();
+            return changed;
+        }
+
+        private static T[] Merge<T>(T[] existing, T[] wanted, ref bool changed) where T : UnityEngine.Object
+        {
+            var merged = new List<T>();
+            if (existing != null)
+            {
+                foreach (T item in existing)
+                {
+                    if (item != null && !merged.Contains(item)) merged.Add(item);
+                    else changed = true;
+                }
+            }
+
+            if (wanted != null)
+            {
+                foreach (T item in wanted)
+                {
+                    if (item != null && !merged.Contains(item))
+                    {
+                        merged.Add(item);
+                        changed = true;
+                    }
+                }
+            }
+
+            return merged.ToArray();
+        }
+
         private void Awake()
         {
             Index();
@@ -89,9 +139,12 @@ namespace Threefold.Objectives
 
         private void HandleReloaded(WorldReload reload)
         {
-            if (reload == WorldReload.StateReplaced)
+            // At once, from the store itself, so that it does not matter whether the checkpoints have taken
+            // their state yet, and a restart that follows (a retry, a new game, a replay) already finds the
+            // respawn point that belongs to the state just put in place.
+            if (reload == WorldReload.StateReplaced && progress != null)
             {
-                replaced = true;
+                TakeRemembered(false);
             }
         }
 
@@ -105,12 +158,7 @@ namespace Threefold.Objectives
                 TakeRemembered(true);
                 WorldState.SaveCheckpoint();
             }
-            else if (replaced)
-            {
-                TakeRemembered(false);
-            }
 
-            replaced = false;
             if (player == null)
             {
                 return;
@@ -147,7 +195,10 @@ namespace Threefold.Objectives
                     session.SetRespawnPoint(checkpoint.RespawnPosition, checkpoint.RespawnRotation);
                 }
 
-                WorldState.SaveCheckpoint();
+                if (checkpoint.TakesWorldCheckpoint)
+                {
+                    WorldState.SaveCheckpoint();
+                }
             }
 
             CheckpointReached?.Invoke(checkpoint);
@@ -156,7 +207,7 @@ namespace Threefold.Objectives
         /// <summary>Makes the furthest remembered checkpoint current, and optionally puts the player there.</summary>
         private void TakeRemembered(bool placePlayer)
         {
-            progress.Restore(order => order < byOrder.Length && byOrder[order] != null && byOrder[order].IsReached);
+            progress.Restore(order => order < byOrder.Length && IsRemembered(byOrder[order]));
             if (session == null)
             {
                 return;
@@ -176,6 +227,22 @@ namespace Threefold.Objectives
             {
                 session.Respawn();
             }
+        }
+
+        /// <summary>Whether the store remembers a checkpoint as reached. One without a key can only answer for itself.</summary>
+        private static bool IsRemembered(Checkpoint checkpoint)
+        {
+            if (checkpoint == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(checkpoint.PersistenceKey))
+            {
+                return checkpoint.IsReached;
+            }
+
+            return PuzzleSessionState.TryGet(checkpoint.PersistenceKey, out PuzzleRecord record) && record.Active && record.Locked;
         }
 
         private void Index()

@@ -18,8 +18,10 @@ namespace Threefold.Tests
     /// Sprint LM-07, the Broken Foundry: its progression as a graph, every object of the level driven
     /// by the disciplines' real default attacks, what lasts and what does not across a reload, the
     /// checkpoints, the hazard rule, forgetting one level's saved state, and the development
-    /// diagnostics. Plain C#; the components that carry these rules out need Unity and are checked by
-    /// <see cref="BrokenFoundryAssemblyTests"/> when the Unity job runs.
+    /// diagnostics. Plain C#. The components that carry these rules out need Unity:
+    /// <see cref="BrokenFoundryAssemblyTests"/> builds and checks the scene and calls the session's
+    /// restart, retry and new game directly, but what runs frame by frame (the checkpoint route, the
+    /// hazard, a remembered defeat hiding its enemy) needs Play Mode tests, which the project does not have yet.
     /// </summary>
     public sealed class BrokenFoundryTests
     {
@@ -329,6 +331,30 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void Recovery_NeverStandsUpSomethingDestroyed_AndIsRefusedOnAStructure()
+        {
+            MagicalPropertySettings settings = WorldMagicDefaults.Settings(ExampleObject.UnstableStructure);
+            settings.stabilitySettings.recoverSeconds = 3f;
+
+            var problems = new List<string>();
+            Assert.Greater(MagicalObjectRules.Validate(settings, problems), 0, "Recovery on something with a structure is reported.");
+            StringAssert.Contains("stability alone", string.Join(" ", problems));
+
+            // Even so, at run time a destroyed object stays down and comes to rest.
+            MagicalPropertySet set = Make(settings);
+            for (int i = 0; i < 8 && !set.IsDestroyed; i++)
+            {
+                Hit(set, Pulse(1f), Aegis);
+            }
+
+            Assert.IsTrue(set.IsDestroyed);
+            Run(set, 10f);
+            Assert.IsTrue(set.Meets(PropertyCondition.Collapsed), "Destroyed, it does not stand again.");
+            Assert.IsFalse(set.Stability.IsRecovering);
+            Assert.IsTrue(set.IsAtRest, "Nothing keeps it in the simulation.");
+        }
+
+        [Test]
         public void Recovery_IsOffByDefault_SoEveryEarlierStructureStaysDown()
         {
             Assert.AreEqual(0f, new StabilitySettings().recoverSeconds);
@@ -604,15 +630,35 @@ namespace Threefold.Tests
         [Test]
         public void Keys_EverythingTheLevelSavesIsUnderItsPrefix_SoAReplayForgetsAllOfIt()
         {
-            foreach (CheckpointLayout checkpoint in FoundryLayout.Checkpoints)
+            // The keys the setup gives the gates' triggers and the Guardian's defeat, and the checkpoints' keys.
+            var keys = new List<string>
             {
-                StringAssert.StartsWith(FoundryLayout.KeyPrefix, CheckpointProgress.KeyFor(FoundryLayout.KeyPrefix, checkpoint.Order));
+                Threefold.EditorTools.BrokenFoundrySetup.ForecourtGateKey,
+                Threefold.EditorTools.BrokenFoundrySetup.ExitGateKey,
+                Threefold.EditorTools.BrokenFoundrySetup.GuardianKey,
+            };
+            keys.AddRange(FoundryLayout.Checkpoints.Select(c => CheckpointProgress.KeyFor(FoundryLayout.KeyPrefix, c.Order)));
+
+            foreach (string key in keys)
+            {
+                StringAssert.StartsWith(FoundryLayout.KeyPrefix, key);
             }
 
-            Assert.AreEqual(FoundryLayout.Checkpoints.Length,
-                FoundryLayout.Checkpoints.Select(c => CheckpointProgress.KeyFor(FoundryLayout.KeyPrefix, c.Order)).Distinct().Count());
-            Assert.AreEqual(FoundryLayout.SceneName + "/", FoundryLayout.KeyPrefix,
-                "Persistent ids are made from the scene's name, so they share this prefix.");
+            Assert.AreEqual(keys.Count, keys.Distinct().Count(), "Every key is different.");
+
+            // Persistent ids are "<scene>/<object>" (MagicalObjectSetup.MakePersistentId); the scene is saved under this name.
+            StringAssert.EndsWith(FoundryLayout.SceneName + ".unity", Threefold.EditorTools.BrokenFoundrySetup.ScenePath);
+            Assert.AreEqual(FoundryLayout.SceneName + "/", FoundryLayout.KeyPrefix);
+
+            // And forgetting the prefix takes all of them, and nothing else.
+            foreach (string key in keys)
+            {
+                WorldState.Current.SetPuzzle(key, new PuzzleRecord(true, true));
+            }
+
+            WorldState.Current.SetPuzzle("CombatArena/Something", new PuzzleRecord(true, true));
+            Assert.AreEqual(keys.Count, WorldState.ForgetScope(FoundryLayout.KeyPrefix));
+            Assert.AreEqual(1, WorldState.Current.PuzzleCount);
         }
 
         // ============================================================= checkpoints and the hazard
@@ -664,7 +710,8 @@ namespace Threefold.Tests
             Assert.IsTrue(HazardRules.Ready(10f, float.NegativeInfinity, 1f));
             Assert.IsFalse(HazardRules.Ready(10.5f, 10f, 1f));
             Assert.IsTrue(HazardRules.Ready(11f, 10f, 1f));
-            Assert.Greater(100f / FoundryLayout.SlagDamage, 3f, "Several falls before the slag defeats a Mage at full health.");
+            const float mageHealth = 100f; // What CombatSetup gives the Mage.
+            Assert.AreEqual(4, Mathf.CeilToInt(mageHealth / FoundryLayout.SlagDamage), "The fourth fall defeats a Mage at full health.");
         }
 
         // ============================================================= diagnostics
@@ -719,6 +766,7 @@ namespace Threefold.Tests
             gantry = Make(FoundryObject.CrumblingGantry);
             Hit(gantry, Pulse(1f), Aegis);
             StringAssert.Contains("stands again in", MagicalStateText.Temporary(gantry));
+            StringAssert.DoesNotContain("stress", MagicalStateText.Temporary(gantry), "Stress means nothing for what is down.");
 
             MagicalPropertySet plug = Make(ExampleObject.HeatSensitiveStone);
             Hit(plug, Wave(1f), Flame);

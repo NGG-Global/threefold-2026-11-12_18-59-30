@@ -140,6 +140,50 @@ namespace Threefold.Tests
             }
         }
 
+        [Test]
+        public void TheGantrysWeightIsCountedOverItsDeckOnly_SoBracingItFromTheFootIsNotStandingOnIt()
+        {
+            float pitch = FoundryLayout.GantryPitchDegrees;
+            float length = FoundryLayout.GantryLength;
+            float run = FoundryLayout.GantryRun;
+            float inset = FoundryLayout.LoadZoneFootInset(pitch);
+            Assert.Greater(inset, 0.5f, "On a slope the trigger must start some way up the deck.");
+            Assert.AreEqual(0f, FoundryLayout.LoadZoneFootInset(0f), 0.0001f, "On the level bridge it need not.");
+
+            // Standing: the deck rises from the foot; its trigger, at right angles to it, leans back. Measured from the foot.
+            float sin = Mathf.Sin(pitch * Mathf.Deg2Rad);
+            float cos = Mathf.Cos(pitch * Mathf.Deg2Rad);
+            float start = -length * 0.5f + inset;
+            foreach (float up in new[] { FoundryLayout.LoadZoneLift, FoundryLayout.LoadZoneLift + FoundryLayout.LoadZoneHeight })
+            {
+                float horizontal = run * 0.5f + start * cos - up * sin;
+                Assert.GreaterOrEqual(horizontal, -0.001f, "No part of the trigger reaches back past the foot.");
+            }
+
+            // Fallen: the deck lies flat, shifted forward, and its trigger begins beyond the foot as well.
+            float shift = FoundryLayout.CollapsedRampShift(length, run);
+            Assert.GreaterOrEqual(run * 0.5f + shift - length * 0.5f, 0f, "The fallen deck lies beyond the foot, not where the player stood.");
+            Assert.Greater(run * 0.5f + shift + start, 0f);
+        }
+
+        [Test]
+        public void TheCheckpointsBehindDoorsSpanTheirRoom_SoNobodyWalksPastThem()
+        {
+            Assert.AreEqual(FoundryLayout.OreHallX.y - FoundryLayout.OreHallX.x, FoundryLayout.Checkpoints[1].Zone.Size.x, 0.001f);
+            Assert.AreEqual(FoundryLayout.LiftHallX.y - FoundryLayout.LiftHallX.x, FoundryLayout.Checkpoints[2].Zone.Size.x, 0.001f);
+            Assert.AreEqual(FoundryLayout.ExitCourtX.y - FoundryLayout.ExitCourtX.x, FoundryLayout.Checkpoints[4].Zone.Size.x, 0.001f);
+            Assert.AreEqual(FoundryLayout.StairDoorX.y - FoundryLayout.StairDoorX.x, FoundryLayout.Checkpoints[3].Zone.Size.x, 0.001f,
+                "The upper one fills the only doorway to the stair.");
+            Assert.AreEqual(FoundryLayout.ExitYardX.y - FoundryLayout.ExitYardX.x, FoundryLayout.Checkpoints[5].Zone.Size.x, 0.001f);
+
+            // Each lies across the way in, close behind the opening it is reached through.
+            Assert.That(FoundryLayout.Checkpoints[1].Zone.BaseCentre.z - FoundryLayout.PartitionZ.y, Is.InRange(0.5f, 2.5f));
+            Assert.That(FoundryLayout.Checkpoints[2].Zone.BaseCentre.z - FoundryLayout.LiftHallZ.x, Is.InRange(0.5f, 2.5f));
+            Assert.That(FoundryLayout.Checkpoints[4].Zone.BaseCentre.z - FoundryLayout.ExitCourtZ.x, Is.InRange(0.5f, 2.5f));
+            Assert.Less(FoundryLayout.Checkpoints[1].Zone.BaseCentre.z + FoundryLayout.Checkpoints[1].Zone.Size.z * 0.5f, FoundryLayout.PitZ.x,
+                "The Ore Hall's lies on the landing, short of the slag.");
+        }
+
         // ------------------------------------------------------------- nothing unintended
 
         [Test]

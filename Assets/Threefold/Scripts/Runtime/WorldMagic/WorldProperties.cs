@@ -1022,6 +1022,15 @@ namespace Threefold.WorldMagic
             Stress = 0f;
         }
 
+        /// <summary>
+        /// Keeps the object down for good: a recovery under way is given up. For an object whose structure was
+        /// destroyed, which can never stand again.
+        /// </summary>
+        public void StopRecovering()
+        {
+            recoverRemaining = 0f;
+        }
+
         /// <summary>Marks the object as having come down, from a saved state. A saved collapse is meant to last, so it does not recover.</summary>
         public void SetCollapsed()
         {

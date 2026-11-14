@@ -24,9 +24,25 @@ namespace Threefold.Objectives
         [Tooltip("Where the player comes back, facing the way it faces. Empty: this object's position.")]
         [SerializeField] private Transform respawnPoint;
 
+        [Tooltip("Reaching it also takes the world state's checkpoint, which 'retry from checkpoint' returns to. Off for a " +
+                 "level's last checkpoint, so that a retry after the level is complete goes back to the one before.")]
+        [SerializeField] private bool takesWorldCheckpoint = true;
+
+        /// <summary>
+        /// How far below its box the player's feet may be and still count: the character stands on the floor
+        /// within its controller's skin, and the box stands on the floor exactly.
+        /// </summary>
+        public const float GroundTolerance = 0.3f;
+
         public int Order => order;
         public Vector3 ZoneSize => zoneSize;
         public Transform RespawnPoint => respawnPoint;
+
+        public bool TakesWorldCheckpoint
+        {
+            get => takesWorldCheckpoint;
+            set => takesWorldCheckpoint = value;
+        }
 
         /// <summary>True once the player has been here, in this attempt or a saved one.</summary>
         public bool IsReached => IsActive;
@@ -55,12 +71,13 @@ namespace Threefold.Objectives
             respawnPoint = respawn;
         }
 
-        /// <summary>Whether a point in the world lies inside the checkpoint's box.</summary>
+        /// <summary>Whether a point in the world lies inside the checkpoint's box, or just below it (see <see cref="GroundTolerance"/>).</summary>
         public bool Contains(Vector3 worldPoint)
         {
             Vector3 local = Quaternion.Inverse(transform.rotation) * (worldPoint - transform.position);
-            local.y -= zoneSize.y * 0.5f;
-            return CheckpointProgress.Contains(local, zoneSize * 0.5f);
+            float height = zoneSize.y + GroundTolerance;
+            local.y += GroundTolerance - height * 0.5f;
+            return CheckpointProgress.Contains(local, new Vector3(zoneSize.x * 0.5f, height * 0.5f, zoneSize.z * 0.5f));
         }
 
         /// <summary>Marks the checkpoint as reached, for good. Returns false if it already was.</summary>

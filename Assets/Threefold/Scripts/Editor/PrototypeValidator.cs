@@ -215,7 +215,16 @@ namespace Threefold.EditorTools
                 }
             }
 
-            if (FindInScene<PrototypeSession>(scene) == null) Problem("There is no session, so the level cannot be restarted.");
+            PrototypeSession session = FindInScene<PrototypeSession>(scene);
+            if (session == null)
+            {
+                Problem("There is no session, so the level cannot be restarted.");
+            }
+            else if (objective != null && objective.Goals.Count > 0 && string.IsNullOrEmpty(session.ReplayScope))
+            {
+                Problem("The objective has goals but the session has no replay scope: once the goals are reached, a restart " +
+                        "would complete the level again at once.");
+            }
 
             ObjectiveHud objectiveHud = FindInScene<ObjectiveHud>(scene);
             if (objectiveHud == null)

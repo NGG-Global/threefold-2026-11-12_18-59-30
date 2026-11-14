@@ -603,8 +603,9 @@ namespace Threefold.WorldMagic
 
         /// <summary>
         /// Drops everything temporary and keeps the rest: heat, fire, charge, a brace and stress go; a
-        /// glide is completed; damage, a latched activation, a collapse and the position stay. Nothing
-        /// is announced.
+        /// glide is completed; damage, a latched activation, a collapse and the position stay, except a
+        /// collapse that would recover by itself, which is temporary and ends (the object stands again).
+        /// Nothing is announced.
         /// </summary>
         /// <param name="keep">
         /// What the object saves. Heat and charge named here are the configured exceptions: they are
@@ -878,7 +879,16 @@ namespace Threefold.WorldMagic
                 }
 
                 Arcane?.ClearTemporary();
-                Stability?.ClearTemporary();
+
+                // A destroyed object stays down: a collapse that would otherwise recover no longer does.
+                if (Stability != null && Stability.IsRecovering)
+                {
+                    Stability.StopRecovering();
+                }
+                else
+                {
+                    Stability?.ClearTemporary();
+                }
             }
         }
 

@@ -21,9 +21,9 @@ namespace Threefold.DevTools
     /// three-finger tap. Numbers are shown here only; the player never sees them (Docs/Discovery.md).
     ///
     /// Drawn with Unity's immediate-mode GUI, which allocates while shown; that is acceptable for a
-    /// development tool and costs nothing while hidden apart from recording the frame time. Whether
-    /// its buttons take touches on a device with the Input System as the only input handler has not
-    /// been checked.
+    /// development tool. While hidden it records the frame time, and Unity still calls its OnGUI each
+    /// frame, which returns at once; the frame times it shows include that small cost. Whether its
+    /// buttons take touches on a device with the Input System as the only input handler has not been checked.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DevDiagnosticsOverlay : MonoBehaviour
@@ -218,19 +218,19 @@ namespace Threefold.DevTools
 
             int count = Physics.RaycastNonAlloc(view.position, view.forward, hits, AimDistance, Physics.DefaultRaycastLayers,
                 QueryTriggerInteraction.Ignore);
-            MagicalObject nearest = null;
-            float nearestDistance = float.MaxValue;
+
+            // The first thing the view meets, so nothing behind a wall is reported. The Mage itself is skipped.
+            int nearest = -1;
             for (int i = 0; i < count; i++)
             {
-                MagicalObject found = hits[i].collider.GetComponentInParent<MagicalObject>();
-                if (found != null && hits[i].distance < nearestDistance)
+                bool player = disciplines != null && hits[i].collider.transform.IsChildOf(disciplines.transform);
+                if (!player && (nearest < 0 || hits[i].distance < hits[nearest].distance))
                 {
-                    nearest = found;
-                    nearestDistance = hits[i].distance;
+                    nearest = i;
                 }
             }
 
-            return nearest;
+            return nearest >= 0 ? hits[nearest].collider.GetComponentInParent<MagicalObject>() : null;
         }
 
         private void AppendTemporary()

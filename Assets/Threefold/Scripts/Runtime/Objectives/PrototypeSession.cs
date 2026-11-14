@@ -97,7 +97,9 @@ namespace Threefold.Objectives
         /// <summary>
         /// Puts the saved world back to the last checkpoint, then restarts there. Lasting changes made since
         /// the checkpoint are undone (a slag plug broken after it stands again), which lets a tester try another
-        /// way through. Returns false if no checkpoint was taken.
+        /// way through, also after the level was completed: this never replays the level from its start.
+        /// Returns false if no checkpoint was taken. A level's checkpoint route moves the respawn point to the
+        /// checkpoint the reverted state remembers, before the player is placed.
         /// </summary>
         public bool RetryFromCheckpoint()
         {
@@ -106,7 +108,7 @@ namespace Threefold.Objectives
                 return false;
             }
 
-            Restart();
+            Restart(false);
             return true;
         }
 
@@ -127,7 +129,12 @@ namespace Threefold.Objectives
         /// </summary>
         public void Restart()
         {
-            bool replay = objective != null && objective.IsComplete && !string.IsNullOrEmpty(replayScope);
+            Restart(true);
+        }
+
+        private void Restart(bool allowReplay)
+        {
+            bool replay = allowReplay && objective != null && objective.IsComplete && !string.IsNullOrEmpty(replayScope);
             if (replay)
             {
                 // Forgotten first, so that the objective's goals are no longer reached when progress is cleared below.
@@ -211,8 +218,10 @@ namespace Threefold.Objectives
         /// </summary>
         public void NewGame()
         {
+            // Nothing is remembered any more, checkpoints included: the player starts at the start.
+            hasRespawn = false;
             WorldState.NewGame();
-            Restart();
+            Restart(false);
         }
 
         private void Awake()

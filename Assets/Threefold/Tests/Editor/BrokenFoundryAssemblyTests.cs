@@ -6,6 +6,7 @@ using Threefold.EditorTools;
 using Threefold.Levels;
 using Threefold.Objectives;
 using Threefold.Persistence;
+using Threefold.Puzzles;
 using Threefold.WorldMagic;
 using UnityEditor;
 using UnityEngine;
@@ -52,6 +53,8 @@ namespace Threefold.Tests
             // The Guardian is on its navigation mesh, which stops at the casting floor's gates.
             Assert.IsTrue(NavMesh.SamplePosition(gameplay.Guardian.transform.position, out NavMeshHit guardian, 1f, NavMesh.AllAreas));
             Assert.IsFalse(NavMesh.SamplePosition(new Vector3(5.3f, 2f, 18f), out _, 1.5f, NavMesh.AllAreas), "Not on the stair.");
+            Assert.IsFalse(NavMesh.SamplePosition(new Vector3(5.3f, 0f, 21.6f), out _, 0.3f, NavMesh.AllAreas), "Not at the stair's foot.");
+            Assert.IsFalse(NavMesh.SamplePosition(new Vector3(0f, 0f, 42.5f), out _, 0.3f, NavMesh.AllAreas), "Not in the gate.");
             Assert.IsFalse(NavMesh.SamplePosition(new Vector3(0f, 0f, 48f), out _, 1.5f, NavMesh.AllAreas), "Not in the exit court.");
             var path = new NavMeshPath();
             foreach (Vector3 point in FoundryLayout.GuardianRoute)
@@ -68,7 +71,8 @@ namespace Threefold.Tests
                 Assert.IsTrue(Physics.Raycast(respawn + Vector3.up, Vector3.down, out RaycastHit ground, 1.2f, Physics.DefaultRaycastLayers,
                     QueryTriggerInteraction.Ignore), $"'{checkpoint.name}' has ground under its respawn point.");
                 Assert.AreEqual(respawn.y, ground.point.y, 0.15f);
-                Assert.IsFalse(Physics.CheckCapsule(respawn + Vector3.up * 0.4f, respawn + Vector3.up * 1.45f, 0.3f, Physics.DefaultRaycastLayers,
+                // The Mage's own capsule (radius 0.35, height 1.8), lifted clear of the floor by a few centimetres.
+                Assert.IsFalse(Physics.CheckCapsule(respawn + Vector3.up * 0.4f, respawn + Vector3.up * 1.5f, 0.35f, Physics.DefaultRaycastLayers,
                     QueryTriggerInteraction.Ignore), $"'{checkpoint.name}': the Mage fits there.");
             }
 
@@ -88,12 +92,22 @@ namespace Threefold.Tests
             }
 
             BrokenFoundrySetup.BuildForAutomation();
-            int firstCount = CountObjects(SceneManager.GetActiveScene());
-            string crystalId = BrokenFoundrySetup.Find(SceneManager.GetActiveScene()).Crystal.PersistentId;
+            Scene first = SceneManager.GetActiveScene();
+            int firstCount = CountObjects(first);
+            int firstComponents = CountComponents(first);
+            BrokenFoundrySetup.Gameplay before = BrokenFoundrySetup.Find(first);
+            string crystalId = before.Crystal.PersistentId;
+
+            // A value tuned by hand, which a second run must keep.
+            before.Hazard.Configure(before.Hazard.Size, 7f);
 
             Scene scene = BrokenFoundrySetup.BuildForAutomation();
+            BrokenFoundrySetup.Gameplay after = BrokenFoundrySetup.Find(scene);
             Assert.AreEqual(firstCount, CountObjects(scene), "Running the setup a second time changed the number of objects.");
-            Assert.AreEqual(crystalId, BrokenFoundrySetup.Find(scene).Crystal.PersistentId, "An id that exists is never changed.");
+            Assert.AreEqual(firstComponents, CountComponents(scene), "Running the setup a second time added components.");
+            Assert.AreEqual(crystalId, after.Crystal.PersistentId, "An id that exists is never changed.");
+            Assert.AreEqual(7f, after.Hazard.Damage, "A tuned value is kept.");
+            Assert.AreEqual(FoundryLayout.Checkpoints.Length, after.Route.CheckpointCount, "The route lists each checkpoint once.");
 
             var problems = new StringBuilder();
             Assert.AreEqual(0, PrototypeValidator.Validate(scene, problems), problems.ToString());
@@ -161,6 +175,47 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void NewGameAndRetry_PutThePlayerInTheRightPlace_AndARetryNeverReplaysTheLevel()
+        {
+            WorldState.ResetSession();
+            var host = new GameObject("Session");
+            var goalHost = new GameObject("Way Out");
+            try
+            {
+                var objective = host.AddComponent<DefeatTargetsObjective>();
+                var session = host.AddComponent<PrototypeSession>();
+                session.Bind(objective, null, null, null, null);
+                session.ReplayScope = "Test/";
+
+                // A new game forgets the checkpoint the player had reached.
+                session.SetRespawnPoint(new Vector3(0f, 0f, 44f), Quaternion.identity);
+                session.NewGame();
+                Assert.IsFalse(session.HasRespawnPoint, "After a new game the player starts at the start.");
+
+                // Complete the objective after a checkpoint was taken, with something of the level saved in it.
+                Assert.IsFalse(session.RetryFromCheckpoint(), "No checkpoint taken yet.");
+                WorldState.Current.SetPuzzle("Test/Plug", new PuzzleRecord(true, true));
+                WorldState.SaveCheckpoint();
+                var goal = goalHost.AddComponent<Checkpoint>();
+                goal.PersistenceKey = "Test/Checkpoint/5";
+                objective.SetGoals(new[] { goal });
+                goal.MarkReached();
+                Assert.IsTrue(objective.IsComplete);
+
+                Assert.IsTrue(session.RetryFromCheckpoint());
+                Assert.IsTrue(WorldState.Current.TryGetPuzzle("Test/Plug", out _),
+                    "A retry goes back to the checkpoint; it does not replay the level, which would forget everything under Test/.");
+                Assert.IsFalse(WorldState.Current.TryGetPuzzle("Test/Checkpoint/5", out _), "The way out, reached after it, is undone.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(goalHost);
+                WorldState.ResetSession();
+            }
+        }
+
+        [Test]
         public void ACheckpointsBoxStandsOnItAndTurnsWithIt()
         {
             var host = new GameObject("Checkpoint");
@@ -173,13 +228,25 @@ namespace Threefold.Tests
                 Assert.IsTrue(checkpoint.Contains(new Vector3(10f, 2.1f, 5f)), "At its feet.");
                 Assert.IsTrue(checkpoint.Contains(new Vector3(10f, 4.9f, 6.9f)), "Turned: its 4 m now run along z.");
                 Assert.IsFalse(checkpoint.Contains(new Vector3(11f, 3f, 5f)), "Its 1 m depth now runs along x.");
-                Assert.IsFalse(checkpoint.Contains(new Vector3(10f, 1.9f, 5f)), "Below it.");
+                Assert.IsTrue(checkpoint.Contains(new Vector3(10f, 1.85f, 5f)), "Feet a little below the floor still count.");
+                Assert.IsFalse(checkpoint.Contains(new Vector3(10f, 1.6f, 5f)), "Well below it does not.");
                 Assert.AreEqual(host.transform.position, checkpoint.RespawnPosition, "Without a respawn point, its own position.");
             }
             finally
             {
                 Object.DestroyImmediate(host);
             }
+        }
+
+        private static int CountComponents(Scene scene)
+        {
+            int count = 0;
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                count += root.GetComponentsInChildren<Component>(true).Length;
+            }
+
+            return count;
         }
 
         private static int CountObjects(Scene scene)

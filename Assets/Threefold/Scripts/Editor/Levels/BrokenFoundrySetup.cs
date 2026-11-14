@@ -590,19 +590,27 @@ namespace Threefold.EditorTools
                 guardian.transform.SetPositionAndRotation(FoundryLayout.Guardian.Position, Quaternion.Euler(0f, FoundryLayout.Guardian.Yaw, 0f));
                 Undo.RegisterCreatedObjectUndo(guardian, DialogTitle);
 
-                var routeObject = new GameObject(GuardianName + " Route");
-                routeObject.transform.SetParent(encounterTransform, false);
-                PatrolRoute route = routeObject.AddComponent<PatrolRoute>();
-                var points = new Transform[FoundryLayout.GuardianRoute.Length];
-                for (int i = 0; i < points.Length; i++)
+                // A route that is still there (the Guardian alone was deleted) is used again, as it may have been tuned.
+                Transform existingRoute = encounterTransform.Find(GuardianName + " Route");
+                PatrolRoute route = existingRoute != null ? existingRoute.GetComponent<PatrolRoute>() : null;
+                if (route == null)
                 {
-                    var point = new GameObject("Point " + (i + 1));
-                    point.transform.SetParent(routeObject.transform, false);
-                    point.transform.position = FoundryLayout.GuardianRoute[i];
-                    points[i] = point.transform;
+                    var routeObject = new GameObject(GuardianName + " Route");
+                    routeObject.transform.SetParent(encounterTransform, false);
+                    Undo.RegisterCreatedObjectUndo(routeObject, DialogTitle);
+                    route = routeObject.AddComponent<PatrolRoute>();
+                    var points = new Transform[FoundryLayout.GuardianRoute.Length];
+                    for (int i = 0; i < points.Length; i++)
+                    {
+                        var point = new GameObject("Point " + (i + 1));
+                        point.transform.SetParent(routeObject.transform, false);
+                        point.transform.position = FoundryLayout.GuardianRoute[i];
+                        points[i] = point.transform;
+                    }
+
+                    route.SetPoints(points);
                 }
 
-                route.SetPoints(points);
                 EnemyController created = guardian.GetComponent<EnemyController>();
                 created.BindScene(null, route);
                 MarkChanged(created);
@@ -611,10 +619,18 @@ namespace Threefold.EditorTools
             }
 
             gameplay.Guardian = guardianTransform != null ? guardianTransform.GetComponent<EnemyController>() : null;
-            if (encounter != null && gameplay.Guardian != null && encounter.Members.Count == 0)
+            if (encounter != null && gameplay.Guardian != null && !Contains(encounter.Members, gameplay.Guardian))
             {
+                // Members added by hand are kept; one that was deleted is dropped.
+                var members = new List<EnemyController>();
+                foreach (EnemyController member in encounter.Members)
+                {
+                    if (member != null) members.Add(member);
+                }
+
+                members.Add(gameplay.Guardian);
                 Undo.RecordObject(encounter, DialogTitle);
-                encounter.Configure(EncounterName, new[] { gameplay.Guardian });
+                encounter.Configure(EncounterName, members);
                 MarkChanged(encounter);
             }
 
@@ -633,6 +649,7 @@ namespace Threefold.EditorTools
             if (gameplay.Outcome != null)
             {
                 Undo.RecordObject(gameplay.Outcome, DialogTitle);
+                // A Guardian that was deleted compares equal to null, so a re-created one is connected here.
                 if (gameplay.Outcome.Enemy == null && gameplay.Guardian != null)
                 {
                     gameplay.Outcome.Bind(gameplay.Guardian);
@@ -673,7 +690,9 @@ namespace Threefold.EditorTools
 
                     Checkpoint created = host.AddComponent<Checkpoint>();
                     created.Configure(layout.Order, layout.Zone.Size, respawn.transform);
-                    created.PersistenceKey = CheckpointProgress.KeyFor(FoundryLayout.KeyPrefix, layout.Order);
+
+                    // The way out completes the level; a retry after that goes back to the checkpoint before it.
+                    created.TakesWorldCheckpoint = layout.Order != FoundryLayout.ExitCheckpoint.Order;
                     Undo.RegisterCreatedObjectUndo(host, DialogTitle);
                     existing = host.transform;
                     placed++;
@@ -682,6 +701,13 @@ namespace Threefold.EditorTools
                 Checkpoint checkpoint = existing.GetComponent<Checkpoint>();
                 if (checkpoint != null)
                 {
+                    if (string.IsNullOrEmpty(checkpoint.PersistenceKey))
+                    {
+                        Undo.RecordObject(checkpoint, DialogTitle);
+                        checkpoint.PersistenceKey = CheckpointProgress.KeyFor(FoundryLayout.KeyPrefix, layout.Order);
+                        MarkChanged(checkpoint);
+                    }
+
                     gameplay.Checkpoints.Add(checkpoint);
                 }
             }
@@ -693,13 +719,17 @@ namespace Threefold.EditorTools
             PrototypeSession session = FindInScene<PrototypeSession>(scene);
             Health health = mage.GetComponent<Health>();
 
-            if (gameplay.Route != null && NeedsBinding(gameplay.Route, gameplay))
+            if (gameplay.Route != null)
             {
                 Undo.RecordObject(gameplay.Route, DialogTitle);
-                gameplay.Route.Bind(session, mage.transform, health, gameplay.Checkpoints.ToArray(),
+                bool changed = gameplay.Route.FillMissing(session, mage.transform, health, gameplay.Checkpoints.ToArray(),
                     gameplay.Hazard != null ? new[] { gameplay.Hazard } : new HazardVolume[0]);
                 MarkChanged(gameplay.Route);
-                report.AppendLine($"Connected the checkpoint route: {gameplay.Checkpoints.Count} checkpoints and the slag pit.");
+                if (changed)
+                {
+                    report.AppendLine($"Connected the checkpoint route: {gameplay.Route.CheckpointCount} checkpoint(s) and " +
+                                      $"{gameplay.Route.HazardCount} hazard(s). Entries added by hand are kept.");
+                }
             }
 
             if (session != null && string.IsNullOrEmpty(session.ReplayScope))
@@ -726,32 +756,6 @@ namespace Threefold.EditorTools
                     gameplay.Progress != null ? new MonoBehaviour[] { gameplay.Progress } : new MonoBehaviour[0]);
                 MarkChanged(gameplay.Diagnostics);
             }
-        }
-
-        private static bool NeedsBinding(CheckpointRoute route, Gameplay gameplay)
-        {
-            if (route.Session == null || route.Player == null || route.CheckpointCount != gameplay.Checkpoints.Count)
-            {
-                return true;
-            }
-
-            for (int i = 0; i < route.CheckpointCount; i++)
-            {
-                if (route.GetCheckpoint(i) == null)
-                {
-                    return true;
-                }
-            }
-
-            for (int i = 0; i < route.HazardCount; i++)
-            {
-                if (route.GetHazard(i) == null)
-                {
-                    return true;
-                }
-            }
-
-            return route.HazardCount == 0 && gameplay.Hazard != null;
         }
 
         private static GameObject EnsureInstance(GameObject prefab, Transform parent, string name, LayoutPoint point, ref int placed)
@@ -789,6 +793,19 @@ namespace Threefold.EditorTools
 
             T component = existing.GetComponent<T>();
             return component != null ? component : Undo.AddComponent<T>(existing.gameObject);
+        }
+
+        private static bool Contains(IReadOnlyList<EnemyController> members, EnemyController wanted)
+        {
+            foreach (EnemyController member in members)
+            {
+                if (member == wanted)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static MagicalObject Magical(GameObject instance) => instance != null ? instance.GetComponent<MagicalObject>() : null;

@@ -414,12 +414,16 @@ namespace Threefold.EditorTools
                 }
             }
 
+            // Weight is counted over the deck only: on a ramp the trigger starts far enough up the deck that no
+            // part of it leans back over the floor where the player stands to brace it.
+            float zoneStart = Mathf.Max(-Mathf.Min(loadLength, length) * 0.5f, -length * 0.5f + FoundryLayout.LoadZoneFootInset(pitch));
+            float zoneEnd = Mathf.Min(loadLength, length) * 0.5f;
             var zoneObject = new GameObject("LoadZone");
             zoneObject.transform.SetParent(deck.transform, false);
             BoxCollider zoneBox = zoneObject.AddComponent<BoxCollider>();
             zoneBox.isTrigger = true;
-            zoneBox.center = new Vector3(0f, 0.9f, 0f);
-            zoneBox.size = new Vector3(FoundryLayout.DeckWidth, 1.6f, Mathf.Min(loadLength, length));
+            zoneBox.center = new Vector3(0f, FoundryLayout.LoadZoneLift + FoundryLayout.LoadZoneHeight * 0.5f, (zoneStart + zoneEnd) * 0.5f);
+            zoneBox.size = new Vector3(FoundryLayout.DeckWidth, FoundryLayout.LoadZoneHeight, zoneEnd - zoneStart);
             LoadZone zone = zoneObject.AddComponent<LoadZone>();
 
             MagicalObject magical = root.AddComponent<MagicalObject>();
@@ -444,8 +448,11 @@ namespace Threefold.EditorTools
                 },
                 null);
 
-            // A ramp drops flat to the floor at the foot of its ledge; a bridge drops into the pit below it.
-            Vector3 offset = ramp ? new Vector3(0.2f, -rise * 0.5f + 0.15f, 0f) : new Vector3(0.1f, -2f, 0f);
+            // A ramp drops flat to the floor beyond its foot, its far end under the wall it leaned on, so it never
+            // lands where the player stood; a bridge drops into the pit below it.
+            Vector3 offset = ramp
+                ? new Vector3(0.2f, -rise * 0.5f + 0.15f, FoundryLayout.CollapsedRampShift(length, run))
+                : new Vector3(0.1f, -2f, 0f);
             Vector3 turn = ramp ? new Vector3(pitch, 0f, 6f) : new Vector3(4f, 0f, 7f);
             visuals.ConfigureMotion(sway, 1.2f, deck.transform, offset, turn);
 
