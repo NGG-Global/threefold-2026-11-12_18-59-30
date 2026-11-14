@@ -98,13 +98,20 @@ namespace Threefold.VisualStyle
 
     /// <summary>
     /// A quality level: which rendering features of the style are on, and how much they may cost.
-    /// The three levels below are starting points chosen by reasoning about cost. They have not
-    /// been measured on a device; the art bible asks for tiers to be settled by profiling.
+    /// The player sees the three as graphics presets: Performance, Balanced and Quality
+    /// (<see cref="GraphicsPresets"/>). They are starting points chosen by reasoning about cost.
+    /// They have not been measured on a device; the art bible asks for tiers to be settled by profiling.
     /// </summary>
     [Serializable]
     public sealed class VisualQualityPreset
     {
-        public string displayName = "Medium";
+        public string displayName = "Balanced";
+
+        [Header("Frame rate")]
+        [Tooltip("Frames per second this preset aims for: 30 or 60. 0: the level's default (30 for the lowest, 60 for the others). " +
+                 "A target of 60 that the device cannot keep is lowered to 30 for the session.")]
+        [Min(0)]
+        public int targetFrameRate;
 
         [Header("Linework")]
         [Tooltip("Contour lines around selected characters. One extra draw of each outlined mesh.")]
@@ -135,13 +142,18 @@ namespace Threefold.VisualStyle
         [Tooltip("High dynamic range rendering. Only needed for post-processing.")]
         public bool hdr;
 
-        /// <summary>For older or low-end phones: no outlines, no shadows filtering, lower resolution.</summary>
+        /// <summary>
+        /// Performance, for less capable phones: 30 frames per second, a lower resolution, hard short shadows,
+        /// no anti-aliasing or post-processing. The contour lines around the characters stay: they are part
+        /// of the illustrated look and cost one extra draw of a few meshes.
+        /// </summary>
         public static VisualQualityPreset Low()
         {
             return new VisualQualityPreset
             {
-                displayName = "Low",
-                outlines = false,
+                displayName = "Performance",
+                targetFrameRate = GraphicsPresets.LowFrameRate,
+                outlines = true,
                 shadows = StyleShadows.Hard,
                 shadowDistance = 22f,
                 shadowResolution = 512,
@@ -152,18 +164,19 @@ namespace Threefold.VisualStyle
             };
         }
 
-        /// <summary>The intended level for a mid-range Android phone.</summary>
+        /// <summary>Balanced, the intended preset for a capable Android phone: 60 frames per second.</summary>
         public static VisualQualityPreset Medium()
         {
-            return new VisualQualityPreset();
+            return new VisualQualityPreset { displayName = "Balanced", targetFrameRate = GraphicsPresets.HighFrameRate };
         }
 
-        /// <summary>For high-end phones and the Editor: full resolution and post-processing.</summary>
+        /// <summary>Quality, for high-end phones and the Editor: full resolution, finer shadows and post-processing, at 60.</summary>
         public static VisualQualityPreset High()
         {
             return new VisualQualityPreset
             {
-                displayName = "High",
+                displayName = "Quality",
+                targetFrameRate = GraphicsPresets.HighFrameRate,
                 outlines = true,
                 shadows = StyleShadows.Soft,
                 shadowDistance = 50f,

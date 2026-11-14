@@ -1,20 +1,25 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Threefold.Combat;
 using Threefold.Magic;
 using Threefold.Objectives;
+using Threefold.VisualStyle;
 using Threefold.WorldMagic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Profiling;
 using UnityEngine.SceneManagement;
 
 namespace Threefold.DevTools
 {
     /// <summary>
-    /// Development-only diagnostics for testing a level: the current discipline, the magical object in
-    /// the middle of the view with its properties and state, every temporary state running, the
-    /// reaction queue, the level's puzzle progression, and frame timing. It also offers a restart, a
-    /// retry from the last checkpoint and a way to load another scene in the build.
+    /// Development-only diagnostics for testing a level: frame timing against the graphics preset's
+    /// target, CPU and GPU time where Unity reports them, approximate memory and garbage collections,
+    /// enemies and projectiles, performance warnings (<see cref="PerformanceWarnings"/>), the current
+    /// discipline, the magical object in the middle of the view with its properties and state, every
+    /// temporary state running, the reaction queue, and the level's puzzle progression. It also offers
+    /// a restart, a retry from the last checkpoint and a way to load another scene in the build.
     ///
     /// Hidden in normal play. It switches itself off completely in a build that is not a development
     /// build. To show or hide it: F3 or the back-quote key, the gamepad's Select (View) button, or a
@@ -32,6 +37,7 @@ namespace Threefold.DevTools
         private const float RescanSeconds = 2f;
         private const int MaxTemporaryLines = 8;
         private const float AimDistance = 40f;
+        private const float StatsWindowSeconds = 10f;
 
         [SerializeField] private PlayerDisciplines disciplines;
         [SerializeField] private Transform view;
@@ -43,10 +49,27 @@ namespace Threefold.DevTools
         [Tooltip("Shown when the scene starts. Off: shown only when asked for.")]
         [SerializeField] private bool visibleAtStart = false;
 
+        [Tooltip("A warning is shown when this many projectiles are in flight at once. A rule of thumb, not a measured budget.")]
+        [Min(1)]
+        [SerializeField] private int projectileWarningCount = 24;
+
         private readonly FrameTimingStats frames = new FrameTimingStats(240);
         private readonly StringBuilder text = new StringBuilder(2048);
         private readonly List<MagicalObject> magicalObjects = new List<MagicalObject>();
         private readonly RaycastHit[] hits = new RaycastHit[8];
+        private readonly FrameTiming[] timings = new FrameTiming[1];
+        private readonly List<string> warnings = new List<string>(8);
+
+        // Counters over windows of ten seconds, kept while hidden too, so warnings have something to go on at once.
+        private float windowStart = -1f;
+        private int collectionsAtStart;
+        private long droppedAtStart;
+        private long overflowAtStart;
+        private float lastWindowSeconds;
+        private int lastWindowCollections;
+        private long lastWindowDropped;
+        private long lastWindowOverflow;
+        private int temporaryCount;
 
         private bool visible;
         private string shown = string.Empty;
@@ -97,6 +120,12 @@ namespace Threefold.DevTools
         private void Update()
         {
             frames.Add(Time.unscaledDeltaTime);
+            UpdateWindow();
+            if (visible)
+            {
+                // CPU and GPU times of recent frames, where the platform reports them.
+                FrameTimingManager.CaptureFrameTimings();
+            }
 
             if (TogglePressed())
             {
@@ -163,11 +192,34 @@ namespace Threefold.DevTools
                 .Append(timing.AverageMs.ToString("0.0", invariant)).Append(" ms average, slowest 5% ")
                 .Append(timing.SlowestMs.ToString("0.0", invariant)).Append(" ms, worst ")
                 .Append(timing.WorstMs.ToString("0.0", invariant)).Append(" ms (").Append(timing.Samples).Append(" frames)").AppendLine();
+
+            VisualStyleController style = VisualStyleController.Active;
             string[] qualities = QualitySettings.names;
             int quality = QualitySettings.GetQualityLevel();
-            text.Append("       quality ").Append(quality >= 0 && quality < qualities.Length ? qualities[quality] : quality.ToString())
-                .Append(", target ").Append(Application.targetFrameRate <= 0 ? "platform default" : Application.targetFrameRate + " fps")
-                .AppendLine();
+            text.Append("       preset ").Append(style != null ? style.PresetName : "(no style controller)")
+                .Append(", Unity quality ").Append(quality >= 0 && quality < qualities.Length ? qualities[quality] : quality.ToString())
+                .Append(", target ").Append(Application.targetFrameRate <= 0 ? "platform default" : Application.targetFrameRate + " fps");
+            if (style != null && style.FrameRateFellBack)
+            {
+                text.Append(" (lowered from ").Append(style.RequestedFrameRate).Append(')');
+            }
+
+            text.AppendLine();
+
+            float cpuMs = 0f;
+            float gpuMs = 0f;
+            if (FrameTimingManager.GetLatestTimings(1, timings) > 0)
+            {
+                cpuMs = (float)timings[0].cpuMainThreadFrameTime;
+                gpuMs = (float)timings[0].gpuFrameTime;
+            }
+
+            text.Append("       main thread ").Append(cpuMs > 0f ? cpuMs.ToString("0.0", invariant) + " ms" : "not reported")
+                .Append(", GPU ").Append(gpuMs > 0f ? gpuMs.ToString("0.0", invariant) + " ms" : "not reported").AppendLine();
+
+            AppendMemory();
+            AppendActors();
+            AppendWarnings(timing, style, cpuMs, gpuMs);
 
             text.Append("DISCIPLINE  ").Append(disciplines != null ? disciplines.Current.ToString() : "(no disciplines)").AppendLine();
 
@@ -188,6 +240,122 @@ namespace Threefold.DevTools
             }
 
             shown = text.ToString();
+        }
+
+        private void AppendMemory()
+        {
+            // Approximate: Unity's own allocators and the managed heap, as the profiling interface reports them.
+            text.Append("MEMORY  Unity ").Append(PerformanceWarnings.Megabytes(Profiler.GetTotalAllocatedMemoryLong()))
+                .Append(" of ").Append(PerformanceWarnings.Megabytes(Profiler.GetTotalReservedMemoryLong())).Append(" reserved, managed ")
+                .Append(PerformanceWarnings.Megabytes(Profiler.GetMonoUsedSizeLong())).Append(" of ")
+                .Append(PerformanceWarnings.Megabytes(Profiler.GetMonoHeapSizeLong())).Append(", device ")
+                .Append(SystemInfo.systemMemorySize).Append(" MB").AppendLine();
+            text.Append("        garbage collections ").Append(System.GC.CollectionCount(0));
+            if (lastWindowSeconds > 0f)
+            {
+                text.Append(" (").Append(lastWindowCollections).Append(" in the last ")
+                    .Append(lastWindowSeconds.ToString("0", CultureInfo.InvariantCulture)).Append(" s)");
+            }
+
+            text.AppendLine();
+        }
+
+        private void AppendActors()
+        {
+            text.Append("ACTORS  enemies ").Append(CountEnemies()).Append(", projectiles in flight ").Append(Projectile.FlyingCount)
+                .Append(", objects with temporary states ").Append(temporaryCount).AppendLine();
+        }
+
+        private static int CountEnemies()
+        {
+            int count = 0;
+            IReadOnlyList<Health> active = Health.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                Health health = active[i];
+                if (health != null && health.IsAlive && health.Team == CombatTeam.Enemy)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private void AppendWarnings(in FrameTimingSummary timing, VisualStyleController style, float cpuMs, float gpuMs)
+        {
+            var snapshot = new PerformanceSnapshot
+            {
+                AverageMs = timing.AverageMs,
+                SlowestMs = timing.SlowestMs,
+                TargetFps = Application.targetFrameRate,
+                FellBack = style != null && style.FrameRateFellBack,
+                CpuMs = cpuMs,
+                GpuMs = gpuMs,
+                Collections = lastWindowCollections,
+                CollectionSeconds = lastWindowSeconds,
+                DroppedSinceLastLook = lastWindowDropped,
+                CriticalOverflowSinceLastLook = lastWindowOverflow,
+                Enemies = CountEnemies(),
+                Projectiles = Projectile.FlyingCount,
+                ProjectileLimit = projectileWarningCount,
+            };
+
+            WorldSimulation simulation = WorldSimulation.Existing;
+            if (simulation != null && simulation.Scheduler != null)
+            {
+                snapshot.ReactionsWaiting = simulation.Scheduler.Count;
+                if (simulation.Simulation != null)
+                {
+                    snapshot.SimulatedObjects = simulation.Simulation.ActiveCount;
+                    snapshot.SimulationWaiting = simulation.Simulation.WaitingCount;
+                    snapshot.SimulationLimit = simulation.Budgets.maxActiveObjects;
+                }
+            }
+
+            warnings.Clear();
+            int count = PerformanceWarnings.Collect(snapshot, warnings);
+            text.Append("WARNINGS  ").Append(count == 0 ? "none" : count.ToString()).AppendLine();
+            for (int i = 0; i < warnings.Count; i++)
+            {
+                text.Append("        ! ").Append(warnings[i]).AppendLine();
+            }
+        }
+
+        /// <summary>Closes a window of ten seconds when it is over: garbage collections and refused reactions in it.</summary>
+        private void UpdateWindow()
+        {
+            float now = Time.unscaledTime;
+            ReactionStatistics statistics = default;
+            WorldSimulation simulation = WorldSimulation.Existing;
+            if (simulation != null && simulation.Scheduler != null)
+            {
+                statistics = simulation.Scheduler.Statistics;
+            }
+
+            if (windowStart < 0f)
+            {
+                windowStart = now;
+                collectionsAtStart = System.GC.CollectionCount(0);
+                droppedAtStart = statistics.Dropped;
+                overflowAtStart = statistics.CriticalOverflow;
+                return;
+            }
+
+            if (now - windowStart < StatsWindowSeconds)
+            {
+                return;
+            }
+
+            int collections = System.GC.CollectionCount(0);
+            lastWindowSeconds = now - windowStart;
+            lastWindowCollections = Mathf.Max(0, collections - collectionsAtStart);
+            lastWindowDropped = PerformanceWarnings.Since(statistics.Dropped, droppedAtStart);
+            lastWindowOverflow = PerformanceWarnings.Since(statistics.CriticalOverflow, overflowAtStart);
+            windowStart = now;
+            collectionsAtStart = collections;
+            droppedAtStart = statistics.Dropped;
+            overflowAtStart = statistics.CriticalOverflow;
         }
 
         private void AppendTarget()
@@ -236,6 +404,7 @@ namespace Threefold.DevTools
         private void AppendTemporary()
         {
             text.Append("TEMPORARY STATES").AppendLine();
+            temporaryCount = 0;
             int lines = 0;
             int more = 0;
             foreach (MagicalObject magical in magicalObjects)
@@ -250,6 +419,8 @@ namespace Threefold.DevTools
                 {
                     continue;
                 }
+
+                temporaryCount++;
 
                 if (lines < MaxTemporaryLines)
                 {

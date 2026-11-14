@@ -389,8 +389,13 @@ namespace Threefold.Tests
             Assert.Less(low.shadowDistance, medium.shadowDistance);
             Assert.LessOrEqual(low.antiAliasing, medium.antiAliasing);
 
-            Assert.IsFalse(low.outlines, "The lowest level draws no contour lines.");
+            // Since LM-08 every preset keeps the contour lines around the characters: they are part of the
+            // illustrated identity, and cost one extra draw of a few meshes.
+            Assert.IsTrue(low.outlines, "Performance keeps the contour lines.");
             Assert.IsTrue(medium.outlines);
+            Assert.AreEqual(30, low.targetFrameRate, "Performance aims for a steady 30.");
+            Assert.AreEqual(60, medium.targetFrameRate);
+            Assert.AreEqual(60, high.targetFrameRate);
             Assert.IsFalse(low.postProcessing);
             Assert.IsFalse(medium.postProcessing, "No full-screen effects on a mid-range phone until profiling justifies them.");
             Assert.AreEqual(StyleShadows.Hard, low.shadows);

@@ -89,6 +89,9 @@ namespace Threefold.Combat
         private static readonly System.Collections.Generic.List<Projectile> Deflectable =
             new System.Collections.Generic.List<Projectile>(16);
 
+        // How many projectiles are in flight, for the development diagnostics.
+        private static int flyingCount;
+
         private readonly RaycastHit[] hits = new RaycastHit[8];
         private readonly Collider[] overlaps = new Collider[8];
         private int deflections;
@@ -109,6 +112,9 @@ namespace Threefold.Combat
             get => element;
             set => element = value;
         }
+
+        /// <summary>How many projectiles are in flight now, of every owner.</summary>
+        public static int FlyingCount => flyingCount;
 
         /// <summary>How often this projectile has been turned aside since it was launched.</summary>
         public int Deflections => deflections;
@@ -195,7 +201,7 @@ namespace Threefold.Combat
                 ? ownerHealth.Team
                 : CombatTeam.Neutral;
             remainingRange = data.MaxRange;
-            flying = true;
+            SetFlying(true);
 
             if (data.Deflection.IsDesignated && !Deflectable.Contains(this))
             {
@@ -227,7 +233,7 @@ namespace Threefold.Combat
 
         private void OnDisable()
         {
-            flying = false;
+            SetFlying(false);
             Deflectable.Remove(this);
         }
 
@@ -236,6 +242,18 @@ namespace Threefold.Combat
         private static void ResetStatics()
         {
             Deflectable.Clear();
+            flyingCount = 0;
+        }
+
+        private void SetFlying(bool value)
+        {
+            if (flying == value)
+            {
+                return;
+            }
+
+            flying = value;
+            flyingCount += value ? 1 : -1;
         }
 
         private void Update()
@@ -375,7 +393,7 @@ namespace Threefold.Combat
 
         private void Impact(Vector3 point, Vector3 normal, Collider other)
         {
-            flying = false;
+            SetFlying(false);
             Deflectable.Remove(this);
 
             SpellElement carried = launch.Element != SpellElement.None ? launch.Element : element;
@@ -411,7 +429,7 @@ namespace Threefold.Combat
 
         private void Expire()
         {
-            flying = false;
+            SetFlying(false);
             Deflectable.Remove(this);
             pooled.ReturnToPool();
         }

@@ -70,7 +70,8 @@ namespace Threefold.EditorTools
 
         /// <summary>
         /// Adds everything that makes a scene playable, wherever its environment came from: the Mage,
-        /// the camera, input, touch controls, combat, HUD and training dummies. Existing parts are kept.
+        /// the camera, input, touch controls, combat, HUD, training dummies and the development
+        /// diagnostics. Existing parts are kept.
         /// </summary>
         /// <param name="spawnPosition">Where a newly created Mage is placed.</param>
         /// <param name="spawnRotation">Which way a newly created Mage faces.</param>
@@ -99,6 +100,7 @@ namespace Threefold.EditorTools
             DisciplineSetup.Ensure(scene, mage, report);
             DiscoverySetup.Ensure(scene, mage, report);
             ObjectiveSetup.Ensure(scene, mage, report, objective);
+            DiagnosticsSetup.Ensure(scene, mage, report);
             return mage;
         }
 
