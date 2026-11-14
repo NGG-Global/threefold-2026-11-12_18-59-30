@@ -109,6 +109,10 @@ namespace Threefold.Magic
         [Range(0f, 1f)]
         [SerializeField] private float blockMoveSpeedMultiplier = 0.55f;
 
+        [Tooltip("How far above and below the Mage a guard's effect on the world reaches, in metres.")]
+        [Min(0.5f)]
+        [SerializeField] private float guardVerticalReach = 3f;
+
         [Tooltip("How far a melee swing can be heard by enemies, in metres.")]
         [Min(0f)]
         [SerializeField] private float meleeNoiseRadius = 7f;
@@ -164,6 +168,9 @@ namespace Threefold.Magic
 
         /// <summary>A charge could not begin, with the reason.</summary>
         public event Action<DisciplineDefinition, CastResult> ChargeRefused;
+
+        /// <summary>The guard sent its effect out, with the number of objects it braced.</summary>
+        public event Action<DisciplineDefinition, int> GuardPulsed;
 
         /// <summary>The rules and their state: combo step, charge time, movement limits.</summary>
         public DisciplineCombatModel Model
@@ -350,6 +357,10 @@ namespace Threefold.Magic
                 case CombatCommandKind.InterruptInput:
                     inputSource.InterruptAttack();
                     break;
+
+                case CombatCommandKind.GuardPulse:
+                    PulseGuard(definition, command.Slot);
+                    break;
             }
         }
 
@@ -417,8 +428,8 @@ namespace Threefold.Magic
                 Stagger = step.stagger,
                 Element = definition != null ? definition.Element : SpellElement.None,
                 MaxTargets = step.maxTargets,
-                Heat = step.heat,
-                PushDistance = 0f,
+                Effects = step.Effects,
+                Discipline = command.Slot,
                 HitLayers = definition != null ? definition.MeleeHitLayers : (LayerMask)Physics.DefaultRaycastLayers,
                 CoverCheckHeight = step.verticalReach * 0.5f,
             };
@@ -442,7 +453,7 @@ namespace Threefold.Magic
 
             if (ability != null && caster != null)
             {
-                CastOptions options = BuildOptions(ability, command.Aim, command.Power);
+                CastOptions options = BuildOptions(ability, command.Aim, command.Power, command.Slot);
                 fired = caster.TryCast(ability, options) == CastResult.Success;
             }
 
@@ -452,17 +463,47 @@ namespace Threefold.Magic
 
         // ---------------------------------------------------------------- aim
 
-        private CastOptions BuildOptions(ChargedAbilityDefinition ability, Vector2 aim, float power)
+        private CastOptions BuildOptions(ChargedAbilityDefinition ability, Vector2 aim, float power, int slot)
         {
             ChargeProfile charge = ability.Charge;
 
             if (charge.targeting == ChargedTargetingMode.GroundDirection)
             {
-                return CastOptions.Directed(power, ChargedAim.GroundDirection(aim, CameraYaw()));
+                return CastOptions.Directed(power, ChargedAim.GroundDirection(aim, CameraYaw()), slot);
             }
 
             Vector2 offsets = ChargedAim.CameraOffsets(aim, charge.maxAimYawDegrees, charge.maxAimPitchDegrees);
-            return CastOptions.Aimed(power, offsets.x, offsets.y);
+            return CastOptions.Aimed(power, offsets.x, offsets.y, slot);
+        }
+
+        /// <summary>
+        /// The guard of the selected discipline acts on the world: an Aegis guard braces unstable
+        /// things around the Mage. It carries no damage. The protection block gives is not affected.
+        /// </summary>
+        private void PulseGuard(DisciplineDefinition definition, int slot)
+        {
+            if (definition == null || !definition.GuardEffect.HasEffect)
+            {
+                return;
+            }
+
+            GuardEffectProfile guard = definition.GuardEffect;
+            var request = new AreaStrikeRequest
+            {
+                User = gameObject,
+                Shape = new AreaShape(transform.position, transform.forward, guard.radius, 360f, guardVerticalReach),
+                Damage = 0f,
+                Stagger = 0f,
+                Element = SpellElement.None,
+                MaxTargets = 0,
+                Effects = guard.Effects,
+                Discipline = slot,
+                HitLayers = definition.MeleeHitLayers,
+                CoverCheckHeight = 1f,
+            };
+
+            AreaStrike.Resolve(request, null, out int braced);
+            GuardPulsed?.Invoke(definition, braced);
         }
 
         /// <summary>The camera's heading, or the character's own without a camera.</summary>
@@ -493,7 +534,7 @@ namespace Threefold.Magic
             }
 
             float power = rules.CurrentChargePower;
-            CastOptions options = BuildOptions(ability, frame.Gesture.Aim, power);
+            CastOptions options = BuildOptions(ability, frame.Gesture.Aim, power, rules.ChargeSlot);
             AbilityContext context = caster.PreviewContext(options);
 
             Vector3 point = context.AimPoint;

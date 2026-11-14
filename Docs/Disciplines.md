@@ -78,7 +78,7 @@ burning enemy stays alert but does not learn where the Mage is from the burn.
 | Training dummy (straw) | Heats 1.4 times as fast |
 | Arcane Wisp | 1.3 times |
 | Ruins Guardian (stone) | 0.6 times |
-| Anything else | Not affected unless it implements `IHeatReceiver` |
+| Objects in the world | Those with a thermal property heat by the same rule (`Docs/WorldMagic.md`) |
 
 ### Stagger and push (Aegis)
 
@@ -90,19 +90,34 @@ prevents stun-locking.
 The Force Pulse also pushes. An enemy slides along its navigation surface by the distance its
 push resistance leaves (Guardian 0.6, Wisp 0), using the same knockback as a stagger. No
 Rigidbody is involved, and nothing leaves the walkable area. Training dummies stand on a post and
-are not pushed. A later crate, door or pendulum becomes pushable by implementing
-`IForceReceiver`.
+are not pushed.
 
-### Magical mechanisms
+Since LM-03 the Aegis swings carry a little force as well (0.6 and 1.0), so they shove an enemy
+slightly: a Wisp 0.6 m and 1 m, a Guardian 0.24 m and 0.4 m. A strike that also staggers moves
+the enemy by the larger of the two, the stagger's knockback. Objects in the world with a kinetic,
+structural or stability property answer force too.
 
-Attacks carry their kind of magic (`SpellElement`: Arcane, Fire, Force). The Arcane Arrow still
-lights the Arcane crystals of the Sealed Gateway, as the Arcane Bolt did. Flame and Aegis attacks
-reach `ISpellReceiver` objects inside their area, so a brazier that accepts Fire or a seal that
-accepts Force needs no new code.
+### Effects on the world
+
+Since LM-03 every attack carries effects apart from its damage, and objects respond according to
+their properties. `Docs/WorldMagic.md` describes the model and the example objects.
+
+| Attack | Carries |
+| --- | --- |
+| Arcane melee | Nothing |
+| Arcane Arrow | Arcane charge, 40 to 100 |
+| Flame melee, Flame Wave | Heat: 18, 18, 30 per swing; 45 to 80 for the wave |
+| Aegis melee, Force Pulse | Force: 0.6 and 1.0 per swing; 2.5 to 5 for the pulse |
+| Aegis guard | A brace for unstable objects within 3.5 m, while BLOCK is held |
+
+The Arcane Arrow still lights the Arcane crystals of the Sealed Gateway: a puzzle crystal reads
+arcane charge as Arcane magic, heat as Fire and force as Force. Arcane swings carry no effect, so
+unlike in LM-02 they no longer light a crystal that stands within reach of a swing.
 
 ## Block
 
-Block is the same whatever discipline is selected. While BLOCK is held and the hands are free:
+The protection of block is the same whatever discipline is selected. While BLOCK is held and the
+hands are free:
 
 - The guard is up at once; there is no start-up.
 - Hits arriving within a 160-degree arc in front of the Mage lose 80% of their damage.
@@ -113,6 +128,10 @@ Block is the same whatever discipline is selected. While BLOCK is held and the h
 
 There is no timed parry or counter; none existed before, and none was added. A pale arc on the
 ground shows the guarded side and flashes when a hit is stopped.
+
+One thing does depend on the discipline: with **Aegis** selected, the guard also braces unstable
+objects within 3.5 m for as long as BLOCK is held (`Docs/WorldMagic.md`). It does nothing to
+creatures and changes nothing about the protection.
 
 ## Presentation
 
@@ -168,6 +187,7 @@ Strike and the placeholder bolt of LM-01; block already reduces damage there.
 | Just ahead of the start | Three dummies abreast | Arcane hits one; Flame's swings hit all three and heat them |
 | The field | Five dummies in a wedge, one more behind a wall | Flame Wave and Force Pulse; the one behind the wall must not be hit |
 | The lane | Targets at 22, 30 and 38 m | Arcane Arrow at range; the last is the objective construct |
+| The left edge | Crystal, barricade, stone barrier, platform, unstable structure, reinforced door | Effects on the world (LM-03, `Docs/WorldMagic.md`) |
 
 Dummies cannot be pushed and have no poise. Try stagger and push on the Guardian and the Wisps in
 the Combat Arena.
@@ -176,11 +196,12 @@ the Combat Arena.
 
 | To change | Where |
 | --- | --- |
-| A discipline's swings: damage, stagger, reach, arc, targets, heat, mana returned, start-up, recovery, combo window, movement, shake, animation trigger | `Arcane.asset`, `Flame.asset`, `Aegis.asset`: Standard attack |
+| A discipline's swings: damage, stagger, reach, arc, targets, heat, force, mana returned, start-up, recovery, combo window, movement, shake, animation trigger | `Arcane.asset`, `Flame.asset`, `Aegis.asset`: Standard attack |
+| What a discipline's guard does to nearby objects | The same assets: Guard |
 | Input buffer, how far a swing turns towards a target | The same assets: Standard attack |
 | Colour, icon, kind of magic | The same assets: Identity |
 | Charged attack: mana cost, cooldown, time to full charge, movement while charging, damage and stagger range, aim limits | `ArcaneArrow.asset`, `FlameWave.asset`, `ForcePulse.asset` |
-| Arrow speed, range, size | `ArcaneArrow.asset`: Projectile |
+| Arrow speed, range, size, arcane charge | `ArcaneArrow.asset`: Projectile |
 | Wave and pulse reach, arc, target limit, heat, push | `FlameWave.asset`, `ForcePulse.asset`: Area |
 | Damage that breaks a charge, speed while blocking, camera help | `Mage`: Discipline Combat |
 | Block: share of damage removed, guarded arc | `Mage`: Player Guard |
@@ -199,7 +220,7 @@ plain C# with the time passed in, so they are tested without Unity.
 | Data | `Magic/DisciplineDefinition`, `Magic/DisciplineProfiles`, `Combat/ChargedProfiles`, `Magic/DisciplineDefaults` | Numbers and references only |
 | Sequencing (plain C#) | `Magic/DisciplineCombatModel`, `Magic/MeleeComboMachine` | The gesture, the selected discipline, a yes or no for mana and cooldown. Answers with commands |
 | Resolution (plain C#) | `Combat/TargetSelection` (who is hit, `BlockRules`, `ChargeScaling`), `Combat/StatusEffects` (`HeatMeter`), `Combat/ChargedAim`, `Magic/CameraAssist` | Geometry and arithmetic |
-| Resolution (Unity) | `Combat/AreaStrike` (one physics query, then `TargetSelection`), `Combat/Projectile` | Colliders, `Health`, the receiver interfaces |
+| Resolution (Unity) | `Combat/AreaStrike` (one physics query, then `TargetSelection`), `Combat/Projectile` | Colliders, `Health`, the effect receiver interface (`IMagicEffectReceiver`, LM-03) |
 | Spell behaviour | `Combat/ChargedAbilities` (`ChargedProjectileDefinition`, `ChargedAreaDefinition`), cast through the existing `AbilityCaster` | Cost, cooldown, what the attack does |
 | Carrying out | `Magic/DisciplineCombat`, `Combat/PlayerGuard`, `Magic/PlayerDisciplines` | The model's commands and the systems above |
 | Presentation | `CombatFeedback/DisciplineFeedback`, `ChargeAimPreview`, `GuardVisual`, `SweepEffect`, `AimShapes` | Events only; changes no rule |
@@ -235,7 +256,7 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `DisciplineCombatTests` (48) | All three melee combos step by step, wrap and restart, buffered taps, mashing; all three charged attacks; tap versus hold; charge power and cap; aim passed with the release; charging while moving; cancel zone, block, heavy hit, climbing and defeat; mana spent on release only, refusal without mana or on cooldown, running out of mana; switching discipline between swings, during a swing and during a charge; the mouse-button path; the design intent of the default numbers |
+| `DisciplineCombatTests` (52) | All three melee combos step by step, wrap and restart, buffered taps, mashing; all three charged attacks; tap versus hold; charge power and cap; aim passed with the release; charging while moving; cancel zone, block, heavy hit, climbing and defeat; mana spent on release only, refusal without mana or on cooldown, running out of mana; switching discipline between swings, during a swing and during a charge; the mouse-button path; the design intent of the default numbers; the Aegis guard's pulses (LM-03) |
 | `CombatRulesTests` (36) | Target selection (reach, arc, height, nearest first, limits, allies, the defeated, the attacker), turning towards a target, heat (build-up, fading, ignition, burn total, immunity), block (arc, direction, mitigation), charge scaling, aim mapping, camera help, stagger apart from damage |
 | `EnemyBrainTests` (4 added) | A forceful hit staggers with little damage; precise hits do not; a full Force Pulse staggers a Guardian at once; burn damage never staggers |
 | `DisciplineSetupTests` (3) | Needs Unity: the range assembles and validates with all three disciplines; a second run adds nothing; generated assets match the defaults |
@@ -259,8 +280,7 @@ Unity job runs). Feel is untested by definition.
 - A swing is resolved in one instant at the end of its start-up, not swept over time.
 - Combat timing follows game time and the charge ring on ATTACK follows real time. They agree
   unless the time scale changes, which nothing in the game does yet (no pause, no slow motion).
-- Heat and push exist on enemies and dummies only. No brazier, crate or other world object
-  responds yet; the interfaces are there.
+- Objects in the world respond since LM-03, with limits of their own (`Docs/WorldMagic.md`).
 - Enemies do not use the disciplines, heat or block.
 - Block has no cost and no limit; with 80% reduction and no stamina it may prove too safe.
 - The Staff Strike and Arcane Bolt assets of earlier sprints remain and are unused by the Mage

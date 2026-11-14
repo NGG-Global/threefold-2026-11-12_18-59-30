@@ -158,6 +158,8 @@ namespace Threefold.EditorTools
                 definition = ScriptableObject.CreateInstance<DisciplineDefinition>();
                 definition.ConfigureIdentity(discipline, info.Name, info.Color, info.Icon, DisciplineDefaults.Element(discipline));
                 definition.ConfigureCombat(DisciplineDefaults.Melee(discipline), charged);
+                definition.ConfigureGuard(DisciplineDefaults.Guard(discipline));
+                definition.MarkCurrent();
                 definition.Presentation.meleeImpactEffect = strikeImpact;
                 definition.Presentation.sweepEffect = sweep;
                 definition.Presentation.releaseEffect = release;
@@ -173,6 +175,20 @@ namespace Threefold.EditorTools
             // An existing asset keeps its values. Only references that point at nothing are filled, which
             // also repairs it after a prefab was regenerated.
             bool changed = definition.FillChargedAbility(charged);
+
+            // An asset generated before the world effects existed is given them, once. Values that are
+            // already set are kept; after this the asset is never touched for it again.
+            if (definition.Upgrade())
+            {
+                EditorUtility.SetDirty(definition);
+                if (definition.ChargedAbility != null)
+                {
+                    EditorUtility.SetDirty(definition.ChargedAbility);
+                }
+
+                report.AppendLine($"Updated discipline '{info.Name}' with its effects on the world (force, bracing and " +
+                                  "arcane charge where it has them). Its other values were kept.");
+            }
             DisciplinePresentation look = definition.Presentation;
 
             if (look.meleeImpactEffect == null && strikeImpact != null)

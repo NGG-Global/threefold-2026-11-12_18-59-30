@@ -1,4 +1,5 @@
 using Threefold.Pooling;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Combat
@@ -9,7 +10,7 @@ namespace Threefold.Combat
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Health))]
-    public sealed class TrainingDummy : MonoBehaviour, IRestorable, IHeatReceiver
+    public sealed class TrainingDummy : MonoBehaviour, IRestorable, IMagicEffectReceiver
     {
         private const int MaxDefeatEffects = 4;
 
@@ -34,6 +35,7 @@ namespace Threefold.Combat
         [SerializeField] private HeatSettings heat = new HeatSettings { susceptibility = 1.4f };
 
         private Health health;
+        private CreatureEffectModel effects;
         private HeatCarrier heatCarrier;
         private float respawnRemaining;
         private bool down;
@@ -44,23 +46,37 @@ namespace Threefold.Combat
 
         public HeatSettings Heat => heat;
 
-        public bool ReceiveHeat(float amount, GameObject source)
+        /// <summary>
+        /// A magical effect arrives. A dummy takes heat like any creature; it stands on a post, so
+        /// force does not move it, and it has nothing that answers charge or bracing.
+        /// </summary>
+        public EffectResponse ReceiveEffect(in MagicEffect effect)
         {
-            return !down && Carrier.Receive(amount, source);
+            if (down)
+            {
+                return EffectResponse.Spent;
+            }
+
+            EnsureEffects();
+            EffectResponse response = effects.Apply(effect, out _);
+            if (effects.IgnitedByLastEffect)
+            {
+                heatCarrier.AnnounceIgnition();
+            }
+
+            return response;
         }
 
-        private HeatCarrier Carrier
+        private void EnsureEffects()
         {
-            get
+            if (effects != null)
             {
-                if (heatCarrier == null)
-                {
-                    heatCarrier = new HeatCarrier(heat);
-                    heatCarrier.Bind(health != null ? health : GetComponent<Health>());
-                }
-
-                return heatCarrier;
+                return;
             }
+
+            effects = new CreatureEffectModel(heat, 1f, false);
+            heatCarrier = new HeatCarrier(effects.Thermal);
+            heatCarrier.Bind(health != null ? health : GetComponent<Health>());
         }
 
         /// <summary>Connects the dummy's parts. Called by the setup tooling.</summary>
@@ -86,7 +102,7 @@ namespace Threefold.Combat
             }
 
             down = false;
-            heatCarrier?.Clear();
+            effects?.Restore();
             SetPresent(true);
             health.Revive();
         }
@@ -131,7 +147,7 @@ namespace Threefold.Combat
         {
             down = true;
             respawnRemaining = respawnSeconds;
-            heatCarrier?.Clear();
+            effects?.Restore();
 
             if (defeatEffectPrefab != null)
             {

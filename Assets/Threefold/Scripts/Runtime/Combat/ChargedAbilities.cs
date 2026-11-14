@@ -85,7 +85,8 @@ namespace Threefold.Combat
                 launched.Launch(new ProjectileLaunch(context.Caster, context.Direction,
                     ChargeScaling.Scale(projectile.speedMin, projectile.speedMax, power), projectile.range, Radius(power),
                     Damage(power) * context.DamageScale, hitLayers, impactEffectPrefab, projectile.noiseRadius,
-                    Stagger(power), Charge.element, 0f, ChargeScaling.Scale(projectile.scaleMin, projectile.scaleMax, power)));
+                    Stagger(power), Charge.element, projectile.Effects(power),
+                    ChargeScaling.Scale(projectile.scaleMin, projectile.scaleMax, power), context.Discipline));
             }
         }
     }
@@ -156,8 +157,8 @@ namespace Threefold.Combat
                 Stagger = Stagger(power),
                 Element = Charge.element,
                 MaxTargets = area.maxTargets,
-                Heat = ChargeScaling.Scale(area.heatMin, area.heatMax, power),
-                PushDistance = ChargeScaling.Scale(area.pushMin, area.pushMax, power),
+                Effects = area.Effects(power),
+                Discipline = context.Discipline,
                 HitLayers = hitLayers,
                 CoverCheckHeight = area.verticalReach * 0.5f,
             };

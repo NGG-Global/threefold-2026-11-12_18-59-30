@@ -1,4 +1,5 @@
 using Threefold.Pooling;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Combat
@@ -24,20 +25,28 @@ namespace Threefold.Combat
         /// <summary>The kind of magic carried. None uses the projectile prefab's own kind.</summary>
         public readonly SpellElement Element;
 
-        /// <summary>Heat added to a target that can be heated.</summary>
-        public readonly float Heat;
+        /// <summary>
+        /// The magical effects carried, apart from the damage. If empty, the projectile's kind of magic
+        /// decides: an arcane bolt charges, a fire bolt heats, with the damage as the strength.
+        /// </summary>
+        public readonly EffectPayload Effects;
+
+        /// <summary>The discipline the shot came from, as its selector slot, or -1.</summary>
+        public readonly int Discipline;
 
         /// <summary>Size of the projectile's visuals relative to the prefab. A charged shot is larger.</summary>
         public readonly float VisualScale;
 
         public ProjectileLaunch(GameObject owner, Vector3 direction, float speed, float maxRange, float radius,
             float damage, LayerMask hitLayers, PooledObject impactEffect, float noiseRadius = 0f, float stagger = -1f,
-            SpellElement element = SpellElement.None, float heat = 0f, float visualScale = 1f)
+            SpellElement element = SpellElement.None, EffectPayload effects = default, float visualScale = 1f,
+            int discipline = -1)
         {
             Stagger = stagger;
             Element = element;
-            Heat = heat;
+            Effects = effects;
             VisualScale = visualScale;
+            Discipline = discipline;
             Owner = owner;
             Direction = direction;
             Speed = speed;
@@ -79,6 +88,7 @@ namespace Threefold.Combat
         private bool flying;
         private Vector3 baseScale;
         private bool baseScaleKnown;
+        private int effectEventId;
 
         /// <summary>The kind of magic this projectile carries.</summary>
         public SpellElement Element
@@ -111,6 +121,7 @@ namespace Threefold.Combat
             transform.localScale = baseScale * Mathf.Max(0.05f, data.VisualScale);
 
             launch = data;
+            effectEventId = MagicEffectEvents.NextId();
             ownerTransform = data.Owner != null ? data.Owner.transform : null;
             ownerTeam = data.Owner != null && data.Owner.TryGetComponent(out Health ownerHealth)
                 ? ownerHealth.Team
@@ -229,20 +240,15 @@ namespace Threefold.Combat
                     carried));
             }
 
-            // Only reached on impact, which is rare per frame, so the lookups cost little.
-            if (launch.Heat > 0f)
-            {
-                IHeatReceiver heat = other.GetComponentInParent<IHeatReceiver>();
-                if (heat != null)
-                {
-                    heat.ReceiveHeat(launch.Heat, launch.Owner);
-                }
-            }
-
-            ISpellReceiver receiver = other.GetComponentInParent<ISpellReceiver>();
+            // Effects are separate from the damage: an enemy takes both, a crystal only the effect.
+            // Only reached on impact, which is rare per frame, so the lookup costs little.
+            IMagicEffectReceiver receiver = other.GetComponentInParent<IMagicEffectReceiver>();
             if (receiver != null)
             {
-                receiver.ReceiveSpell(new SpellImpact(carried, point, launch.Direction, launch.Owner));
+                EffectPayload effects = launch.Effects.IsEmpty
+                    ? EffectPayload.FromElement(carried, launch.Damage)
+                    : launch.Effects;
+                AreaStrike.Deliver(receiver, effects, launch.Direction, point, launch.Owner, launch.Discipline, effectEventId);
             }
 
             if (launch.ImpactEffect != null)

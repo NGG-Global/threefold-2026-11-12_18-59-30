@@ -48,12 +48,4 @@ namespace Threefold.Combat
         }
     }
 
-    /// <summary>
-    /// Anything that reacts to being struck by a spell, beyond taking damage: a crystal that lights
-    /// up, a brazier that ignites, a seal that breaks.
-    /// </summary>
-    public interface ISpellReceiver
-    {
-        void ReceiveSpell(in SpellImpact impact);
-    }
 }

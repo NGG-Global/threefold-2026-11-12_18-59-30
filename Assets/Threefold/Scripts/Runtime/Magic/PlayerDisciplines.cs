@@ -80,6 +80,12 @@ namespace Threefold.Magic
             return definition != null && definition.ChargedAbility != null ? definition.ChargedAbility.Charge : null;
         }
 
+        public float GetGuardPulseSeconds(int slot)
+        {
+            DisciplineDefinition definition = GetDefinition(slot);
+            return definition != null && definition.GuardEffect.HasEffect ? definition.GuardEffect.pulseSeconds : 0f;
+        }
+
         /// <summary>Puts a discipline asset into a slot, extending the list if needed. Called by the setup tooling.</summary>
         public void SetDefinition(int slot, DisciplineDefinition definition)
         {

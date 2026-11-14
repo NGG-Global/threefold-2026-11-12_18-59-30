@@ -3,7 +3,22 @@ using UnityEngine;
 
 namespace Threefold.Combat
 {
-    /// <summary>How a target responds to heat. Tuned per kind of target.</summary>
+    /// <summary>The thermal state of a target. The order is the order of the transitions.</summary>
+    public enum ThermalState
+    {
+        Unheated = 0,
+
+        /// <summary>Warm enough to behave differently: a heat-sensitive stone turns brittle.</summary>
+        Heated = 1,
+
+        /// <summary>Alight, taking burn damage in ticks until the burn ends.</summary>
+        Burning = 2,
+    }
+
+    /// <summary>
+    /// How a target responds to heat. Tuned per kind of target. Enemies, training dummies and
+    /// objects in the world all use these settings and the same <see cref="HeatMeter"/>.
+    /// </summary>
     [Serializable]
     public sealed class HeatSettings
     {
@@ -11,9 +26,16 @@ namespace Threefold.Combat
         [Min(0f)]
         public float susceptibility = 1f;
 
-        [Tooltip("Heat at which the target ignites.")]
+        [Tooltip("Heat at which the target ignites, or, if it cannot burn, the most heat it holds.")]
         [Min(1f)]
         public float capacity = 100f;
+
+        [Tooltip("Share of the capacity at which the target counts as heated.")]
+        [Range(0.05f, 1f)]
+        public float heatedFraction = 0.5f;
+
+        [Tooltip("Whether the target ignites at its capacity. A target that cannot burn only becomes heated.")]
+        public bool flammable = true;
 
         [Tooltip("Seconds after the last heat before it starts to fade.")]
         [Min(0f)]
@@ -37,9 +59,11 @@ namespace Threefold.Combat
     }
 
     /// <summary>
-    /// Heat on one target. Flame attacks add heat; it fades after a pause. At capacity the target
-    /// ignites and burns for a while, taking damage in ticks, then starts again from cold. Heat
-    /// added while burning is ignored, so a target cannot be kept alight without pause.
+    /// Heat on one target: the thermal property. Heat effects add heat; it fades after a pause.
+    /// The states are Unheated, Heated (at a share of the capacity) and Burning. At capacity a
+    /// flammable target ignites and burns for a while, taking damage in ticks, then starts again
+    /// from cold; one that cannot burn stays heated at its capacity until it cools. Heat added
+    /// while burning is ignored, so a target cannot be kept alight without pause.
     /// Plain C#, tested outside Unity.
     /// </summary>
     public sealed class HeatMeter
@@ -59,6 +83,25 @@ namespace Threefold.Combat
         public float Heat { get; private set; }
 
         public bool IsBurning => burnRemaining > 0f;
+
+        /// <summary>Unheated, Heated or Burning.</summary>
+        public ThermalState State
+        {
+            get
+            {
+                if (IsBurning)
+                {
+                    return ThermalState.Burning;
+                }
+
+                return Heat > 0f && Heat + 0.0001f >= settings.capacity * settings.heatedFraction
+                    ? ThermalState.Heated
+                    : ThermalState.Unheated;
+            }
+        }
+
+        /// <summary>True while nothing will change without new heat: cold and not burning.</summary>
+        public bool IsAtRest => !IsBurning && Heat <= 0f;
 
         /// <summary>0 when cold, 1 at ignition. Stays at 1 while burning.</summary>
         public float Fraction => IsBurning ? 1f : Mathf.Clamp01(Heat / Mathf.Max(settings.capacity, 1f));
@@ -82,6 +125,12 @@ namespace Threefold.Combat
             }
 
             Heat = settings.capacity;
+            if (!settings.flammable)
+            {
+                // It cannot burn: it holds its full heat until it cools.
+                return false;
+            }
+
             if (settings.burnSeconds <= 0f)
             {
                 Heat = 0f;
@@ -142,59 +191,20 @@ namespace Threefold.Combat
         }
     }
 
-    /// <summary>Something that heats up and can catch fire: an enemy, a straw dummy, later a brazier.</summary>
-    public interface IHeatReceiver
-    {
-        /// <summary>Adds heat from a flame attack. Returns true if it was accepted (the target is not immune).</summary>
-        bool ReceiveHeat(float amount, GameObject source);
-
-        float HeatFraction { get; }
-
-        bool IsBurning { get; }
-    }
-
-    /// <summary>A push from the Force Pulse or a similar impulse.</summary>
-    public readonly struct ForceImpulse
-    {
-        /// <summary>Direction of the push along the ground.</summary>
-        public readonly Vector3 Direction;
-
-        /// <summary>How far an unresisting target is moved, in metres.</summary>
-        public readonly float Distance;
-
-        public readonly GameObject Source;
-
-        public ForceImpulse(Vector3 direction, float distance, GameObject source)
-        {
-            Direction = direction;
-            Distance = distance;
-            Source = source;
-        }
-    }
-
     /// <summary>
-    /// Something a force impulse can move. Each receiver decides how: an enemy slides along its
-    /// navigation surface, a later crate or pendulum would move in its own way. Nothing gets a
-    /// Rigidbody just to be pushed.
-    /// </summary>
-    public interface IForceReceiver
-    {
-        void ReceiveForce(in ForceImpulse impulse);
-    }
-
-    /// <summary>
-    /// Runs a <see cref="HeatMeter"/> for a component that has a <see cref="Health"/>: applies burn
-    /// damage and announces ignition. Composed into enemies and dummies rather than added as a
-    /// component, so existing prefabs need no change.
+    /// Carries a creature's heat out through its <see cref="Health"/>: applies burn damage in ticks and
+    /// announces ignition and burning, for a <see cref="HeatMeter"/> that someone else decides for.
+    /// Composed into enemies and dummies rather than added as a component, so existing prefabs need
+    /// no change.
     /// </summary>
     public sealed class HeatCarrier
     {
         private readonly HeatMeter meter;
         private Health health;
 
-        public HeatCarrier(HeatSettings settings)
+        public HeatCarrier(HeatMeter meter)
         {
-            meter = new HeatMeter(settings);
+            this.meter = meter ?? new HeatMeter(null);
         }
 
         public HeatMeter Meter => meter;
@@ -204,20 +214,14 @@ namespace Threefold.Combat
             health = target;
         }
 
-        public bool Receive(float amount, GameObject source)
+        /// <summary>Tells whatever shows status effects that the creature has just caught fire.</summary>
+        public void AnnounceIgnition()
         {
-            if (!meter.CanHeat || health == null || !health.IsAlive)
-            {
-                return false;
-            }
-
-            if (meter.Add(amount))
+            if (health != null)
             {
                 CombatEvents.RaiseStatus(new StatusEvent(health.gameObject, StatusKind.Ignited, health.AimPoint,
                     meter.Settings.burnSeconds));
             }
-
-            return true;
         }
 
         public void Tick(float deltaTime)

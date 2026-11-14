@@ -73,6 +73,9 @@ namespace Threefold.EditorTools
                 }
             }
 
+            // Objects that respond to magic are checked wherever they are, with or without a Mage.
+            MagicalObjectValidator.Validate(scene, Problem);
+
             ThirdPersonMotor motor = FindInScene<ThirdPersonMotor>(scene);
             if (motor == null)
             {

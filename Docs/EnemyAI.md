@@ -57,7 +57,9 @@ The Mage has 100 health: five Slams, or nine Motes.
    damage, so the Mage's Aegis strikes stagger far sooner than their damage suggests. Enemies can
    also be heated and set alight by Flame, and pushed by the Force Pulse along their navigation
    surface (Guardian: resists 60% of a push and heats slowly; Wisp: thrown the full distance and
-   heats quickly). See `Docs/Disciplines.md`.
+   heats quickly). See `Docs/Disciplines.md`. Since Sprint LM-03 heat and force reach an enemy as
+   magical effects, by the same rules objects in the world use (`Docs/WorldMagic.md`), and the
+   Aegis swings carry a little force too, so each one shoves an enemy slightly.
 9. **Defeat.** The enemy stops, stops blocking movement and shots, bursts, and sinks (Guardian) or
    fades (Wisp). It stays down until the level restarts.
 

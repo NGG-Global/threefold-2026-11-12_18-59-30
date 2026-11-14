@@ -1,4 +1,5 @@
 using System;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Magic
@@ -36,6 +37,10 @@ namespace Threefold.Magic
         [Min(0f)]
         public float heat;
 
+        [Tooltip("Force of the blow on things that can be moved or broken: the metres an unresisting target is shoved.")]
+        [Min(0f)]
+        public float force;
+
         [Tooltip("Mana returned for each target hit. Melee feeds the charged attacks.")]
         [Min(0f)]
         public float manaGainPerTarget = 2f;
@@ -67,6 +72,9 @@ namespace Threefold.Magic
 
         /// <summary>Seconds from the tap until the next swing can start.</summary>
         public float TotalSeconds => startupSeconds + recoverySeconds;
+
+        /// <summary>The magical effects the swing carries, apart from its damage.</summary>
+        public EffectPayload Effects => new EffectPayload { heat = heat, force = force, targets = EffectTargets.All };
     }
 
     /// <summary>A discipline's standard attack: the swings in order, and how forgiving the input is.</summary>
@@ -93,5 +101,37 @@ namespace Threefold.Magic
         {
             return steps != null && index >= 0 && index < steps.Length ? steps[index] : null;
         }
+    }
+
+    /// <summary>
+    /// What a discipline's guard does to the world around the character, beyond protecting it. The
+    /// protection itself is the same for every discipline. An Aegis guard braces unstable things nearby.
+    /// </summary>
+    [Serializable]
+    public sealed class GuardEffectProfile
+    {
+        [Tooltip("Strength of the brace given to nearby objects while guarding. 0 means the guard does not brace.")]
+        [Min(0f)]
+        public float stabilize;
+
+        [Tooltip("Seconds each brace lasts. It is renewed for as long as the guard is held.")]
+        [Min(0f)]
+        public float stabilizeSeconds = 1.5f;
+
+        [Tooltip("How far from the character objects are braced, in metres.")]
+        [Min(0f)]
+        public float radius = 3.5f;
+
+        [Tooltip("Seconds between braces while the guard is held.")]
+        [Min(0.1f)]
+        public float pulseSeconds = 0.4f;
+
+        public bool HasEffect => stabilize > 0f && radius > 0f;
+
+        /// <summary>The effects each pulse of the guard carries. Objects only: a brace means nothing to a creature.</summary>
+        public EffectPayload Effects => new EffectPayload
+        {
+            stabilize = stabilize, stabilizeSeconds = stabilizeSeconds, targets = EffectTargets.Objects,
+        };
     }
 }

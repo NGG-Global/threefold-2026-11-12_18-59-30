@@ -53,6 +53,73 @@ namespace Threefold.Magic
             }
         }
 
+        /// <summary>What a discipline's guard does to nearby objects. Only an Aegis guard braces.</summary>
+        public static GuardEffectProfile Guard(MagicDiscipline discipline)
+        {
+            if (discipline == MagicDiscipline.Aegis)
+            {
+                return new GuardEffectProfile { stabilize = 1f, stabilizeSeconds = 1.5f, radius = 3.5f, pulseSeconds = 0.4f };
+            }
+
+            return new GuardEffectProfile();
+        }
+
+        /// <summary>
+        /// The version of the values a newly generated discipline holds. It is raised when a release
+        /// adds values that assets generated earlier do not have; the setup command then adds them once.
+        /// Version 1 added the effects on the world: force on Aegis swings, the brace of the Aegis guard
+        /// and the charge the Arcane Arrow carries.
+        /// </summary>
+        public const int DataVersion = 1;
+
+        /// <summary>
+        /// Gives values generated before version 1 the effects on the world that version introduced.
+        /// Only a value that is still zero is filled, from the defaults of the same swing, so anything
+        /// tuned since is kept. The profiles passed in are changed in place; null ones are skipped.
+        /// </summary>
+        /// <returns>True if anything changed.</returns>
+        public static bool FillWorldEffects(MagicDiscipline discipline, MeleeComboProfile melee, GuardEffectProfile guard,
+            ProjectileProfile projectile)
+        {
+            bool changed = false;
+
+            MeleeComboProfile meleeDefaults = Melee(discipline);
+            if (melee != null && melee.steps != null)
+            {
+                for (int i = 0; i < melee.steps.Length && i < meleeDefaults.StepCount; i++)
+                {
+                    MeleeStepProfile step = melee.steps[i];
+                    float force = meleeDefaults.steps[i].force;
+                    if (step != null && step.force <= 0f && force > 0f)
+                    {
+                        step.force = force;
+                        changed = true;
+                    }
+                }
+            }
+
+            GuardEffectProfile guardDefaults = Guard(discipline);
+            if (guard != null && guard.stabilize <= 0f && guardDefaults.HasEffect)
+            {
+                guard.stabilize = guardDefaults.stabilize;
+                guard.stabilizeSeconds = guardDefaults.stabilizeSeconds;
+                guard.radius = guardDefaults.radius;
+                guard.pulseSeconds = guardDefaults.pulseSeconds;
+                changed = true;
+            }
+
+            ProjectileProfile projectileDefaults = Charged(discipline).Projectile;
+            if (projectile != null && projectileDefaults != null && projectile.arcaneChargeMin <= 0f &&
+                projectile.arcaneChargeMax <= 0f && projectileDefaults.arcaneChargeMax > 0f)
+            {
+                projectile.arcaneChargeMin = projectileDefaults.arcaneChargeMin;
+                projectile.arcaneChargeMax = projectileDefaults.arcaneChargeMax;
+                changed = true;
+            }
+
+            return changed;
+        }
+
         public static SpellElement Element(MagicDiscipline discipline)
         {
             switch (discipline)
@@ -118,7 +185,7 @@ namespace Threefold.Magic
                 Projectile = new ProjectileProfile
                 {
                     speedMin = 30f, speedMax = 46f, range = 55f, radiusMin = 0.16f, radiusMax = 0.24f,
-                    scaleMin = 0.9f, scaleMax = 1.5f, noiseRadius = 10f,
+                    scaleMin = 0.9f, scaleMax = 1.5f, noiseRadius = 10f, arcaneChargeMin = 40f, arcaneChargeMax = 100f,
                 },
             };
         }
@@ -194,13 +261,13 @@ namespace Threefold.Magic
                 {
                     new MeleeStepProfile
                     {
-                        name = "Force Palm", damage = 14f, stagger = 30f, reach = 2.3f, arcDegrees = 90f, maxTargets = 2,
+                        name = "Force Palm", damage = 14f, stagger = 30f, force = 0.6f, reach = 2.3f, arcDegrees = 90f, maxTargets = 2,
                         manaGainPerTarget = 3f, startupSeconds = 0.18f, recoverySeconds = 0.34f, comboWindowSeconds = 0.6f,
                         moveSpeedMultiplier = 0.7f, hitTrauma = 0.2f,
                     },
                     new MeleeStepProfile
                     {
-                        name = "Bulwark Slam", damage = 20f, stagger = 45f, reach = 2.6f, arcDegrees = 120f, maxTargets = 3,
+                        name = "Bulwark Slam", damage = 20f, stagger = 45f, force = 1f, reach = 2.6f, arcDegrees = 120f, maxTargets = 3,
                         manaGainPerTarget = 3f, startupSeconds = 0.26f, recoverySeconds = 0.46f, comboWindowSeconds = 0.5f,
                         moveSpeedMultiplier = 0.55f, hitTrauma = 0.3f,
                     },
