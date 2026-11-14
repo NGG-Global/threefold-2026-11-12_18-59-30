@@ -111,8 +111,10 @@ namespace Threefold.Puzzles
                 active = record.Active;
                 locked = record.Locked;
             }
-            else
+            else if (PersistsUnlockedState)
             {
+                // Its state is remembered whenever it differs from the start, so nothing remembered
+                // means the start.
                 if (!active && !locked)
                 {
                     return;
@@ -121,9 +123,32 @@ namespace Threefold.Puzzles
                 active = false;
                 locked = false;
             }
+            else
+            {
+                // Only a locked (solved) state of this kind of element is ever remembered: its unlocked
+                // state follows from its inputs. With nothing remembered it is no longer locked, and what
+                // it shows is worked out again from the inputs. An element that was not locked is left alone.
+                if (!locked)
+                {
+                    OnWorldStateReplaced();
+                    return;
+                }
+
+                locked = false;
+                active = false;
+            }
 
             OnRestored();
             StateChanged?.Invoke(this);
+            OnWorldStateReplaced();
+        }
+
+        /// <summary>
+        /// Called after the saved world was replaced as a whole and this element has taken what is
+        /// remembered for it. An element whose state follows from others works it out again here.
+        /// </summary>
+        protected virtual void OnWorldStateReplaced()
+        {
         }
 
         /// <summary>

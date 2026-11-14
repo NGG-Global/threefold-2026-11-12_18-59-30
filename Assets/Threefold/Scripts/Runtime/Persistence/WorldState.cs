@@ -62,15 +62,25 @@ namespace Threefold.Persistence
         /// </summary>
         public static event Action<WorldReload> Reloaded;
 
+        /// <summary>
+        /// Raised just before the store is written, copied or reloaded from. Objects answer by putting
+        /// what is meant to last into the store as it is at this moment. Most of it is there already,
+        /// written when it changed; this catches what changes continuously, such as damage from a fire
+        /// that is still burning or a charge that is draining.
+        /// </summary>
+        public static event Action Capturing;
+
         /// <summary>A restart or a return to a checkpoint: persistent state stays, temporary state is reset.</summary>
         public static void ReloadWorld()
         {
+            Capturing?.Invoke();
             Reloaded?.Invoke(WorldReload.Restart);
         }
 
         /// <summary>Remembers the world state as it is now.</summary>
         public static void SaveCheckpoint()
         {
+            Capturing?.Invoke();
             checkpoint = Current.Capture();
         }
 
@@ -104,6 +114,11 @@ namespace Threefold.Persistence
         /// <summary>Writes the store to disk if it has changed. Returns false only if a write was tried and failed.</summary>
         public static bool Save()
         {
+            if (SavesToDisk)
+            {
+                Capturing?.Invoke();
+            }
+
             if (!IsDirty)
             {
                 return true;
@@ -155,6 +170,7 @@ namespace Threefold.Persistence
         {
             ResetSession();
             Reloaded = null;
+            Capturing = null;
         }
     }
 }

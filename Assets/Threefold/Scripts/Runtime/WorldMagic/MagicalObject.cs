@@ -21,6 +21,19 @@ namespace Threefold.WorldMagic
     /// With a Persistent Id, the parts of its state that its definition names are saved and come
     /// back after loading. Everything else is temporary and is reset when the world is reloaded.
     /// </summary>
+    /// <summary>Why a magical object's state was set as a whole rather than changed step by step.</summary>
+    public enum StateReset
+    {
+        /// <summary>The world was reloaded from an unchanged store (a restart): temporary state reset, lasting state kept.</summary>
+        Reloaded = 0,
+
+        /// <summary>The state was replaced: put back to the start, or taken from a store that was itself replaced.</summary>
+        Replaced = 1,
+
+        /// <summary>The object was switched off and its temporary state was brought up to date or dropped.</summary>
+        Settled = 2,
+    }
+
     [DisallowMultipleComponent]
     public sealed class MagicalObject : MonoBehaviour, IMagicEffectReceiver, IRestorable, IAimAssistTarget, ISimulated
     {
@@ -96,7 +109,7 @@ namespace Threefold.WorldMagic
         /// to how it started, loaded from the saved world, or brought up to date after being switched
         /// off. Whoever shows the state looks at it afresh; nothing that already happened is played again.
         /// </summary>
-        public event Action<MagicalObject> Restored;
+        public event Action<MagicalObject, StateReset> Restored;
 
         public MagicalObjectDefinition Definition => definition;
 
@@ -277,7 +290,7 @@ namespace Threefold.WorldMagic
                 WorldState.Current.RemoveObject(persistentId);
             }
 
-            ShowLoadedState();
+            ShowLoadedState(StateReset.Replaced);
         }
 
         private void Awake()
@@ -301,7 +314,7 @@ namespace Threefold.WorldMagic
                 if (definition.Properties.whenInactive == InactiveBehaviour.CatchUp)
                 {
                     properties.CatchUp(Time.time - switchedOffAt);
-                    ShowLoadedState();
+                    ShowLoadedState(StateReset.Settled);
                     Persist();
                 }
             }
@@ -330,6 +343,13 @@ namespace Threefold.WorldMagic
             {
                 properties.ClearTemporary();
                 ApplyOffset();
+
+                // Whoever shows or follows the state is told, or a door would stay open for a crystal
+                // that has gone dark. Not while the scene itself is being unloaded.
+                if (gameObject.scene.isLoaded)
+                {
+                    Restored?.Invoke(this, StateReset.Settled);
+                }
             }
 
             // Whatever is meant to last is noted now: the object may be unloaded without another chance.
@@ -347,6 +367,7 @@ namespace Threefold.WorldMagic
             if (listensToWorld)
             {
                 WorldState.Reloaded -= HandleWorldReloaded;
+                WorldState.Capturing -= Persist;
                 listensToWorld = false;
             }
 
@@ -403,6 +424,7 @@ namespace Threefold.WorldMagic
             if (!listensToWorld)
             {
                 WorldState.Reloaded += HandleWorldReloaded;
+                WorldState.Capturing += Persist;
                 listensToWorld = true;
             }
 
@@ -438,11 +460,11 @@ namespace Threefold.WorldMagic
             }
 
             properties.Load(record, definition.Properties.persisted);
-            ShowLoadedState();
+            ShowLoadedState(reload == WorldReload.Restart ? StateReset.Reloaded : StateReset.Replaced);
         }
 
         /// <summary>After the state was set as a whole: put the object where and how the state says, and tell whoever shows it.</summary>
-        private void ShowLoadedState()
+        private void ShowLoadedState(StateReset reason)
         {
             ApplyLoadedState();
 
@@ -453,7 +475,7 @@ namespace Threefold.WorldMagic
                 awake = WorldSimulation.Wake(this);
             }
 
-            Restored?.Invoke(this);
+            Restored?.Invoke(this, reason);
         }
 
         /// <summary>Makes the object in the scene match a state that was set as a whole. Silent: no event, no effect.</summary>
@@ -475,7 +497,7 @@ namespace Threefold.WorldMagic
         /// <summary>Writes what is meant to last into the world state. Does nothing for an object without an identifier.</summary>
         private void Persist()
         {
-            if (persistent)
+            if (persistent && properties != null)
             {
                 WorldState.Current.SetObject(persistentId, properties.Capture(definition.Properties.persisted));
             }
@@ -597,6 +619,13 @@ namespace Threefold.WorldMagic
 
                     Vector3 point = other.bounds.ClosestPoint(origin);
                     float distance = (point - origin).sqrMagnitude;
+
+                    // A wall stops a reaction as it stops an attack's area; creatures do not shield.
+                    Transform targetTransform = receiver is Component component ? component.transform : other.transform;
+                    if (AreaStrike.IsBehindCover(self, targetTransform, origin, point, reactionLayers))
+                    {
+                        continue;
+                    }
 
                     int known = IndexOfTarget(receiver, found);
                     if (known >= 0)

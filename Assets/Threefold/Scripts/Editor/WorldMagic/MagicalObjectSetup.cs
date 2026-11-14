@@ -406,6 +406,11 @@ namespace Threefold.EditorTools
             {
                 // A definition generated before LM-04 is given, once, what that sprint added: what is
                 // saved and its reactions. Those values did not exist before; every other value is kept.
+                if (definition.DataVersion < WorldMagicDefaults.DataVersion)
+                {
+                    Undo.RecordObject(definition, DialogTitle);
+                }
+
                 if (definition.Upgrade(WorldMagicDefaults.Settings(example)))
                 {
                     EditorUtility.SetDirty(definition);
@@ -949,9 +954,8 @@ namespace Threefold.EditorTools
         // -------------------------------------------------------- identifiers
 
         /// <summary>
-        /// Gives every selected magical object that has none a persistent id, or, with nothing
-        /// selected, every magical object in the open scene whose definition keeps something. Ids that
-        /// exist are never changed: changing one would orphan what was saved under it.
+        /// Gives every selected magical object that has none a persistent id. Ids that exist are never
+        /// changed: changing one would orphan what was saved under it.
         /// </summary>
         [MenuItem(AssignIdsMenuPath, false, 61)]
         public static void AssignPersistentIds()
@@ -966,19 +970,14 @@ namespace Threefold.EditorTools
                 }
             }
 
-            bool fromSelection = targets.Count > 0;
-            if (!fromSelection)
+            // Which objects keep their state is a decision per object: a practice target is meant to come
+            // back. So nothing is assigned without a selection.
+            if (targets.Count == 0)
             {
-                foreach (GameObject root in scene.GetRootGameObjects())
-                {
-                    foreach (MagicalObject magical in root.GetComponentsInChildren<MagicalObject>(true))
-                    {
-                        if (magical.Definition != null && magical.Definition.Properties.persisted != PersistedState.None)
-                        {
-                            targets.Add(magical);
-                        }
-                    }
-                }
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "Select the magical objects in the scene that should keep their state, then run this command again. " +
+                    "Objects without an id are as new after every reload, which is what a practice target wants.", "OK");
+                return;
             }
 
             var report = new StringBuilder();
@@ -990,9 +989,7 @@ namespace Threefold.EditorTools
 
             string summary = assigned > 0
                 ? report.ToString().TrimEnd() + "\n\nSave the scene with Ctrl+S."
-                : fromSelection
-                    ? "Every selected magical object already has a persistent id."
-                    : "Every magical object in the scene that keeps something already has a persistent id.";
+                : "Every selected magical object already has a persistent id.";
             Debug.Log($"[Threefold] Assign Persistent Ids.\n{summary}");
             EditorUtility.DisplayDialog(DialogTitle, summary, "OK");
         }
@@ -1000,7 +997,7 @@ namespace Threefold.EditorTools
         [MenuItem(AssignIdsMenuPath, true)]
         private static bool CanAssignPersistentIds()
         {
-            return !EditorApplication.isPlayingOrWillChangePlaymode;
+            return !EditorApplication.isPlayingOrWillChangePlaymode && Selection.gameObjects.Length > 0;
         }
 
         /// <summary>Fills empty ids so that every id in the scene is unique. Returns how many were assigned.</summary>

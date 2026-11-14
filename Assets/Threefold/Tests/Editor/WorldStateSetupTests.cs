@@ -161,6 +161,21 @@ namespace Threefold.Tests
                 definition.Properties.emissions = new ReactionEmission[0];
                 Assert.IsFalse(definition.Upgrade(defaults));
                 Assert.AreEqual(0, definition.Properties.emissions.Length);
+
+                // An older definition whose new values were already set by hand keeps them, and is not looked at again.
+                var edited = ScriptableObject.CreateInstance<MagicalObjectDefinition>();
+                try
+                {
+                    edited.Properties.persisted = PersistedState.Position;
+                    Assert.IsTrue(edited.Upgrade(defaults));
+                    Assert.AreEqual(PersistedState.Position, edited.Properties.persisted);
+                    Assert.AreEqual(0, edited.Properties.emissions.Length);
+                    Assert.AreEqual(WorldMagicDefaults.DataVersion, edited.DataVersion);
+                }
+                finally
+                {
+                    Object.DestroyImmediate(edited);
+                }
             }
             finally
             {

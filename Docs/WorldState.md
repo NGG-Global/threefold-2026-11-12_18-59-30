@@ -97,15 +97,20 @@ state of magical objects. `PuzzleSessionState` reads and writes the same store; 
 second save framework beside it. Puzzle keys and object ids are separate name spaces.
 
 Changes are kept **as they happen**. A gate that was opened is open in the store at once, so it
-is still open if the player is defeated a moment later.
+is still open if the player is defeated a moment later. Values that change continuously (the
+damage of a fire still burning, a charge that is draining) are written when the state changes,
+when the object comes to rest or is switched off, and again just before every save, restart and
+checkpoint, so those never work from a stale value. Only a crash can lose the drift since the
+last of these.
 
 ### Identifiers
 
 A magical object is saved under its **Persistent Id**, a text that must be unique in the game.
 
 - **Threefold > World Magic > Assign Persistent Ids** gives an id to every selected magical
-  object that has none, or, with nothing selected, to every one in the scene whose definition
-  keeps something. The id is made from the scene's and the object's name and is made unique.
+  object that has none. The id is made from the scene's and the object's name and is made
+  unique. Nothing is assigned without a selection: which objects keep their state is a decision
+  per object, and a practice target is meant to come back.
 - An id that exists is never changed by tooling: changing it would orphan what was saved under it.
 - Two objects with one id are reported by the validation. At run time the second is refused and
   is simply not saved; the first is unaffected.
@@ -131,7 +136,7 @@ new file and then put in place of the old one, which is kept as a backup. Loadin
 
 | Operation | What it does | How |
 | --- | --- | --- |
-| **Restart** | The world takes its saved state again. Persistent state stays; everything temporary is reset; objects without an id are as new. Puzzle elements are left as they are, as before | R, the Restart button, `PrototypeSession.Restart()` |
+| **Restart** | The world takes its saved state again. Persistent state stays; everything temporary is reset; objects without an id are as new. Puzzle elements are left as they are, as before; a latched property trigger stays latched, and one without a latch follows its object | R, the Restart button, `PrototypeSession.Restart()` |
 | **Checkpoint** | A copy of the store is taken, and the store can be put back to it; the world follows | `WorldState.SaveCheckpoint()`, `WorldState.RevertToCheckpoint()`. Nothing in the game calls these yet |
 | **New game** | Everything saved is forgotten, on disk too, and the level restarts | **Threefold > World State > New Game (Forget Saved State)**, `PrototypeSession.NewGame()` |
 
@@ -207,6 +212,10 @@ each kind of effect once per identity, so an effect cannot come back to where it
 target reached by two paths is acted on once. The queue also refuses to hold the same effect of
 the same event for the same target twice.
 
+**Walls.** A reaction by distance is stopped by scenery between the two objects, by the same
+test an attack's area uses. Creatures do not shield what stands behind them. A reaction to a
+linked target is not affected by distance or walls.
+
 **Order.** Critical reactions first, then normal, then low; within a priority, first offered,
 first carried out. Objects are advanced in the order they joined the simulation, and a reaction
 goes to linked targets in the order listed, then to what is in reach, nearest first. The same
@@ -227,7 +236,8 @@ given up, so nothing is called on it afterwards. What it had already sent out st
 The setup adds to the lane of LM-03:
 
 - **Persistent ids** on the examples that keep something: barricade and stone (destruction),
-  platform (position), unstable structure (collapse), door (destruction, damage, activation).
+  platform (position), unstable structure (collapse, destruction), door (destruction, damage,
+  activation).
   The crystal's activation is timed and therefore temporary; it has no id.
 - **A row of five barricades** behind the lane, each within reach of the next one's fire and of
   no other. Light the first: it and the next three burn down, and the fifth stays untouched.
@@ -246,8 +256,9 @@ to the nearest point of the other.
 
 1. Pull `main` on the laptop and let Unity import. The Console must show no red errors.
 2. Run **Threefold > Setup > Discipline Range**, read the report and save the scene. It updates
-   the example definitions once (what is saved, their reactions; other values are kept), gives
-   the examples their ids, links the crystal, and places the chain row and the budgets.
+   the example definitions once (what is saved, their reactions; other values are kept, and so
+   are these if you have already set any of them by hand), gives the examples their ids, links
+   the crystal, and places the chain row and the budgets.
 3. Run **Threefold > Validate > Open Scene**.
 4. Upload the scene and the changed assets in `Assets/Threefold/Generated/WorldMagic`.
 
@@ -256,8 +267,8 @@ Play Sessions**, destroy something, stop Play and press Play again. **Show What 
 prints the store. **New Game** clears it.
 
 For a new object of your own: tick what is to be kept under **Persisted** in its definition,
-run **Assign Persistent Ids**, add reaction rules under **Reactions**, and list **Linked
-Targets** on the object if a rule goes to them.
+select the object and run **Assign Persistent Ids**, add reaction rules under **Reactions**, and
+list **Linked Targets** on the object if a rule goes to them.
 
 ## Tuning
 
@@ -325,7 +336,9 @@ Not measured: none of this has been profiled.
 - Puzzle elements with a key follow the store when it is replaced as a whole (checkpoint, new
   game, load). A restart leaves them as they are, as before.
 - A magical effect carries its reaction depth.
-- Heat on something already burning is still ignored by default; it is now a policy.
+- Heat on something already burning is still ignored by default; it is now a policy, and it
+  means the same for enemies and training dummies as for objects.
+- `AreaStrike.IsBehindCover` is public, so reactions use the same cover test as attacks.
 
 ## Tests
 
@@ -334,8 +347,8 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `WorldStateTests` (24) | The store and its revision; snapshots; the text format written and read back, in a fixed order, with awkward ids; refusal of foreign and newer files; damaged and cut-off text; the file with its backup; repeated saving and loading; restart, checkpoint and new game; duplicate ids |
-| `MagicalPersistenceTests` (29) | Each persistent part restored, on each example; temporary state reset; the heat and charge exceptions; loading again and again; loading is silent; records that do not fit; rules between properties after a load; tiers; the three stacking policies; a breakable brace; clean-up on destruction; clearing temporary state; catching up; reaction rules firing once per entry and at their interval; reaction depth |
+| `WorldStateTests` (25) | The store and its revision; snapshots; the text format written and read back, in a fixed order, with awkward ids; refusal of foreign and newer files; damaged and cut-off text; the file with its backup; repeated saving and loading; restart, checkpoint and new game; objects asked for their present state before a save, a restart and a checkpoint; duplicate ids |
+| `MagicalPersistenceTests` (33) | Each persistent part restored, on each example; temporary state reset; the heat and charge exceptions; loading again and again; loading is silent; records that do not fit; rules between properties after a load; tiers; the three stacking policies; a breakable brace; clean-up on destruction; clearing temporary state; catching up; reaction rules firing once per entry and at their interval; reaction depth; a latch through a restart and through a replaced state; the update of an older definition keeping what was set by hand; the burn policy on a creature |
 | `ChainReactionTests` (25) | The queue: order, budget per frame, priorities, overflow, critical never refused, depth limit, duplicates, targets that are gone, cancelling, no nesting. The simulated set: budget, waiting, critical, order, leaving during a step. Whole chains with the examples: a fire along a row to the depth limit, a row of structures toppling, no way back, two paths acting once, a crystal feeding a linked lock, destruction in the middle of a chain, forty simultaneous critical reactions, low priority giving way, and a chain saved half-way and loaded |
 | `WorldStateSetupTests` (5) | Needs Unity: the range's ids, chain row and link; duplicate ids reported; assigning ids; the update of an older definition; an id with nothing to save and a broken link |
 
@@ -357,7 +370,9 @@ pause, the visuals suspending when unseen, and the Editor menu commands.
 - Nothing in the game takes a checkpoint yet. The operations exist and are tested.
 - The player's own state (position, health, mana, discipline) is not saved, and neither are
   enemies. A restart puts them back as before.
-- A reaction's radius is measured in a straight line and passes through walls.
+- After a new game or a return to a checkpoint, puzzle switches, doors and logic gates follow
+  the store, but a sequence that was solved and a timer that was running keep their inner
+  progress until the scene is loaded again.
 - Creatures receive reactions (a Wisp next to a burning barricade heats up) but send none.
 - An object that waits for a place in the simulation shows no change until it gets one.
 - A persistent id made from names changes meaning if the object is renamed and the id is then

@@ -36,7 +36,7 @@ namespace Threefold.WorldMagic
         [Tooltip("What is saved for an object of this kind that has a Persistent Id in the scene. Everything else is " +
                  "reset when the world is reloaded. Heat and Charge are temporary by nature; tick them only for a " +
                  "puzzle that depends on them.")]
-        public PersistedState persisted = PersistedState.Destruction | PersistedState.Activation | PersistedState.Collapse;
+        public PersistedState persisted = WorldMagicDefaults.UnsetPersisted;
 
         [Tooltip("What happens to heat, charge and braces while the object is switched off (out of range, unloaded).")]
         public InactiveBehaviour whenInactive = InactiveBehaviour.Pause;

@@ -250,6 +250,10 @@ namespace Threefold.WorldMagic
                 bool sways = swayTarget != null && swayDegrees > 0f && properties.Meets(PropertyCondition.Unstable);
                 if (!source.IsAwake && !sways)
                 {
+                    // It has settled out of sight. What is shown is brought up to date one last time,
+                    // because a component that is switched off cannot notice being looked at again.
+                    ShowCurrentState(false);
+                    SnapMotion(properties);
                     enabled = false;
                 }
 
@@ -320,7 +324,8 @@ namespace Threefold.WorldMagic
 
         private void HandleStateChanged(MagicalObject changed, WorldPropertyKind kind, int from, int to)
         {
-            ShowCurrentState(true);
+            // A burst for something nobody is looking at is not worth its particles.
+            ShowCurrentState(!suspendWhenUnseen || IsSeen());
             enabled = true;
         }
 
@@ -332,7 +337,7 @@ namespace Threefold.WorldMagic
             }
         }
 
-        private void HandleRestored(MagicalObject restored)
+        private void HandleRestored(MagicalObject restored, StateReset reason)
         {
             // The state was set as a whole: show it as it is, without playing how it came about.
             ShowCurrentState(false);

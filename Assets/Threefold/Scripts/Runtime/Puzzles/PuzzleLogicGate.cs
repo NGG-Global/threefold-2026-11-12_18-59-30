@@ -97,6 +97,14 @@ namespace Threefold.Puzzles
             Unsubscribe();
         }
 
+        protected override void OnWorldStateReplaced()
+        {
+            if (started)
+            {
+                Evaluate();
+            }
+        }
+
         private void HandleInputChanged(PuzzleElement element)
         {
             Evaluate();

@@ -44,6 +44,23 @@ namespace Threefold.WorldMagic
             return conditionHolds || (latched && isActive);
         }
 
+        /// <summary>
+        /// Whether the trigger should be active after its object's state was set as a whole. A restart,
+        /// or a return from being switched off, leaves a latch as it is, like any solved puzzle. When
+        /// the state was replaced (a new game, a checkpoint, a load, a full reset), a latch holds only
+        /// if what is remembered for this trigger says so.
+        /// </summary>
+        public static bool DecideAfterReset(bool conditionHolds, bool isActive, bool latched, bool stateReplaced,
+            bool rememberedActive)
+        {
+            if (conditionHolds)
+            {
+                return true;
+            }
+
+            return latched && (stateReplaced ? rememberedActive : isActive);
+        }
+
         protected override void Awake()
         {
             base.Awake();
@@ -95,10 +112,11 @@ namespace Threefold.WorldMagic
             Evaluate();
         }
 
-        private void HandleRestored(MagicalObject restored)
+        private void HandleRestored(MagicalObject restored, StateReset reason)
         {
-            // Back to the start: a latch is released as well.
-            SetElementActive(source != null && source.Meets(activeWhen));
+            bool holds = source != null && source.Meets(activeWhen);
+            bool remembered = PuzzleSessionState.TryGet(PersistenceKey, out PuzzleRecord record) && record.Active;
+            SetElementActive(DecideAfterReset(holds, IsActive, latch, reason == StateReset.Replaced, remembered));
         }
 
         private void Evaluate()

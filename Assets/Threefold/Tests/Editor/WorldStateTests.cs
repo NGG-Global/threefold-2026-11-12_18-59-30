@@ -546,5 +546,68 @@ namespace Threefold.Tests
             Assert.AreEqual(0, PersistentIdRegistry.FindDuplicates(new[] { "x", "y" }, duplicates));
             Assert.IsEmpty(duplicates);
         }
+
+        [Test]
+        public void ObjectsAreAskedForTheirPresentStateBeforeItIsWrittenCopiedOrReloaded()
+        {
+            // An object whose lasting state changes continuously: it writes itself when asked.
+            int charge = 140;
+            var order = new List<string>();
+            Action capture = () =>
+            {
+                order.Add("capture");
+                WorldState.Current.SetObject("range/lock", new ObjectRecord { Saved = PersistedState.Charge, Charge = charge });
+            };
+            Action<WorldReload> reload = kind => order.Add("reload:" + kind);
+            WorldState.Capturing += capture;
+            WorldState.Reloaded += reload;
+            try
+            {
+                // A restart: the store is brought up to date first, then the world reloads from it.
+                charge = 10;
+                WorldState.ReloadWorld();
+                CollectionAssert.AreEqual(new[] { "capture", "reload:Restart" }, order);
+                WorldState.Current.TryGetObject("range/lock", out ObjectRecord record);
+                Assert.AreEqual(10f, record.Charge, "Not the stale 140 of the last change of state.");
+
+                // A checkpoint holds the state as it is at that moment.
+                order.Clear();
+                charge = 7;
+                WorldState.SaveCheckpoint();
+                CollectionAssert.AreEqual(new[] { "capture" }, order);
+
+                // Returning to it must not let objects write their present state over it first.
+                order.Clear();
+                charge = 99;
+                WorldState.RevertToCheckpoint();
+                CollectionAssert.AreEqual(new[] { "reload:StateReplaced" }, order);
+                WorldState.Current.TryGetObject("range/lock", out record);
+                Assert.AreEqual(7f, record.Charge);
+
+                // Saving to disk: asked first, so what is written is current. Without a file nobody is asked.
+                order.Clear();
+                WorldState.Save();
+                Assert.IsEmpty(order);
+
+                WorldState.FilePath = SavePath;
+                charge = 3;
+                Assert.IsTrue(WorldState.Save());
+                CollectionAssert.AreEqual(new[] { "capture" }, order);
+                var onDisk = new WorldStateStore();
+                Assert.IsTrue(WorldStateFile.Load(SavePath, onDisk).Loaded);
+                onDisk.TryGetObject("range/lock", out record);
+                Assert.AreEqual(3f, record.Charge);
+
+                // A new game asks nobody: there is nothing worth keeping.
+                order.Clear();
+                WorldState.NewGame();
+                CollectionAssert.AreEqual(new[] { "reload:StateReplaced" }, order);
+            }
+            finally
+            {
+                WorldState.Capturing -= capture;
+                WorldState.Reloaded -= reload;
+            }
+        }
     }
 }

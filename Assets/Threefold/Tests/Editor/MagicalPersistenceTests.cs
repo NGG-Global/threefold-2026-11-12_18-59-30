@@ -787,5 +787,111 @@ namespace Threefold.Tests
 
             Assert.IsFalse(furnace.IsAtRest, "It keeps radiating, so time has to keep passing for it.");
         }
+
+        // ----------------------------------------------------- review follow-ups
+
+        [Test]
+        public void RubbleThatWasClearedAwayStaysCleared()
+        {
+            MagicalPropertySet structure = Example(ExampleObject.UnstableStructure);
+            structure.Apply(Effect(MagicEffectKind.Force, 5f));
+            Assert.AreEqual(StabilityState.Collapsed, structure.Stability.State);
+
+            // The fallen structure is then broken up until nothing is left of it.
+            for (int i = 0; i < 4 && !structure.IsDestroyed; i++)
+            {
+                structure.Apply(Effect(MagicEffectKind.Force, 5f));
+            }
+
+            Assert.IsTrue(structure.IsDestroyed);
+
+            MagicalPropertySet loaded = SaveAndLoad(structure, ExampleObject.UnstableStructure);
+            Assert.IsTrue(loaded.IsDestroyed, "The way that was cleared is still clear.");
+            Assert.AreEqual(StabilityState.Collapsed, loaded.Stability.State);
+        }
+
+        [Test]
+        public void ALatchHoldsThroughARestartAndGoesOnlyWhenTheStateIsReplaced()
+        {
+            // The condition holds: active whatever else is true.
+            Assert.IsTrue(PropertyStateTrigger.DecideAfterReset(true, false, false, false, false));
+            Assert.IsTrue(PropertyStateTrigger.DecideAfterReset(true, false, true, true, false));
+
+            // A restart resets the crystal the trigger watches. A latch that had caught stays caught,
+            // as a solved puzzle stays solved; a trigger without a latch follows its object.
+            Assert.IsTrue(PropertyStateTrigger.DecideAfterReset(false, true, true, false, false));
+            Assert.IsFalse(PropertyStateTrigger.DecideAfterReset(false, true, false, false, false));
+            Assert.IsFalse(PropertyStateTrigger.DecideAfterReset(false, false, true, false, false), "A latch that never caught has nothing to hold.");
+
+            // The state itself was replaced (a new game, a checkpoint): the latch holds only if what is
+            // remembered for the trigger says so.
+            Assert.IsFalse(PropertyStateTrigger.DecideAfterReset(false, true, true, true, false));
+            Assert.IsTrue(PropertyStateTrigger.DecideAfterReset(false, true, true, true, true));
+            Assert.IsFalse(PropertyStateTrigger.DecideAfterReset(false, true, false, true, true), "Without a latch nothing is held.");
+        }
+
+        [Test]
+        public void TheUpdateOfAnOlderDefinitionKeepsWhatWasAlreadySetByHand()
+        {
+            MagicalPropertySettings defaults = WorldMagicDefaults.Settings(ExampleObject.WoodenBarricade);
+
+            // Untouched: everything the new version introduced is filled in.
+            var untouched = new MagicalPropertySettings { thermal = true };
+            Assert.IsTrue(WorldMagicDefaults.FillWorldState(untouched, defaults));
+            Assert.AreEqual(defaults.persisted, untouched.persisted);
+            Assert.AreEqual(1, untouched.emissions.Length);
+            Assert.IsTrue(untouched.thermal, "Values that existed before are not touched.");
+
+            // Any one of them already set by hand: all of them are kept.
+            var persistedChanged = new MagicalPropertySettings { persisted = PersistedState.Position };
+            Assert.IsFalse(WorldMagicDefaults.FillWorldState(persistedChanged, defaults));
+            Assert.AreEqual(PersistedState.Position, persistedChanged.persisted);
+            Assert.AreEqual(0, persistedChanged.emissions.Length);
+
+            var reactionsAdded = new MagicalPropertySettings { emissions = new[] { new ReactionEmission { magnitude = 3f } } };
+            Assert.IsFalse(WorldMagicDefaults.FillWorldState(reactionsAdded, defaults));
+            Assert.AreEqual(3f, reactionsAdded.emissions[0].magnitude);
+            Assert.AreEqual(WorldMagicDefaults.UnsetPersisted, reactionsAdded.persisted);
+
+            var markedCritical = new MagicalPropertySettings { critical = true };
+            Assert.IsFalse(WorldMagicDefaults.FillWorldState(markedCritical, defaults));
+
+            var inactiveChosen = new MagicalPropertySettings { whenInactive = InactiveBehaviour.Reset };
+            Assert.IsFalse(WorldMagicDefaults.FillWorldState(inactiveChosen, defaults));
+            Assert.AreEqual(InactiveBehaviour.Reset, inactiveChosen.whenInactive);
+
+            Assert.IsFalse(WorldMagicDefaults.FillWorldState(null, defaults));
+            Assert.IsFalse(WorldMagicDefaults.FillWorldState(untouched, null));
+        }
+
+        [Test]
+        public void TheBurnPolicyMeansTheSameToACreatureAsToAnObject()
+        {
+            var settings = new HeatSettings { capacity = 50f, burnSeconds = 4f, flammable = true };
+
+            // The default: a creature that is alight takes no more heat, exactly as an object.
+            var creature = new CreatureEffectModel(settings, 0f, true);
+            creature.Apply(Effect(MagicEffectKind.Heat, 100f), out _);
+            Assert.IsTrue(creature.Thermal.IsBurning);
+            Assert.AreEqual(EffectResponse.Resisted, creature.Apply(Effect(MagicEffectKind.Heat, 100f), out _));
+
+            // Set to renew: the same field now does for a creature what it does for an object.
+            settings = new HeatSettings { capacity = 50f, burnSeconds = 4f, flammable = true, burnStacking = StackPolicy.Refresh };
+            creature = new CreatureEffectModel(settings, 0f, true);
+            var thing = new MagicalPropertySet(new MagicalPropertySettings { thermal = true, thermalSettings = settings });
+            creature.Apply(Effect(MagicEffectKind.Heat, 100f), out _);
+            thing.Apply(Effect(MagicEffectKind.Heat, 100f));
+            creature.Thermal.Tick(3f);
+            thing.Tick(3f);
+
+            Assert.AreEqual(EffectResponse.Applied, creature.Apply(Effect(MagicEffectKind.Heat, 100f), out _));
+            Assert.IsFalse(creature.IgnitedByLastEffect, "Renewed, not set alight a second time.");
+            Assert.AreEqual(EffectResponse.Applied, thing.Apply(Effect(MagicEffectKind.Heat, 100f)));
+
+            creature.Thermal.Tick(3f);
+            thing.Tick(3f);
+            Assert.IsTrue(creature.Thermal.IsBurning, "Six seconds in, with a burn time of four: it was renewed.");
+            Assert.AreEqual(ThermalState.Burning, thing.Thermal.State);
+        }
     }
 }

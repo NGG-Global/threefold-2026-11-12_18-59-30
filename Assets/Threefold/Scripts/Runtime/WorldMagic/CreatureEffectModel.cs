@@ -62,9 +62,22 @@ namespace Threefold.WorldMagic
                         return EffectResponse.Duplicate;
                     }
 
-                    if (!Thermal.CanHeat || Thermal.IsBurning)
+                    if (!Thermal.CanHeat)
                     {
                         return EffectResponse.Resisted;
+                    }
+
+                    if (Thermal.IsBurning)
+                    {
+                        // More heat on something alight does nothing, unless its burn is set to renew:
+                        // the same policy, read the same way, as for an object.
+                        if (!Thermal.RenewsWhileBurning)
+                        {
+                            return EffectResponse.Resisted;
+                        }
+
+                        Thermal.Add(effect.Magnitude);
+                        return EffectResponse.Applied;
                     }
 
                     IgnitedByLastEffect = Thermal.Add(effect.Magnitude);

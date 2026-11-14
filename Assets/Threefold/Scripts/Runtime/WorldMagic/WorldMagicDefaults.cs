@@ -34,21 +34,37 @@ namespace Threefold.WorldMagic
         public const int DataVersion = 1;
 
         /// <summary>
-        /// Gives settings generated before version 1 what that version introduced, taken from the
-        /// defaults of the same example. Those values did not exist before, so nothing tuned is lost;
-        /// every other value is left alone.
+        /// What every definition holds for the values version 1 introduced, until someone sets them.
         /// </summary>
-        public static void FillWorldState(MagicalPropertySettings settings, MagicalPropertySettings defaults)
+        public const PersistedState UnsetPersisted =
+            PersistedState.Destruction | PersistedState.Activation | PersistedState.Collapse;
+
+        /// <summary>
+        /// Gives settings generated before version 1 what that version introduced, taken from the
+        /// defaults of the same example. It does so only while all of those values are still as a new
+        /// definition has them: if any was already set by hand, all are kept. Every other value is
+        /// left alone in either case.
+        /// </summary>
+        /// <returns>True if the values were filled in.</returns>
+        public static bool FillWorldState(MagicalPropertySettings settings, MagicalPropertySettings defaults)
         {
             if (settings == null || defaults == null)
             {
-                return;
+                return false;
+            }
+
+            bool untouched = settings.persisted == UnsetPersisted && settings.whenInactive == InactiveBehaviour.Pause &&
+                             !settings.critical && (settings.emissions == null || settings.emissions.Length == 0);
+            if (!untouched)
+            {
+                return false;
             }
 
             settings.persisted = defaults.persisted;
             settings.whenInactive = defaults.whenInactive;
             settings.critical = defaults.critical;
             settings.emissions = defaults.emissions ?? new ReactionEmission[0];
+            return true;
         }
 
         public static string Name(ExampleObject example)
@@ -251,9 +267,10 @@ namespace Threefold.WorldMagic
                     forceThreshold = 1f, forceDamage = 8f, brittleness = 1f,
                 },
 
-                // Once down it stays down. Coming down, it shoves what stands around it hard enough to
-                // topple another structure like itself: a chain, which the depth limit ends.
-                persisted = PersistedState.Collapse,
+                // Once down it stays down, and rubble that was then cleared away stays cleared. Coming
+                // down, it shoves what stands around it hard enough to topple another structure like
+                // itself: a chain, which the depth limit ends.
+                persisted = PersistedState.Collapse | PersistedState.Destruction,
                 emissions = new[]
                 {
                     new ReactionEmission
