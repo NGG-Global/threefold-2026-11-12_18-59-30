@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Threefold.Characters;
+using Threefold.Discovery;
 using Threefold.Persistence;
 using Threefold.Pooling;
 using Threefold.Puzzles;
@@ -126,7 +127,12 @@ namespace Threefold.EditorTools
             public PooledObject Dust;
             public PooledObject Brace;
             public PooledObject Charge;
+            public Material Straw;
+            public PooledObject Mote;
         }
+
+        /// <summary>The name of the group that holds an example's built clues: straw, vents, cracks.</summary>
+        internal const string CluesName = "Clues";
 
         [MenuItem(MenuPath, false, 8)]
         public static void Run()
@@ -317,6 +323,28 @@ namespace Threefold.EditorTools
                                   "Add tints, parts and effects per condition in the Inspector.");
             }
 
+            if (!target.TryGetComponent(out DiscoveryClues _))
+            {
+                // The part that makes the small movements must not be the object itself, which other things
+                // move and measure. The first mesh below it is used; without one, answers show no movement.
+                Transform moving = null;
+                foreach (Renderer candidate in target.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (candidate.transform != target.transform)
+                    {
+                        moving = candidate.transform;
+                        break;
+                    }
+                }
+
+                DiscoveryClues clues = Undo.AddComponent<DiscoveryClues>(target);
+                clues.Bind(magical, target.GetComponent<PropertyStateVisuals>(), moving);
+                report.AppendLine(moving != null
+                    ? $"'{target.name}': added DiscoveryClues; '{moving.name}' makes its small movements."
+                    : $"'{target.name}': added DiscoveryClues without a moving part. Put its mesh on a child object and " +
+                      "assign it as Motion Target, so that its answers do not rely on colour alone.");
+            }
+
             MarkChanged(magical);
 
             if (magical.Definition == null)
@@ -366,6 +394,9 @@ namespace Threefold.EditorTools
                 new Color(1f, 0.93f, 0.7f, 1f), 8, 0.4f, report);
             look.Charge = CombatSetup.EnsureEffectPrefab($"{Folder}/ObjectCharge.prefab", "ObjectCharge", shared.Glow,
                 new Color(0.62f, 0.7f, 1f, 1f), 12, 0.6f, report);
+            look.Straw = LitMaterial("ExampleStraw", new Color(0.78f, 0.68f, 0.4f, 1f), report);
+            look.Mote = CombatSetup.EnsureEffectPrefab($"{Folder}/DiscoveryMote.prefab", "DiscoveryMote", shared.Glow,
+                new Color(1f, 0.97f, 0.88f, 1f), 3, 0.4f, report);
 
             var assets = new ExampleAssets();
             for (int i = 0; i < WorldMagicDefaults.Count; i++)
@@ -373,6 +404,7 @@ namespace Threefold.EditorTools
                 var example = (ExampleObject)i;
                 assets.Definitions[i] = EnsureDefinition(example, report);
                 assets.Prefabs[i] = EnsurePrefab(example, assets.Definitions[i], look, report);
+                EnsureDiscovery(example, look, report);
             }
 
             assets.Gate = EnsureGatePrefab(look, report);
@@ -478,6 +510,185 @@ namespace Threefold.EditorTools
             Object.DestroyImmediate(root);
             report.AppendLine($"Generated prefab '{example}'.");
             return prefab;
+        }
+
+        // ------------------------------------------------------------ discovery
+
+        /// <summary>
+        /// Gives an example prefab what discovery needs, whether the prefab was just generated or has
+        /// existed since an earlier sprint: its built clues (straw at the barricade's foot, vents and
+        /// scorch marks on the stone, cracks and debris on the unstable structure) and the component
+        /// that hints and answers. Whatever is already there is kept.
+        /// </summary>
+        private static void EnsureDiscovery(ExampleObject example, Look look, StringBuilder report)
+        {
+            string path = PrefabPath(example);
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null)
+            {
+                return;
+            }
+
+            bool hasComponent = asset.GetComponent<DiscoveryClues>() != null;
+            bool hasParts = !HasBuiltClues(example) || FindDeep(asset.transform, CluesName) != null;
+            if (hasComponent && hasParts)
+            {
+                return;
+            }
+
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (!root.TryGetComponent(out MagicalObject magical))
+                {
+                    return;
+                }
+
+                if (!hasParts)
+                {
+                    AddBuiltClues(example, root.transform, look);
+                }
+
+                if (!hasComponent)
+                {
+                    DiscoveryClues clues = root.AddComponent<DiscoveryClues>();
+                    clues.Bind(magical, root.GetComponent<PropertyStateVisuals>(), FindMotionTarget(example, root.transform));
+                    ConfigureClues(example, clues, look);
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                report.AppendLine($"Gave prefab '{example}' its discovery clues.");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        private static bool HasBuiltClues(ExampleObject example)
+        {
+            return example == ExampleObject.WoodenBarricade || example == ExampleObject.HeatSensitiveStone ||
+                   example == ExampleObject.UnstableStructure;
+        }
+
+        /// <summary>
+        /// The part of each example that makes the small movements. Never the part something else moves:
+        /// the visible block rather than the sliding platform, the door's planks rather than its leaf.
+        /// </summary>
+        private static Transform FindMotionTarget(ExampleObject example, Transform root)
+        {
+            switch (example)
+            {
+                case ExampleObject.ArcaneCrystal: return root.Find("Visual");
+                case ExampleObject.WoodenBarricade: return root.Find("Whole");
+                case ExampleObject.HeatSensitiveStone: return root.Find("Whole");
+                case ExampleObject.MovablePlatform: return root.Find("Platform/Block");
+                case ExampleObject.UnstableStructure: return root.Find("Body/Sway");
+                default: return root.Find("Leaf/Whole");
+            }
+        }
+
+        private static void ConfigureClues(ExampleObject example, DiscoveryClues clues, Look look)
+        {
+            // Objects whose clue is something built (straw, vents, a rail, cracks) only breathe a trace;
+            // the two that hold charge pulse a little more, because the pulse is their clue.
+            const PropertyCondition Gone = PropertyCondition.Destroyed;
+            switch (example)
+            {
+                case ExampleObject.ArcaneCrystal:
+                    clues.Configure(0.25f, new Color(0.78f, 0.84f, 1f, 1f), Gone | PropertyCondition.Activated, look.Mote);
+                    break;
+                case ExampleObject.WoodenBarricade:
+                    clues.Configure(0.08f, new Color(1f, 0.9f, 0.7f, 1f), Gone | PropertyCondition.Burning, look.Mote);
+                    break;
+                case ExampleObject.HeatSensitiveStone:
+                    clues.Configure(0.08f, new Color(1f, 0.86f, 0.72f, 1f), Gone, look.Mote);
+                    break;
+                case ExampleObject.MovablePlatform:
+                    clues.Configure(0.08f, new Color(0.86f, 0.9f, 1f, 1f), Gone | PropertyCondition.AtTravelLimit, look.Mote);
+                    break;
+                case ExampleObject.UnstableStructure:
+                    clues.Configure(0.08f, new Color(1f, 0.95f, 0.8f, 1f), Gone | PropertyCondition.Collapsed, look.Mote);
+                    break;
+                default:
+                    clues.Configure(0.2f, new Color(0.78f, 0.84f, 1f, 1f),
+                        Gone | PropertyCondition.Activated | PropertyCondition.Fractured, look.Mote);
+                    break;
+            }
+        }
+
+        /// <summary>Level 1: features that belong to the object and tell what it is made of or how it stands.</summary>
+        private static void AddBuiltClues(ExampleObject example, Transform root, Look look)
+        {
+            switch (example)
+            {
+                case ExampleObject.WoodenBarricade:
+                {
+                    // Dry straw packed at its foot: it will burn.
+                    Transform parent = root.Find("Whole");
+                    Transform clues = Group(parent != null ? parent : root, CluesName);
+                    Part(PrimitiveType.Cube, "Straw", clues, new Vector3(-0.55f, 0.14f, 0.24f), new Vector3(0.55f, 0.28f, 0.3f),
+                        look.Straw, new Vector3(0f, 12f, 0f));
+                    Part(PrimitiveType.Cube, "Straw", clues, new Vector3(0.6f, 0.12f, -0.22f), new Vector3(0.5f, 0.24f, 0.28f),
+                        look.Straw, new Vector3(0f, -18f, 0f));
+                    break;
+                }
+
+                case ExampleObject.HeatSensitiveStone:
+                {
+                    // Vents with scorched stone around them, on both faces: heat has been at work here before.
+                    Transform parent = root.Find("Whole");
+                    Transform clues = Group(parent != null ? parent : root, CluesName);
+                    for (int side = -1; side <= 1; side += 2)
+                    {
+                        Part(PrimitiveType.Cube, "Scorch", clues, new Vector3(0f, 0.75f, side * 0.405f), new Vector3(1f, 0.6f, 0.02f),
+                            look.Charred);
+                        for (int i = 0; i < 3; i++)
+                        {
+                            Part(PrimitiveType.Cube, "Vent", clues, new Vector3(0f, 0.6f + i * 0.15f, side * 0.42f),
+                                new Vector3(0.6f, 0.05f, 0.03f), look.Metal);
+                        }
+                    }
+
+                    break;
+                }
+
+                case ExampleObject.UnstableStructure:
+                {
+                    // Cracks across its blocks, and pieces that have already come away.
+                    Transform parent = root.Find("Body/Sway");
+                    Transform clues = Group(parent != null ? parent : root, CluesName);
+                    Part(PrimitiveType.Cube, "Crack", clues, new Vector3(0.15f, 1f, 0.66f), new Vector3(0.04f, 0.9f, 0.02f), look.Charred,
+                        new Vector3(0f, 0f, 18f));
+                    Part(PrimitiveType.Cube, "Crack", clues, new Vector3(-0.2f, 2f, 0.6f), new Vector3(0.04f, 0.7f, 0.02f), look.Charred,
+                        new Vector3(0f, 0f, -24f));
+                    Part(PrimitiveType.Cube, "Crack", clues, new Vector3(-0.1f, 1.2f, -0.66f), new Vector3(0.04f, 0.8f, 0.02f), look.Charred,
+                        new Vector3(0f, 0f, -15f));
+
+                    // The debris lies on the ground and stays there when the structure comes down.
+                    Transform debris = Group(root, "Debris");
+                    Part(PrimitiveType.Cube, "Chip", debris, new Vector3(0.9f, 0.1f, 0.5f), new Vector3(0.3f, 0.2f, 0.25f), look.Sandstone,
+                        new Vector3(0f, 30f, 0f));
+                    Part(PrimitiveType.Cube, "Chip", debris, new Vector3(-0.85f, 0.08f, -0.4f), new Vector3(0.22f, 0.16f, 0.2f),
+                        look.Sandstone, new Vector3(0f, -20f, 0f));
+                    Part(PrimitiveType.Cube, "Chip", debris, new Vector3(0.7f, 0.06f, -0.7f), new Vector3(0.18f, 0.12f, 0.16f), look.Stone,
+                        new Vector3(0f, 55f, 0f));
+                    break;
+                }
+            }
+        }
+
+        private static Transform FindDeep(Transform root, string name)
+        {
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (child != root && child.name == name)
+                {
+                    return child;
+                }
+            }
+
+            return null;
         }
 
         // -------------------------------------------------------------- prefabs

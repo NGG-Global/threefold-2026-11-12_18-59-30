@@ -128,6 +128,12 @@ namespace Threefold.WorldMagic
         /// <summary>True while the simulation is advancing the object: something on it is changing with time.</summary>
         public bool IsAwake => awake;
 
+        /// <summary>
+        /// True while an effect is being applied. A change of state announced meanwhile was caused by
+        /// that effect; one announced at any other time came with the passing of time.
+        /// </summary>
+        public bool IsApplyingEffect { get; private set; }
+
         public string PersistentId => persistentId;
 
         /// <summary>True if the object's lasting state is being saved: it has an identifier and nothing else claimed it first.</summary>
@@ -228,7 +234,17 @@ namespace Threefold.WorldMagic
             }
 
             // A push asks AllowedGlide (below) how far the way is clear before anything is announced.
-            EffectResponse response = properties.Apply(effect);
+            IsApplyingEffect = true;
+            EffectResponse response;
+            try
+            {
+                response = properties.Apply(effect);
+            }
+            finally
+            {
+                IsApplyingEffect = false;
+            }
+
             EffectReceived?.Invoke(this, effect, response);
 
             SendReactions();

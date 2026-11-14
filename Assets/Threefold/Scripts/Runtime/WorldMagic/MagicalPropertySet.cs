@@ -617,6 +617,84 @@ namespace Threefold.WorldMagic
             }
         }
 
+        /// <summary>
+        /// Whether an effect of this kind could change anything on the object as it is right now,
+        /// whatever its strength. False where the object has no matching property, and also where the
+        /// property can take no more of it at present: something already alight, a lock already
+        /// open, an object that has come down. It says what is possible, not what will succeed: an
+        /// effect that is too weak is still refused.
+        /// </summary>
+        public bool CouldRespondTo(MagicEffectKind kind)
+        {
+            if (IsDestroyed)
+            {
+                return false;
+            }
+
+            switch (kind)
+            {
+                case MagicEffectKind.Heat:
+                {
+                    if (Thermal == null || !Thermal.CanHeat)
+                    {
+                        return false;
+                    }
+
+                    if (Thermal.IsBurning)
+                    {
+                        return Thermal.RenewsWhileBurning;
+                    }
+
+                    // Something that cannot burn holds only so much heat; at its full heat it takes no more.
+                    return Thermal.Settings.flammable || Thermal.Heat + 0.0001f < Thermal.Settings.capacity;
+                }
+
+                case MagicEffectKind.ArcaneCharge:
+                {
+                    if (Arcane == null || Arcane.Settings.susceptibility <= 0f)
+                    {
+                        return false;
+                    }
+
+                    if (Arcane.State != ArcaneState.Activated)
+                    {
+                        return true;
+                    }
+
+                    // Activated: a latch takes no more; a timed one only if it can be renewed.
+                    ArcaneSettings arcane = Arcane.Settings;
+                    return arcane.activation == ArcaneActivation.WhileCharged ||
+                           (arcane.activation == ArcaneActivation.Timed && arcane.activeStacking != StackPolicy.Ignore);
+                }
+
+                case MagicEffectKind.Force:
+                {
+                    bool collapsed = Stability != null && Stability.State == StabilityState.Collapsed;
+                    bool braced = Stability != null && Stability.ResistsDisplacement;
+
+                    if (Structural != null && Structural.Settings.forceDamage > 0f &&
+                        (Structural.Settings.brittleness > 0f || Structural.Settings.heatedBrittleness > 0f))
+                    {
+                        return true;
+                    }
+
+                    if (Kinetic != null && Kinetic.Settings.resistance < 1f && !collapsed && !braced)
+                    {
+                        return true;
+                    }
+
+                    return Stability != null && Stability.State == StabilityState.Unstable;
+                }
+
+                case MagicEffectKind.Stabilize:
+                    return Stability != null && Stability.State != StabilityState.Collapsed &&
+                           (Stability.State != StabilityState.Braced || Stability.Settings.braceStacking != StackPolicy.Ignore);
+
+                default:
+                    return false;
+            }
+        }
+
         private bool ApplyHeat(float magnitude)
         {
             if (!Thermal.CanHeat)

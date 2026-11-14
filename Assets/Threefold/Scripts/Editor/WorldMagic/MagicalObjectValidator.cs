@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Threefold.Combat;
+using Threefold.Discovery;
 using Threefold.Persistence;
 using Threefold.WorldMagic;
 using UnityEditor;
@@ -134,6 +135,8 @@ namespace Threefold.EditorTools
                     ValidateVisuals(visuals, problem);
                 }
             }
+
+            ValidateDiscovery(scene, problem);
         }
 
         /// <summary>Checks one object: its definition, its colliders and the part that moves.</summary>
@@ -284,6 +287,68 @@ namespace Threefold.EditorTools
             {
                 problem($"The property visuals on '{visuals.name}' are set up for '{unreachable}', which '{source.name}' " +
                         "can never reach with its properties. Those parts never show.");
+            }
+        }
+
+        /// <summary>
+        /// Discovery: every clue component is connected and has a part of its own to move, and a scene
+        /// with clues has the director that shows them.
+        /// </summary>
+        private static void ValidateDiscovery(Scene scene, Action<string> problem)
+        {
+            int clueCount = 0;
+            DiscoveryDirector director = null;
+
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (director == null)
+                {
+                    director = root.GetComponentInChildren<DiscoveryDirector>(true);
+                }
+
+                foreach (DiscoveryClues clues in root.GetComponentsInChildren<DiscoveryClues>(true))
+                {
+                    clueCount++;
+                    MagicalObject source = clues.Source != null ? clues.Source : clues.GetComponent<MagicalObject>();
+                    if (source == null)
+                    {
+                        problem($"The discovery clues on '{clues.name}' belong to no magical object.");
+                        continue;
+                    }
+
+                    Transform moving = clues.MotionTarget;
+                    if (moving == null)
+                    {
+                        problem($"The discovery clues on '{clues.name}' have no moving part, so its answers rely on colour " +
+                                "alone. Assign a child that holds its mesh as Motion Target.");
+                    }
+                    else if (moving == source.transform || moving == source.MoveTarget)
+                    {
+                        problem($"The discovery clues on '{clues.name}' move '{moving.name}', which the object itself places. " +
+                                "Use a child that holds only its mesh.");
+                    }
+                    else if (!moving.IsChildOf(source.transform))
+                    {
+                        problem($"The discovery clues on '{clues.name}' move '{moving.name}', which is not part of the object.");
+                    }
+                }
+            }
+
+            if (clueCount == 0)
+            {
+                return;
+            }
+
+            if (director == null)
+            {
+                problem("The scene has objects with discovery clues but no discovery director, so no clue, resonance or " +
+                        "answer is shown. Run Threefold > Setup > Discovery.");
+            }
+            else
+            {
+                if (director.Player == null) problem("The discovery director has no player.");
+                if (director.View == null) problem("The discovery director has no camera, so it cannot tell what is aimed at.");
+                if (director.Disciplines == null) problem("The discovery director has no disciplines, so nothing resonates.");
             }
         }
 

@@ -64,6 +64,15 @@ separates approved decisions from proposals; do not present a proposal as decide
   one `WorldSimulation`. One object acts on another only through a reaction rule in its
   definition, offered to the `ReactionScheduler`, never by calling the other object directly.
   The budgets (depth 3, 8 per frame, 32 active objects) are provisional, not measured.
+- Discovery (`Docs/Discovery.md`) only reads the world and shows it: nothing under
+  `Runtime/WorldMagic` may depend on `Runtime/Discovery`. What it decides is in plain C#
+  (`DiscoveryRules.cs`). An object resonates only if an effect the selected discipline really
+  carries could change it as it is now (`CouldRespondTo`): never add a table of discipline-object
+  pairs, and never show compatibility that the rules do not grant. No outlines, icons, overlays
+  or text on interactable objects, and no numbers shown to the player. Every answer keeps a
+  movement of its own, so none depends on colour. Only the `DiscoveryDirector` has an update, and
+  it attends to a bounded number of nearby objects. Its look is a proposal until the owner has
+  reviewed it in Unity and on a device.
 - The visual style (`Docs/VisualStyle.md`) is a proposal until the owner has reviewed it in Unity
   and on a device. Its shader is `Assets/Threefold/Shaders/IllustratedLit.shader`. The shader's
   arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change
