@@ -53,24 +53,20 @@ namespace Threefold.Discovery
 
         private void OnDisable()
         {
+            StopRumble();
+
             if (subscribed != null)
             {
                 subscribed.AnswerPresented -= HandleAnswer;
                 subscribed = null;
             }
-
-            StopRumble();
         }
 
-        private void Update()
+        // Timed by the director's step, which is real time, so a pulse also ends if the game is paused.
+        // This component has no update of its own and listens only while a pulse is running.
+        private void HandleStep(float unscaledDeltaTime)
         {
-            if (!rumbling)
-            {
-                return;
-            }
-
-            // Real time, so a pulse also ends if the game is paused.
-            remaining -= Time.unscaledDeltaTime;
+            remaining -= unscaledDeltaTime;
             if (remaining <= 0f)
             {
                 StopRumble();
@@ -90,6 +86,11 @@ namespace Threefold.Discovery
             {
                 pad.SetMotorSpeeds(pulse * 0.6f, pulse);
                 remaining = Mathf.Min(cue.Seconds, 0.6f);
+                if (!rumbling && subscribed != null)
+                {
+                    subscribed.Stepped += HandleStep;
+                }
+
                 rumbling = true;
             }
 
@@ -113,6 +114,11 @@ namespace Threefold.Discovery
             }
 
             rumbling = false;
+            if (subscribed != null)
+            {
+                subscribed.Stepped -= HandleStep;
+            }
+
             Gamepad pad = Gamepad.current;
             if (pad != null)
             {

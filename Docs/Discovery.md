@@ -81,7 +81,7 @@ effect was applied, so what is shown is what happened.
 | **Insufficient** | The right kind, but too little: a force below the threshold, a brace too weak | A lean with the effect that holds for a moment and eases back | A light tint, a few motes |
 | **Progress** | It took effect without crossing a threshold: warmer, more charge, more damage | One soft swell | Tint and swell grow as the threshold comes nearer. A few motes |
 | **Transition** | A threshold was crossed: heated, alight, cracked, activated, moving, braced | A sharp kick with the effect that settles | A clear tint; the object's own burst |
-| **Completed** | Nothing further to do: opened for good, come down, destroyed | Two slow swells, the second smaller | Full tint; the object's own burst |
+| **Completed** | Nothing further to do: opened for good, come down, destroyed | Two slow swells, the second smaller | Full tint; the object's own burst. An attempt on something already finished gets the same movement, small and quiet |
 | **Blocked** | The right kind, but held for now: braced, already alight, at its stop | One short dip | A trace of tint. No motes |
 
 Each answer has a movement of its own, so none depends on colour, brightness or sound.
@@ -90,10 +90,17 @@ Each answer has a movement of its own, so none depends on colour, brightness or 
 very different strength are answered identically; how much more is needed is for the player to
 find out. Only "progress" grows fuller as a threshold approaches.
 
-**Not too often.** What other objects set off (a neighbour's fire) is shown only when something
-really changes. The same small answer for the same kind of effect is not repeated within 1.5 s.
-"Incompatible" is not shown for the Aegis guard's brace, which reaches everything nearby several
-times a second.
+**Not too often.**
+
+- What other objects set off (a neighbour's fire), and what enemies do (a stray bolt), is shown
+  only when something really changes, and does not count as the player trying something.
+- The same answer for the same kind of effect is not repeated within 1.5 s, unless it is a real
+  change.
+- The Aegis guard reaches everything nearby several times a second without being aimed. Things
+  it does nothing to stay still: for the guard's brace only a real change is answered (the
+  moment something is braced), and keeping a brace up is not answered at all.
+- When the blow that destroys an object is answered, what is left of it moves; the object's
+  usual parts are hidden by then.
 
 ## Attention escalation
 
@@ -154,9 +161,10 @@ On the Discovery object, under **Options**:
 Movement is part of every cue with every option. Colour, particles, sound and haptics are
 supplements.
 
-**Lower graphics presets.** The director follows the project's quality level: the lowest level
-counts as Low, the highest as High. Only particles depend on it: on the lowest level small
-answers have no motes. The movement, its size and length, the tint, the sound and the haptic
+**Lower graphics presets.** The director follows the game's own quality setting, the one the
+visual style's controller holds, if the scene has it: its lowest level counts as Low, its
+highest as High. Without it the tier set on the director applies (Medium by default). Only
+particles depend on the tier: on Low, small answers have no motes. The movement, its size and length, the tint, the sound and the haptic
 pulse of an answer are the same on every level. Nothing relies on bloom or on post-processing,
 which the lower presets switch off.
 
@@ -215,11 +223,14 @@ not be the part the object itself moves (a sliding block, a door leaf).
 
 ## Performance
 
-- **One update.** Only the director has one. `DiscoveryClues` has none.
-- **A bounded number of objects.** Four times a second the director makes one physics query for
-  the magical objects within 12 m of the player and keeps the nearest 8. Clues and resonance are
-  worked out for those only, each frame, by arithmetic; no physics per frame. A level with six
-  hundred objects costs the same per frame as one with eight.
+- **One update.** Only the director has one. `DiscoveryClues` has none, and the haptic hook is
+  timed by the director's step.
+- **A bounded number of objects.** Objects with clues put themselves on a list when they are
+  switched on. The director looks through that list 64 objects per frame, keeps the nearest 8
+  within 12 m, and starts again a quarter of a second after it has been through all of them.
+  Clues and resonance are worked out for those 8 only, each frame, by arithmetic. No physics is
+  involved, so what else stands around does not matter, and a level with six hundred objects
+  costs the same per frame as one with eight.
 - **Answers are event-driven.** An object reports an attempt when it happens. Up to six answers
   play at once, at any distance.
 - **No allocation** in the rules that run per frame; this is tested.
@@ -244,7 +255,8 @@ depends on it.
 ### Changes to earlier systems
 
 - `MagicalPropertySet.CouldRespondTo` says whether a kind of effect could change the object as
-  it is now. It reads state and changes nothing.
+  it is now: with the brittleness it has at this moment, the brace it is under, the heat it
+  holds. It reads state and changes nothing.
 - `MagicalObject.IsApplyingEffect` tells a change caused by an effect from one that came with time.
 - `PropertyStateVisuals` accepts an accent colour and a scale for its sway from outside, so that
   one component writes a renderer's colour.
@@ -257,7 +269,7 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `DiscoveryTests` (27) | What each discipline offers, from its values. Resonance on compatible targets, for every example and discipline. No false indicators: wherever "could respond" is denied, the strongest attempt does nothing, in every state the examples reach; and where it is granted, a strong enough attempt works. Resonance following state, and its strength when near, aimed at and preparing. Each of the six answers, including insufficient power. Several properties on one object. Which changes count as a transition. What is shown for other objects' reactions, and repetition. Every answer with a movement and sound of its own; the same answer on every quality level; the options; no number revealed. Clues from properties. Escalation: delay, rise, hold, rest, attempts, progress, combat, leaving. The nearest few of six hundred. No allocation per frame |
+| `DiscoveryTests` (32) | What each discipline offers, from its values. Resonance on compatible targets, for every example and discipline. No false indicators: wherever "could respond" is denied, the strongest attempt does nothing, in every state the examples reach; and where it is granted, a strong enough attempt works. Resonance following state, and its strength when near, aimed at and preparing. Each of the six answers, including insufficient power. Several properties on one object. Which changes count as a transition. What is shown for other objects' reactions, and repetition. Every answer with a movement and sound of its own; the same answer on every quality level; the options; no number revealed. Clues from properties. Escalation: delay, rise, hold, rest, attempts, progress, combat, leaving. An attempt on something already finished; a held guard; force judged on the object as it is now; the wider sway following the clue option; the game's quality levels. The nearest few of six hundred, looked through a few per frame. No allocation per frame |
 | `DiscoverySetupTests` (4) | One runs without Unity: every sound has a placeholder of its own. Three need Unity: the range's director and its connections; clue component, moving part and built clues on every example prefab; clues without a moving part or without a director reported |
 
 **Not covered by automated tests:** everything the components do in Play mode. That includes the

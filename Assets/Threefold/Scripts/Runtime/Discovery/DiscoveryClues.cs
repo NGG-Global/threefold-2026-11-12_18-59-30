@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Threefold.Pooling;
 using Threefold.WorldMagic;
 using UnityEngine;
@@ -29,6 +30,10 @@ namespace Threefold.Discovery
                  "moves or resizes: use the visible mesh group, not the sliding block or the door leaf itself.")]
         [SerializeField] private Transform motionTarget;
 
+        [Tooltip("Optional. The part that moves instead once the object is destroyed: its remains. The usual part is " +
+                 "hidden then, and the answer to the blow that destroyed it would not be seen.")]
+        [SerializeField] private Transform motionTargetWhenDestroyed;
+
         [Header("Level 1: its own clue")]
         [Tooltip("How strongly its clue shows when nothing is happening: a slow, faint breathing of its accent. Keep it low; " +
                  "for objects whose clue is a built feature (a rail, straw, vents) a trace is enough.")]
@@ -50,10 +55,15 @@ namespace Threefold.Discovery
         [SerializeField] private UnityEvent onResonance = new UnityEvent();
         [SerializeField] private UnityEvent onAnswer = new UnityEvent();
 
+        // Every clue component that is switched on. The director looks through this list a few at a
+        // time; nothing is asked of physics, and no object does anything by itself.
+        private static readonly List<DiscoveryClues> ActiveClues = new List<DiscoveryClues>(64);
+
         private MagicalObject subscribed;
+        private Transform posedTarget;
         private Vector3 restPosition;
         private Vector3 restScale = Vector3.one;
-        private bool restKnown;
+        private int registryIndex = -1;
         private bool significant;
         private bool attempted;
         private bool progressed;
@@ -63,6 +73,10 @@ namespace Threefold.Discovery
         public MagicalObject Source => source;
         public PropertyStateVisuals Visuals => visuals;
         public Transform MotionTarget => motionTarget;
+        public Transform MotionTargetWhenDestroyed => motionTargetWhenDestroyed;
+
+        /// <summary>Every clue component that is switched on, in no particular order.</summary>
+        internal static List<DiscoveryClues> Active => ActiveClues;
         public float AmbientStrength => ambientStrength;
         public Color AccentColor => accentColor;
         public PooledObject SmallBurst => smallBurst;
@@ -84,6 +98,18 @@ namespace Threefold.Discovery
             source = magicalObject;
             visuals = stateVisuals;
             motionTarget = moving;
+        }
+
+        /// <summary>Sets the part that moves once the object is destroyed, if none is set. Returns true if it changed.</summary>
+        public bool FillDestroyedMotionTarget(Transform remains)
+        {
+            if (motionTargetWhenDestroyed != null || remains == null)
+            {
+                return false;
+            }
+
+            motionTargetWhenDestroyed = remains;
+            return true;
         }
 
         /// <summary>Sets how its own clue shows. Called by the setup tooling.</summary>
@@ -120,30 +146,58 @@ namespace Threefold.Discovery
         /// <summary>Places the moving part: a movement of an answer, and the slight change of size of a breath.</summary>
         internal void ShowPose(Vector3 worldOffset, float scale)
         {
-            if (motionTarget == null)
-            {
-                return;
-            }
-
             bool atRest = worldOffset.sqrMagnitude < 0.0000001f && Mathf.Abs(scale) < 0.00005f;
             if (atRest && !posed)
             {
                 return;
             }
 
-            CaptureRest();
-            Transform parent = motionTarget.parent;
+            // What is left of a destroyed object moves in its place: the usual part is hidden by then.
+            Transform target = motionTargetWhenDestroyed != null && source != null && source.IsDestroyed
+                ? motionTargetWhenDestroyed
+                : motionTarget;
+
+            if (target != posedTarget)
+            {
+                RestorePose();
+                posedTarget = target;
+                if (target != null)
+                {
+                    restPosition = target.localPosition;
+                    restScale = target.localScale;
+                }
+            }
+
+            if (target == null)
+            {
+                return;
+            }
+
+            Transform parent = target.parent;
             Vector3 offset = parent != null ? parent.InverseTransformVector(worldOffset) : worldOffset;
-            motionTarget.localPosition = restPosition + offset;
-            motionTarget.localScale = restScale * (1f + scale);
+            target.localPosition = restPosition + offset;
+            target.localScale = restScale * (1f + scale);
             posed = !atRest;
+        }
+
+        /// <summary>Puts the part that was moved back exactly where and how it was.</summary>
+        private void RestorePose()
+        {
+            if (posedTarget != null)
+            {
+                posedTarget.localPosition = restPosition;
+                posedTarget.localScale = restScale;
+            }
+
+            posedTarget = null;
+            posed = false;
         }
 
         /// <summary>Removes everything the director has shown on the object.</summary>
         internal void ClearPresentation()
         {
             ShowAccent(accentColor, 0f);
-            ShowPose(Vector3.zero, 0f);
+            RestorePose();
             if (visuals != null)
             {
                 visuals.SetSwayScale(1f);
@@ -190,27 +244,37 @@ namespace Threefold.Discovery
             }
         }
 
-        private void OnDisable()
+        private void OnEnable()
         {
-            DiscoveryDirector.Forget(this);
-            if (restKnown && motionTarget != null)
+            if (registryIndex < 0)
             {
-                motionTarget.localPosition = restPosition;
-                motionTarget.localScale = restScale;
-                posed = false;
+                registryIndex = ActiveClues.Count;
+                ActiveClues.Add(this);
             }
         }
 
-        private void CaptureRest()
+        private void OnDisable()
         {
-            if (restKnown || motionTarget == null)
+            // Out of the list by swapping the last entry into its place: no gap, no shifting.
+            if (registryIndex >= 0 && registryIndex < ActiveClues.Count && ActiveClues[registryIndex] == this)
             {
-                return;
+                int last = ActiveClues.Count - 1;
+                DiscoveryClues moved = ActiveClues[last];
+                ActiveClues[registryIndex] = moved;
+                moved.registryIndex = registryIndex;
+                ActiveClues.RemoveAt(last);
             }
 
-            restPosition = motionTarget.localPosition;
-            restScale = motionTarget.localScale;
-            restKnown = true;
+            registryIndex = -1;
+            DiscoveryDirector.Forget(this);
+            RestorePose();
+        }
+
+        // Static state survives between Play sessions when domain reload is disabled in the Editor.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            ActiveClues.Clear();
         }
 
         // Changes announced while an effect is being applied tell whether that effect made something
@@ -235,14 +299,17 @@ namespace Threefold.Discovery
 
             FeedbackResult result = ExperimentFeedback.Classify(target.Properties, effect, response, gave);
 
-            // Only what the player did counts as trying something.
-            if (effect.Depth <= 0 && result.Category != FeedbackCategory.None)
+            // Only what the player did counts as trying something. An enemy's stray bolt is, to the
+            // player, something that happened in the world: answered like any other object's reaction,
+            // which is to say only if something really changed.
+            bool byPlayer = effect.Depth <= 0 && DiscoveryDirector.IsPlayer(effect.Source);
+            if (byPlayer && result.Category != FeedbackCategory.None)
             {
                 attempted = true;
                 progressed |= response == EffectResponse.Applied;
             }
 
-            if (ExperimentFeedback.ShouldPresent(result, effect.Depth))
+            if (ExperimentFeedback.ShouldPresent(result, byPlayer ? 0 : Mathf.Max(1, effect.Depth)))
             {
                 DiscoveryDirector.Answer(this, result, effect);
             }

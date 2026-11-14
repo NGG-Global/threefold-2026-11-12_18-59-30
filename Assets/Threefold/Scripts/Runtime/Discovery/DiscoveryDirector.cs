@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using Threefold.Combat;
 using Threefold.Magic;
 using Threefold.Pooling;
+using Threefold.VisualStyle;
 using Threefold.WorldMagic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -13,8 +15,8 @@ namespace Threefold.Discovery
     /// component of the discovery system with an update, and the work it does per frame is for a
     /// handful of objects near the player, however many there are in the level:
     ///
-    /// - A few times a second it asks physics for the magical objects around the player and keeps
-    ///   the nearest few.
+    /// - It looks through the list of objects that carry clues, a fixed number per frame, and keeps
+    ///   the nearest few around the player. Nothing is asked of physics.
     /// - For those it shows their own clue (level 1), strengthened a little if the player has
     ///   lingered without trying anything, and resonance (level 2) if the selected discipline
     ///   could change the object as it is now.
@@ -28,7 +30,6 @@ namespace Threefold.Discovery
     [DisallowMultipleComponent]
     public sealed class DiscoveryDirector : MonoBehaviour
     {
-        private const int MaxCandidates = 32;
         private const int MaxTrackedLimit = 16;
         private const int MaxAnswers = 6;
         private const float BreathScale = 0.012f;
@@ -51,43 +52,49 @@ namespace Threefold.Discovery
         [SerializeField] private ResonanceSettings resonance = new ResonanceSettings();
         [SerializeField] private AttentionSettings attention = new AttentionSettings();
 
-        [Tooltip("Take the richness of answers from the project's quality level: the lowest level is Low, the highest High.")]
-        [SerializeField] private bool followQualityLevel = true;
+        [Tooltip("Optional. The game's quality setting. With it, the richness of answers follows the chosen level: the " +
+                 "lowest is Low, the highest High.")]
+        [SerializeField] private VisualStyleController style;
 
+        [Tooltip("The richness of answers when there is no quality setting to follow.")]
         [SerializeField] private DiscoveryQuality quality = DiscoveryQuality.Medium;
 
         [Header("Nearby objects")]
-        [Tooltip("How far around the player magical objects are looked for.")]
+        [Tooltip("How far around the player objects with clues are attended to.")]
         [Min(1f)]
         [SerializeField] private float scanRadius = 12f;
 
-        [Tooltip("Seconds between looks. Nothing is looked for in between.")]
+        [Tooltip("Seconds between one look through the level's objects and the next.")]
         [Min(0.05f)]
         [SerializeField] private float scanInterval = 0.25f;
+
+        [Tooltip("How many objects are looked at per frame during a look. A large level takes several frames; the cost per " +
+                 "frame stays the same.")]
+        [Range(8, 512)]
+        [SerializeField] private int scanBudget = 64;
 
         [Tooltip("How many objects are attended to at once: the nearest. Clues and resonance are shown for these only.")]
         [Range(1, MaxTrackedLimit)]
         [SerializeField] private int maxTracked = 8;
-
-        [SerializeField] private LayerMask layers = Physics.DefaultRaycastLayers;
 
         [Header("Answers")]
         [Tooltip("The same small answer for the same kind of effect is not repeated within this many seconds.")]
         [Min(0f)]
         [SerializeField] private float repeatQuietSeconds = 1.5f;
 
-        [Tooltip("The kinds of effect for which 'incompatible' is shown. Stabilise is left out by default: a guard reaches " +
-                 "everything nearby several times a second, and things it means nothing to should stay still.")]
-        [SerializeField] private EffectKinds incompatibleAnswersFor = EffectKinds.Heat | EffectKinds.ArcaneCharge | EffectKinds.Force;
+        [Tooltip("The kinds of effect that are answered although nothing changed (incompatible, insufficient, blocked, " +
+                 "already finished). Stabilise is left out by default: a guard reaches everything nearby several times a " +
+                 "second, and things it does nothing to should stay still.")]
+        [SerializeField] private EffectKinds unchangedAnswersFor = EffectKinds.Heat | EffectKinds.ArcaneCharge | EffectKinds.Force;
 
         [Header("Hooks")]
         [SerializeField] private UnityEvent onResonance = new UnityEvent();
         [SerializeField] private UnityEvent onAnswer = new UnityEvent();
 
-        private readonly Collider[] overlaps = new Collider[64];
-        private readonly DiscoveryClues[] candidates = new DiscoveryClues[MaxCandidates];
-        private readonly float[] candidateDistances = new float[MaxCandidates];
-        private readonly int[] chosen = new int[MaxTrackedLimit];
+        private readonly NearestFew<DiscoveryClues> nearest = new NearestFew<DiscoveryClues>(MaxTrackedLimit);
+        private Vector3 sweepOrigin;
+        private int sweepIndex;
+        private bool sweeping;
 
         private readonly DiscoveryClues[] tracked = new DiscoveryClues[MaxTrackedLimit];
         private readonly float[] shown = new float[MaxTrackedLimit];
@@ -120,6 +127,13 @@ namespace Threefold.Discovery
         /// <summary>Raised when an answer starts to play, with what it is and how it is shown.</summary>
         public event Action<DiscoveryClues, FeedbackResult, FeedbackCue> AnswerPresented;
 
+        /// <summary>
+        /// Raised once per frame with the real time that passed, for the optional hooks that have
+        /// something to time (a haptic pulse to end). They subscribe only while they need it, so that
+        /// this stays the one update of the discovery system.
+        /// </summary>
+        public event Action<float> Stepped;
+
         /// <summary>The director in the scene, or null.</summary>
         public static DiscoveryDirector Existing => instance;
 
@@ -133,20 +147,29 @@ namespace Threefold.Discovery
         public Transform Player => player;
         public PlayerDisciplines Disciplines => disciplines;
 
-        /// <summary>How rich answers are on this device.</summary>
-        public DiscoveryQuality Quality
-        {
-            get
-            {
-                if (!followQualityLevel)
-                {
-                    return quality;
-                }
+        /// <summary>How rich answers are: from the game's quality setting if there is one, otherwise as set here.</summary>
+        public DiscoveryQuality Quality => style != null && style.QualityLevelCount > 0
+            ? DiscoveryQualityRules.FromLevel(style.QualityLevel, style.QualityLevelCount)
+            : quality;
 
-                int levels = QualitySettings.names.Length;
-                int level = QualitySettings.GetQualityLevel();
-                return level <= 0 ? DiscoveryQuality.Low : level >= levels - 1 ? DiscoveryQuality.High : DiscoveryQuality.Medium;
+        public VisualStyleController Style => style;
+
+        /// <summary>Connects the game's quality setting if none is connected. Returns true if it changed.</summary>
+        public bool FillStyle(VisualStyleController controller)
+        {
+            if (style != null || controller == null)
+            {
+                return false;
             }
+
+            style = controller;
+            return true;
+        }
+
+        /// <summary>True if the given source of an effect is the player this director attends to.</summary>
+        internal static bool IsPlayer(GameObject source)
+        {
+            return instance != null && instance.player != null && source == instance.player.gameObject;
         }
 
         /// <summary>Connects the director. Called by the setup tooling.</summary>
@@ -277,69 +300,86 @@ namespace Threefold.Discovery
 
             float deltaTime = Time.deltaTime;
             scanTimer -= deltaTime;
-            if (scanTimer <= 0f)
-            {
-                scanTimer = scanInterval;
-                Scan();
-            }
+            Sweep();
 
             ShowTracked(deltaTime);
             AdvanceAnswers(deltaTime);
+            Stepped?.Invoke(Time.unscaledDeltaTime);
         }
 
         // ---------------------------------------------------------- who is near
 
-        /// <summary>One physics query: the magical objects around the player, of which the nearest few are kept.</summary>
-        private void Scan()
+        /// <summary>
+        /// Looks through the objects that carry clues, a fixed number per frame, keeping the nearest
+        /// few. When it has been through all of them, those become the ones attended to, and after a
+        /// pause it starts again. No physics is involved, so what else stands around does not matter.
+        /// </summary>
+        private void Sweep()
         {
-            Vector3 origin = player.position;
-            int found = Physics.OverlapSphereNonAlloc(origin, scanRadius, overlaps, layers, QueryTriggerInteraction.Ignore);
-            int count = 0;
+            List<DiscoveryClues> all = DiscoveryClues.Active;
 
-            for (int i = 0; i < found; i++)
+            if (!sweeping)
             {
-                Collider other = overlaps[i];
-                overlaps[i] = null;
-                if (other == null || count >= MaxCandidates)
+                if (scanTimer > 0f)
                 {
-                    continue;
+                    return;
                 }
 
-                DiscoveryClues clues = other.GetComponentInParent<DiscoveryClues>();
-                if (clues == null || !clues.isActiveAndEnabled || clues.Source == null)
-                {
-                    continue;
-                }
-
-                float distance = (other.bounds.ClosestPoint(origin) - origin).sqrMagnitude;
-                int known = Array.IndexOf(candidates, clues, 0, count);
-                if (known >= 0)
-                {
-                    candidateDistances[known] = Mathf.Min(candidateDistances[known], distance);
-                    continue;
-                }
-
-                candidates[count] = clues;
-                candidateDistances[count] = distance;
-                count++;
+                sweeping = true;
+                sweepIndex = 0;
+                sweepOrigin = player.position;
+                nearest.Clear();
             }
 
-            // Keep what was known about those that stay, and let go of those that left.
+            int limit = Mathf.Clamp(maxTracked, 1, MaxTrackedLimit);
+            float reach = scanRadius * scanRadius;
+            int budget = scanBudget;
+
+            while (budget-- > 0 && sweepIndex < all.Count)
+            {
+                DiscoveryClues clues = all[sweepIndex++];
+                if (clues == null || clues.Source == null)
+                {
+                    continue;
+                }
+
+                float distance = (clues.Position - sweepOrigin).sqrMagnitude;
+                if (distance <= reach)
+                {
+                    nearest.Offer(clues, distance, limit);
+                }
+            }
+
+            if (sweepIndex >= all.Count)
+            {
+                sweeping = false;
+                scanTimer = scanInterval;
+                Commit();
+            }
+        }
+
+        /// <summary>The nearest few found by a look become the ones attended to. What was known about those that stay is kept.</summary>
+        private void Commit()
+        {
             Array.Copy(tracked, previousTracked, trackedCount);
             Array.Copy(shown, previousShown, trackedCount);
             Array.Copy(attentionStates, previousAttention, trackedCount);
             int previousCount = trackedCount;
 
-            int limit = Mathf.Clamp(maxTracked, 1, MaxTrackedLimit);
-            int selected = Mathf.Min(NearbySelection.Select(candidateDistances, count, chosen), limit);
-
-            for (int i = 0; i < selected; i++)
+            int selected = 0;
+            for (int i = 0; i < nearest.Count; i++)
             {
-                DiscoveryClues clues = candidates[chosen[i]];
-                tracked[i] = clues;
+                DiscoveryClues clues = nearest[i];
+                if (clues == null || !clues.isActiveAndEnabled)
+                {
+                    continue;
+                }
+
+                tracked[selected] = clues;
                 int before = Array.IndexOf(previousTracked, clues, 0, previousCount);
-                shown[i] = before >= 0 ? previousShown[before] : 0f;
-                attentionStates[i] = before >= 0 ? previousAttention[before] : default;
+                shown[selected] = before >= 0 ? previousShown[before] : 0f;
+                attentionStates[selected] = before >= 0 ? previousAttention[before] : default;
+                selected++;
             }
 
             for (int i = selected; i < MaxTrackedLimit; i++)
@@ -348,18 +388,47 @@ namespace Threefold.Discovery
             }
 
             trackedCount = selected;
+            nearest.Clear();
 
             for (int i = 0; i < previousCount; i++)
             {
                 DiscoveryClues left = previousTracked[i];
                 previousTracked[i] = null;
-                if (left != null && Array.IndexOf(tracked, left, 0, trackedCount) < 0 && !IsAnswering(left))
+
+                // One that is still playing an answer is tidied up when the answer ends.
+                if (left != null && !IsTracked(left) && !IsAnswering(left))
                 {
                     left.ClearPresentation();
                 }
             }
+        }
 
-            Array.Clear(candidates, 0, count);
+        private bool IsTracked(DiscoveryClues clues)
+        {
+            return Array.IndexOf(tracked, clues, 0, trackedCount) >= 0;
+        }
+
+        /// <summary>
+        /// Ends what is shown on an object after an answer. If the object is among those attended to,
+        /// its clue and resonance take over again; if not, everything shown on it is removed, so that
+        /// nothing is left behind on an object nobody is attending to.
+        /// </summary>
+        private void Release(DiscoveryClues clues)
+        {
+            if (clues == null)
+            {
+                return;
+            }
+
+            if (IsTracked(clues))
+            {
+                clues.ShowPose(Vector3.zero, 0f);
+                clues.ShowAccent(clues.AccentColor, 0f);
+            }
+            else
+            {
+                clues.ClearPresentation();
+            }
         }
 
         // ------------------------------------------------- clues and resonance
@@ -433,7 +502,7 @@ namespace Threefold.Discovery
 
                 if (clues.Visuals != null)
                 {
-                    clues.Visuals.SetSwayScale(1f + boost);
+                    clues.Visuals.SetSwayScale(AttentionRules.SwayScale(boost, settings));
                 }
             }
         }
@@ -537,7 +606,7 @@ namespace Threefold.Discovery
 
         private void Present(DiscoveryClues clues, in FeedbackResult result, in MagicEffect effect)
         {
-            if (clues == null || !FeedbackGate.Allow(ref clues.Gate, result, Time.time, repeatQuietSeconds, incompatibleAnswersFor))
+            if (clues == null || !FeedbackGate.Allow(ref clues.Gate, result, Time.time, repeatQuietSeconds, unchangedAnswersFor))
             {
                 return;
             }
@@ -605,11 +674,10 @@ namespace Threefold.Discovery
                 return answerCount++;
             }
 
-            if (answers[oldest].Clues != null)
-            {
-                answers[oldest].Clues.ShowPose(Vector3.zero, 0f);
-            }
-
+            // The answer that gives way is ended properly, not left half shown.
+            DiscoveryClues replaced = answers[oldest].Clues;
+            answers[oldest].Clues = null;
+            Release(replaced);
             return oldest;
         }
 
@@ -637,16 +705,11 @@ namespace Threefold.Discovery
 
                 if (clues == null || progress >= 1f)
                 {
-                    if (clues != null)
-                    {
-                        clues.ShowPose(Vector3.zero, 0f);
-                        clues.ShowAccent(clues.AccentColor, 0f);
-                    }
-
-                    // Close the gap; the order of the rest does not matter.
+                    // Close the gap first, so the object no longer counts as answering when it is released.
                     answers[i] = answers[answerCount - 1];
                     answers[answerCount - 1] = default;
                     answerCount--;
+                    Release(clues);
                     continue;
                 }
 

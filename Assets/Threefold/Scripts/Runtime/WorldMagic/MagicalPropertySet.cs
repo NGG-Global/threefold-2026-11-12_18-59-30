@@ -672,8 +672,22 @@ namespace Threefold.WorldMagic
                     bool collapsed = Stability != null && Stability.State == StabilityState.Collapsed;
                     bool braced = Stability != null && Stability.ResistsDisplacement;
 
-                    if (Structural != null && Structural.Settings.forceDamage > 0f &&
-                        (Structural.Settings.brittleness > 0f || Structural.Settings.heatedBrittleness > 0f))
+                    // The brittleness that counts is the one the structure has at this moment: something
+                    // that breaks only when hot cannot be harmed by force while it is cold.
+                    if (Structural != null && Structural.Settings.forceDamage > 0f)
+                    {
+                        bool heated = Thermal != null && Thermal.State >= ThermalState.Heated;
+                        float brittleness = heated && Structural.Settings.heatedBrittleness > 0f
+                            ? Structural.Settings.heatedBrittleness
+                            : Structural.Settings.brittleness;
+                        if (brittleness > 0f)
+                        {
+                            return true;
+                        }
+                    }
+
+                    // A brace that enough force can break is something force can change.
+                    if (braced && Stability.Settings.braceBreakForce > 0f)
                     {
                         return true;
                     }

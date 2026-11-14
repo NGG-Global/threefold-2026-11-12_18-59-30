@@ -529,9 +529,12 @@ namespace Threefold.EditorTools
                 return;
             }
 
-            bool hasComponent = asset.GetComponent<DiscoveryClues>() != null;
+            DiscoveryClues existing = asset.GetComponent<DiscoveryClues>();
+            bool hasComponent = existing != null;
             bool hasParts = !HasBuiltClues(example) || FindDeep(asset.transform, CluesName) != null;
-            if (hasComponent && hasParts)
+            Transform remainsInAsset = FindRemains(example, asset.transform);
+            bool hasRemains = remainsInAsset == null || (hasComponent && existing.MotionTargetWhenDestroyed != null);
+            if (hasComponent && hasParts && hasRemains)
             {
                 return;
             }
@@ -549,12 +552,15 @@ namespace Threefold.EditorTools
                     AddBuiltClues(example, root.transform, look);
                 }
 
-                if (!hasComponent)
+                if (!root.TryGetComponent(out DiscoveryClues clues))
                 {
-                    DiscoveryClues clues = root.AddComponent<DiscoveryClues>();
+                    clues = root.AddComponent<DiscoveryClues>();
                     clues.Bind(magical, root.GetComponent<PropertyStateVisuals>(), FindMotionTarget(example, root.transform));
                     ConfigureClues(example, clues, look);
                 }
+
+                // What is left of a destroyed object is what moves when the blow that destroyed it is answered.
+                clues.FillDestroyedMotionTarget(FindRemains(example, root.transform));
 
                 PrefabUtility.SaveAsPrefabAsset(root, path);
                 report.AppendLine($"Gave prefab '{example}' its discovery clues.");
@@ -585,6 +591,18 @@ namespace Threefold.EditorTools
                 case ExampleObject.MovablePlatform: return root.Find("Platform/Block");
                 case ExampleObject.UnstableStructure: return root.Find("Body/Sway");
                 default: return root.Find("Leaf/Whole");
+            }
+        }
+
+        /// <summary>The group that appears when an example is destroyed, for those that have one.</summary>
+        private static Transform FindRemains(ExampleObject example, Transform root)
+        {
+            switch (example)
+            {
+                case ExampleObject.WoodenBarricade: return root.Find("Remains");
+                case ExampleObject.HeatSensitiveStone: return root.Find("Rubble");
+                case ExampleObject.ReinforcedDoor: return root.Find("Splinters");
+                default: return null;
             }
         }
 

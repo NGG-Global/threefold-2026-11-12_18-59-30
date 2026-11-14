@@ -525,7 +525,7 @@ namespace Threefold.Tests
             const EffectKinds Aimed = EffectKinds.Heat | EffectKinds.ArcaneCharge | EffectKinds.Force;
             var blocked = new FeedbackResult(FeedbackCategory.Blocked, MagicEffectKind.Force, 0f);
             var insufficient = new FeedbackResult(FeedbackCategory.Insufficient, MagicEffectKind.Force, 0f);
-            var transition = new FeedbackResult(FeedbackCategory.Transition, MagicEffectKind.Force, 1f);
+            var transition = new FeedbackResult(FeedbackCategory.Transition, MagicEffectKind.Force, 1f, true);
 
             Assert.IsTrue(FeedbackGate.Allow(ref state, blocked, 10f, 1.5f, Aimed));
             Assert.IsFalse(FeedbackGate.Allow(ref state, blocked, 10.4f, 1.5f, Aimed), "The same again, too soon.");
@@ -611,9 +611,20 @@ namespace Threefold.Tests
                 Assert.LessOrEqual(medium.Particles, high.Particles, category.ToString());
             }
 
-            // The largest answer on the weakest device is still restrained.
-            Assert.LessOrEqual(FeedbackPresentation.Plan(new FeedbackResult(FeedbackCategory.Completed, MagicEffectKind.Force, 1f),
-                settings, DiscoveryQuality.High).Particles, 12);
+            // The largest answer on the richest level is still restrained, and smaller on the weakest.
+            var finished = new FeedbackResult(FeedbackCategory.Completed, MagicEffectKind.Force, 1f, true);
+            Assert.LessOrEqual(FeedbackPresentation.Plan(finished, settings, DiscoveryQuality.High).Particles, 12);
+            Assert.Less(FeedbackPresentation.Plan(finished, settings, DiscoveryQuality.Low).Particles,
+                FeedbackPresentation.Plan(finished, settings, DiscoveryQuality.High).Particles);
+
+            // The game's own quality setting is what counts: its lowest level is Low, its highest High.
+            Assert.AreEqual(DiscoveryQuality.Low, DiscoveryQualityRules.FromLevel(0, 3));
+            Assert.AreEqual(DiscoveryQuality.Medium, DiscoveryQualityRules.FromLevel(1, 3));
+            Assert.AreEqual(DiscoveryQuality.High, DiscoveryQualityRules.FromLevel(2, 3));
+            Assert.AreEqual(DiscoveryQuality.Low, DiscoveryQualityRules.FromLevel(0, 2));
+            Assert.AreEqual(DiscoveryQuality.High, DiscoveryQualityRules.FromLevel(1, 2));
+            Assert.AreEqual(DiscoveryQuality.Medium, DiscoveryQualityRules.FromLevel(0, 1), "With nothing to choose between, the middle.");
+            Assert.AreEqual(DiscoveryQuality.Medium, DiscoveryQualityRules.FromLevel(0, 0));
         }
 
         [Test]
@@ -633,8 +644,9 @@ namespace Threefold.Tests
             var reduced = new DiscoverySettings { reducedParticles = true };
             foreach (FeedbackCategory category in Categories)
             {
-                FeedbackCue cue = FeedbackPresentation.Plan(new FeedbackResult(category, MagicEffectKind.Force, 0.5f), reduced, DiscoveryQuality.High);
                 bool significant = category == FeedbackCategory.Transition || category == FeedbackCategory.Completed;
+                FeedbackCue cue = FeedbackPresentation.Plan(new FeedbackResult(category, MagicEffectKind.Force, 0.5f, significant), reduced,
+                    DiscoveryQuality.High);
                 Assert.LessOrEqual(cue.Particles, significant ? 3 : 0, category.ToString());
                 Assert.AreNotEqual(CueMotion.None, cue.Motion, "Without particles the movement still says it.");
             }
@@ -806,16 +818,134 @@ namespace Threefold.Tests
             Assert.AreEqual(1f, AttentionRules.ClueStrength(0.9f, 2f, settings), "Never beyond full.");
         }
 
+        // ---------------------------------------------------- review follow-ups
+
+        [Test]
+        public void AnAttemptOnSomethingAlreadyFinishedIsAnsweredQuietlyAndNotOverAndOver()
+        {
+            var settings = new DiscoverySettings();
+
+            // The arrow that opens the lock, and a later arrow at the open lock: both "completed".
+            MagicalPropertySet door = Example(ExampleObject.ReinforcedDoor);
+            door.Apply(Effect(MagicEffectKind.ArcaneCharge, 100f));
+            FeedbackResult opening = Try(door, MagicEffectKind.ArcaneCharge, 100f);
+            FeedbackResult again = Try(door, MagicEffectKind.ArcaneCharge, 100f);
+            Assert.AreEqual(FeedbackCategory.Completed, opening.Category);
+            Assert.AreEqual(FeedbackCategory.Completed, again.Category);
+            Assert.IsTrue(opening.Changed);
+            Assert.IsFalse(again.Changed, "The second changed nothing.");
+
+            // The same movement, so it reads as the same thing, but small: no fanfare for nothing.
+            FeedbackCue loud = FeedbackPresentation.Plan(opening, settings, DiscoveryQuality.High);
+            FeedbackCue quiet = FeedbackPresentation.Plan(again, settings, DiscoveryQuality.High);
+            Assert.AreEqual(loud.Motion, quiet.Motion);
+            Assert.Less(quiet.Amplitude, loud.Amplitude * 0.5f);
+            Assert.Less(quiet.Haptic, loud.Haptic * 0.5f);
+            Assert.AreEqual(0, quiet.Particles);
+
+            // And it is not repeated without pause, where a real change always is shown.
+            var state = new FeedbackGateState();
+            Assert.IsTrue(FeedbackGate.Allow(ref state, opening, 1f, 1.5f, EffectKinds.All));
+            Assert.IsFalse(FeedbackGate.Allow(ref state, again, 1.2f, 1.5f, EffectKinds.All), "The opening is still being shown.");
+            Assert.IsTrue(FeedbackGate.Allow(ref state, again, 2.6f, 1.5f, EffectKinds.All));
+            Assert.IsFalse(FeedbackGate.Allow(ref state, again, 3.0f, 1.5f, EffectKinds.All));
+            Assert.IsFalse(FeedbackGate.Allow(ref state, again, 4.0f, 1.5f, EffectKinds.All));
+            Assert.IsTrue(FeedbackGate.Allow(ref state, again, 4.2f, 1.5f, EffectKinds.All));
+
+            // Something really finishing is shown at once, however recently anything else was.
+            Assert.IsTrue(FeedbackGate.Allow(ref state, opening, 4.3f, 1.5f, EffectKinds.All));
+        }
+
+        [Test]
+        public void AHeldGuardDoesNotMakeThingsAnswerOverAndOver()
+        {
+            const EffectKinds Aimed = EffectKinds.Heat | EffectKinds.ArcaneCharge | EffectKinds.Force;
+
+            // On a structure it braces: the bracing is answered once; keeping it up is not an answer at all.
+            MagicalPropertySet structure = Example(ExampleObject.UnstableStructure);
+            FeedbackResult first = Try(structure, MagicEffectKind.Stabilize, 1f);
+            Assert.AreEqual(FeedbackCategory.Transition, first.Category);
+            Assert.IsTrue(first.Changed);
+            for (int pulse = 0; pulse < 5; pulse++)
+            {
+                Run(structure, 0.4f);
+                Assert.AreEqual(FeedbackCategory.None, Try(structure, MagicEffectKind.Stabilize, 1f).Category, $"Pulse {pulse}.");
+            }
+
+            // On a structure that has come down: too late, and said to nobody. The guard is not aimed at anything.
+            MagicalPropertySet rubble = Example(ExampleObject.UnstableStructure);
+            rubble.Apply(Effect(MagicEffectKind.Force, 5f));
+            FeedbackResult tooLate = Try(rubble, MagicEffectKind.Stabilize, 1f);
+            Assert.AreEqual(FeedbackCategory.Completed, tooLate.Category);
+            Assert.IsFalse(tooLate.Changed);
+            var state = new FeedbackGateState();
+            Assert.IsFalse(FeedbackGate.Allow(ref state, tooLate, 1f, 1.5f, Aimed));
+
+            // The first bracing itself is shown although the guard is not aimed: something changed.
+            Assert.IsTrue(FeedbackGate.Allow(ref state, first, 1f, 1.5f, Aimed));
+
+            // A brace too weak to hold, from a guard: also said to nobody.
+            FeedbackResult weak = Try(Example(ExampleObject.UnstableStructure), MagicEffectKind.Stabilize, 0.2f);
+            Assert.AreEqual(FeedbackCategory.Insufficient, weak.Category);
+            Assert.IsFalse(FeedbackGate.Allow(ref state, weak, 5f, 1.5f, Aimed));
+        }
+
+        [Test]
+        public void WhatForceCouldDoIsJudgedOnTheObjectAsItIsNow()
+        {
+            // Stone that only breaks when hot: cold, force can do nothing to it, so it must not resonate with force.
+            var settings = new MagicalPropertySettings
+            {
+                thermal = true,
+                thermalSettings = new HeatSettings { capacity = 100f, heatedFraction = 0.5f, flammable = false, decayPerSecond = 0f },
+                structural = true,
+                structuralSettings = new StructuralSettings { integrity = 100f, forceThreshold = 1f, forceDamage = 10f, brittleness = 0f, heatedBrittleness = 8f },
+            };
+            var stone = new MagicalPropertySet(settings);
+
+            Assert.IsFalse(stone.CouldRespondTo(MagicEffectKind.Force));
+            Assert.AreNotEqual(EffectResponse.Applied, stone.Apply(Effect(MagicEffectKind.Force, 1000f)));
+
+            stone.Apply(Effect(MagicEffectKind.Heat, 80f));
+            Assert.IsTrue(stone.CouldRespondTo(MagicEffectKind.Force), "Hot, it can be broken.");
+            Assert.AreEqual(EffectResponse.Applied, stone.Apply(Effect(MagicEffectKind.Force, 5f)));
+
+            // A brace that enough force can break is something force can change.
+            MagicalPropertySettings braced = WorldMagicDefaults.Settings(ExampleObject.UnstableStructure);
+            braced.structural = false;
+            var firm = new MagicalPropertySet(braced);
+            firm.Apply(Effect(MagicEffectKind.Stabilize, 1f));
+            Assert.IsFalse(firm.CouldRespondTo(MagicEffectKind.Force), "A brace that holds against anything.");
+
+            braced.stabilitySettings.braceBreakForce = 4f;
+            var breakable = new MagicalPropertySet(braced);
+            breakable.Apply(Effect(MagicEffectKind.Stabilize, 1f));
+            Assert.IsTrue(breakable.CouldRespondTo(MagicEffectKind.Force));
+            Assert.AreEqual(EffectResponse.Applied, breakable.Apply(Effect(MagicEffectKind.Force, 5f)));
+        }
+
+        [Test]
+        public void SwitchingCluesOffAlsoSwitchesOffTheWiderSway()
+        {
+            Assert.AreEqual(2f, AttentionRules.SwayScale(1f, new DiscoverySettings()), 0.0001f);
+            Assert.AreEqual(1f, AttentionRules.SwayScale(1f, new DiscoverySettings { clueIntensity = 0f }), 0.0001f);
+            Assert.AreEqual(1.5f, AttentionRules.SwayScale(1f, new DiscoverySettings { clueIntensity = 0.5f }), 0.0001f);
+            Assert.AreEqual(2f, AttentionRules.SwayScale(1f, new DiscoverySettings { clueIntensity = 2f }), 0.0001f, "Never more than the emphasis itself.");
+            Assert.AreEqual(1f, AttentionRules.SwayScale(0f, new DiscoverySettings()), 0.0001f);
+        }
+
         // ---------------------------------------------------------- performance
 
         [Test]
         public void HoweverManyObjectsStandAroundOnlyTheNearestFewAreAttendedTo()
         {
             const int Count = 600;
+            var names = new string[Count];
             var distances = new float[Count];
             var random = new System.Random(7);
             for (int i = 0; i < Count; i++)
             {
+                names[i] = "object " + i;
                 distances[i] = (float)random.NextDouble() * 400f + 1f;
             }
 
@@ -824,27 +954,72 @@ namespace Threefold.Tests
             distances[17] = 0.5f;
             distances[590] = 0.75f;
 
-            var chosen = new int[8];
-            int count = NearbySelection.Select(distances, Count, chosen);
-
-            Assert.AreEqual(8, count, "Never more than there is room for.");
-            Assert.AreEqual(411, chosen[0]);
-            Assert.AreEqual(17, chosen[1]);
-            Assert.AreEqual(590, chosen[2]);
-            for (int i = 1; i < count; i++)
+            // Looked through a few per frame, as the director does: the cost per frame is the batch,
+            // whatever the size of the level.
+            var nearest = new NearestFew<string>(16);
+            int frames = 0;
+            for (int index = 0; index < Count;)
             {
-                Assert.LessOrEqual(distances[chosen[i - 1]], distances[chosen[i]], "Nearest first.");
+                for (int batch = 0; batch < 64 && index < Count; batch++, index++)
+                {
+                    nearest.Offer(names[index], distances[index], 8);
+                }
+
+                frames++;
+                Assert.LessOrEqual(nearest.Count, 8, "Never more than are attended to.");
+            }
+
+            Assert.AreEqual(10, frames, "Six hundred objects, sixty-four a frame.");
+            Assert.AreEqual(8, nearest.Count);
+            Assert.AreEqual("object 411", nearest[0]);
+            Assert.AreEqual("object 17", nearest[1]);
+            Assert.AreEqual("object 590", nearest[2]);
+            for (int i = 1; i < nearest.Count; i++)
+            {
+                Assert.LessOrEqual(nearest.DistanceAt(i - 1), nearest.DistanceAt(i), "Nearest first.");
             }
 
             // Nothing nearer was left out.
             var sorted = (float[])distances.Clone();
             Array.Sort(sorted);
-            Assert.AreEqual(sorted[7], distances[chosen[7]]);
+            Assert.AreEqual(sorted[7], nearest.DistanceAt(7));
+        }
 
-            // Fewer candidates than room: all of them. Equal distances keep the order they were found in.
-            Assert.AreEqual(3, NearbySelection.Select(new[] { 5f, 5f, 1f }, 3, chosen));
-            CollectionAssert.AreEqual(new[] { 2, 0, 1 }, new[] { chosen[0], chosen[1], chosen[2] });
-            Assert.AreEqual(0, NearbySelection.Select(distances, 0, chosen));
+        [Test]
+        public void TheNearestFewAreKeptOnceEachAndInTheOrderFound()
+        {
+            var nearest = new NearestFew<string>(4);
+
+            // Equal distances keep the order they were offered in.
+            nearest.Offer("a", 5f);
+            nearest.Offer("b", 5f);
+            nearest.Offer("c", 1f);
+            Assert.AreEqual(3, nearest.Count);
+            CollectionAssert.AreEqual(new[] { "c", "a", "b" }, new[] { nearest[0], nearest[1], nearest[2] });
+
+            // The list of objects can change while it is being looked through, so one may be offered
+            // twice in the same look. It is kept once.
+            nearest.Offer("a", 0.5f);
+            nearest.Offer("c", 9f);
+            Assert.AreEqual(3, nearest.Count);
+            Assert.IsTrue(nearest.Contains("a"));
+            Assert.IsFalse(nearest.Contains("z"));
+
+            // A full set lets go of its farthest for a nearer one, and ignores a farther one.
+            nearest.Offer("d", 6f);
+            nearest.Offer("e", 7f);
+            Assert.AreEqual(4, nearest.Count);
+            Assert.IsFalse(nearest.Contains("e"));
+            nearest.Offer("f", 2f);
+            CollectionAssert.AreEqual(new[] { "c", "f", "a", "b" }, new[] { nearest[0], nearest[1], nearest[2], nearest[3] });
+            Assert.IsFalse(nearest.Contains("d"));
+
+            nearest.Offer(null, 0f);
+            Assert.AreEqual(4, nearest.Count);
+
+            nearest.Clear();
+            Assert.AreEqual(0, nearest.Count);
+            Assert.IsFalse(nearest.Contains("c"));
         }
 
         [Test]
@@ -856,20 +1031,27 @@ namespace Threefold.Tests
             var attention = new AttentionSettings();
             var attentionState = new AttentionState();
             var gate = new FeedbackGateState();
-            var distances = new float[64];
-            var chosen = new int[8];
+            var nearest = new NearestFew<MagicalPropertySet>(8);
             EffectKinds aegis = Compatibility.OfDefaultDiscipline(MagicDiscipline.Aegis);
             MagicEffect effect = Effect(MagicEffectKind.Force, 2f);
             float sink = 0f;
 
             // Once beforehand, so that anything set up on first use is not counted.
             Compatibility.Matching(door, aegis);
-            NearbySelection.Select(distances, distances.Length, chosen);
+            nearest.Offer(door, 1f, 8);
+            nearest.Clear();
 
             long before = GC.GetAllocatedBytesForCurrentThread();
             for (int frame = 0; frame < 500; frame++)
             {
-                NearbySelection.Select(distances, distances.Length, chosen);
+                nearest.Offer(door, frame, 8);
+                nearest.Offer(door, 1f, 8);
+                if (frame % 16 == 0)
+                {
+                    nearest.Clear();
+                }
+
+                sink += AttentionRules.SwayScale(0.5f, settings);
                 bool compatible = Compatibility.Matching(door, aegis) != EffectKinds.None;
                 sink += ResonanceRules.Strength(compatible, 3f, true, false, resonance, settings);
                 sink += AttentionRules.Advance(ref attentionState, true, false, false, false, false, attention, 0.016f);

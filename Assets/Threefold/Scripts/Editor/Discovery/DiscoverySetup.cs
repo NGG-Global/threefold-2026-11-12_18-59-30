@@ -3,6 +3,7 @@ using Threefold.Characters;
 using Threefold.Combat;
 using Threefold.Discovery;
 using Threefold.Magic;
+using Threefold.VisualStyle;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -92,6 +93,13 @@ namespace Threefold.EditorTools
             {
                 MarkChanged(director);
                 report.AppendLine("Connected the discovery director to the Mage, the camera and the disciplines.");
+            }
+
+            // With the game's quality setting connected, the richness of answers follows the chosen level.
+            if (director.FillStyle(FindInScene<VisualStyleController>(scene)))
+            {
+                MarkChanged(director);
+                report.AppendLine("Connected the discovery director to the scene's quality setting.");
             }
 
             return director;

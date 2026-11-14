@@ -55,11 +55,18 @@ namespace Threefold.Discovery
         /// </summary>
         public readonly float Progress;
 
-        public FeedbackResult(FeedbackCategory category, MagicEffectKind kind, float progress)
+        /// <summary>
+        /// Whether the attempt changed anything on the object. "Completed" with a change is the moment
+        /// something was finished; without one, it is an attempt on something already finished.
+        /// </summary>
+        public readonly bool Changed;
+
+        public FeedbackResult(FeedbackCategory category, MagicEffectKind kind, float progress, bool changed = false)
         {
             Category = category;
             Kind = kind;
             Progress = Mathf.Clamp01(progress);
+            Changed = changed;
         }
     }
 
@@ -468,13 +475,17 @@ namespace Threefold.Discovery
 
                 case EffectResponse.Applied:
                 {
-                    float progress = ProgressOf(set, kind);
                     if (!transitioned)
                     {
-                        return new FeedbackResult(FeedbackCategory.Progress, kind, progress);
+                        // A brace that is merely being kept up brings the object nearer to nothing; the
+                        // object already shows that it is braced.
+                        return kind == MagicEffectKind.Stabilize
+                            ? new FeedbackResult(FeedbackCategory.None, kind, 0f)
+                            : new FeedbackResult(FeedbackCategory.Progress, kind, ProgressOf(set, kind), true);
                     }
 
-                    return new FeedbackResult(IsComplete(set, kind) ? FeedbackCategory.Completed : FeedbackCategory.Transition, kind, 1f);
+                    return new FeedbackResult(IsComplete(set, kind) ? FeedbackCategory.Completed : FeedbackCategory.Transition, kind,
+                        1f, true);
                 }
 
                 case EffectResponse.Resisted:
@@ -677,21 +688,28 @@ namespace Threefold.Discovery
     public static class FeedbackGate
     {
         /// <param name="quietSeconds">The same category for the same kind of effect is not repeated within this time.</param>
-        /// <param name="incompatibleKinds">The kinds of effect for which "incompatible" is shown at all.</param>
+        /// <param name="unchangedAnswersFor">
+        /// The kinds of effect for which an answer is shown although nothing changed (incompatible,
+        /// insufficient, blocked, already finished). A kind that is not aimed, such as the brace of a
+        /// held guard, is left out, so that things it does nothing to stay still.
+        /// </param>
         public static bool Allow(ref FeedbackGateState state, in FeedbackResult result, float now, float quietSeconds,
-            EffectKinds incompatibleKinds)
+            EffectKinds unchangedAnswersFor)
         {
             if (result.Category == FeedbackCategory.None)
             {
                 return false;
             }
 
-            if (result.Category == FeedbackCategory.Incompatible && (Compatibility.Of(result.Kind) & incompatibleKinds) == 0)
+            if (!result.Changed && (Compatibility.Of(result.Kind) & unchangedAnswersFor) == 0)
             {
                 return false;
             }
 
-            bool significant = result.Category == FeedbackCategory.Transition || result.Category == FeedbackCategory.Completed;
+            // Only a real change is always shown. An attempt on something already finished is "completed"
+            // too, but it changed nothing and must not be repeated without pause.
+            bool significant = result.Changed &&
+                               (result.Category == FeedbackCategory.Transition || result.Category == FeedbackCategory.Completed);
             if (!significant && state.HasLast && state.LastCategory == result.Category && state.LastKind == result.Kind &&
                 now - state.LastTime < quietSeconds)
             {
@@ -770,12 +788,26 @@ namespace Threefold.Discovery
 
                 case FeedbackCategory.Completed:
                     cue.Motion = CueMotion.Settle;
-                    cue.Amplitude = 1f;
-                    cue.Seconds = 0.9f;
-                    cue.Accent = 1f;
                     cue.Sound = DiscoverySound.Completion;
-                    cue.Haptic = 0.8f;
-                    particles = 12;
+                    if (result.Changed)
+                    {
+                        // The moment something was finished.
+                        cue.Amplitude = 1f;
+                        cue.Seconds = 0.9f;
+                        cue.Accent = 1f;
+                        cue.Haptic = 0.8f;
+                        particles = 12;
+                    }
+                    else
+                    {
+                        // An attempt on something already finished: the same movement, quietly.
+                        cue.Amplitude = 0.35f;
+                        cue.Seconds = 0.6f;
+                        cue.Accent = 0.25f;
+                        cue.Haptic = 0.15f;
+                        particles = 0;
+                    }
+
                     break;
 
                 case FeedbackCategory.Blocked:
@@ -804,7 +836,8 @@ namespace Threefold.Discovery
             particles = Mathf.RoundToInt(particles * share);
             if (settings != null && settings.reducedParticles)
             {
-                bool significant = result.Category == FeedbackCategory.Transition || result.Category == FeedbackCategory.Completed;
+                bool significant = result.Changed &&
+                                   (result.Category == FeedbackCategory.Transition || result.Category == FeedbackCategory.Completed);
                 particles = significant ? Mathf.Min(particles, 3) : 0;
             }
 
@@ -940,6 +973,16 @@ namespace Threefold.Discovery
             return state.Emphasis * settings.maxBoost;
         }
 
+        /// <summary>
+        /// How much wider an unstable object sways under emphasis: 1 is as authored. The player's clue
+        /// intensity applies to it as to every clue, so switching clues off switches this off too.
+        /// </summary>
+        public static float SwayScale(float boost, DiscoverySettings settings)
+        {
+            float intensity = settings != null ? Mathf.Clamp01(settings.clueIntensity) : 1f;
+            return 1f + Mathf.Max(0f, boost) * intensity;
+        }
+
         /// <summary>The strength an ambient clue is shown with: its base, the player's setting, and any emphasis.</summary>
         public static float ClueStrength(float baseStrength, float boost, DiscoverySettings settings)
         {
@@ -948,52 +991,116 @@ namespace Threefold.Discovery
         }
     }
 
-    /// <summary>
-    /// Chooses which of the objects found near the player are attended to: the nearest few, in a
-    /// fixed order. However many stand around, the work per frame is for this many and no more.
-    /// Plain C#, no allocation.
-    /// </summary>
-    public static class NearbySelection
+    /// <summary>The game's quality levels, as discovery sees them.</summary>
+    public static class DiscoveryQualityRules
     {
-        /// <param name="sqrDistances">Squared distance of each candidate.</param>
-        /// <param name="count">How many candidates there are.</param>
-        /// <param name="result">Receives the indices of the chosen candidates, nearest first.</param>
-        /// <returns>How many were chosen: at most the length of <paramref name="result"/>.</returns>
-        public static int Select(float[] sqrDistances, int count, int[] result)
+        /// <summary>
+        /// Maps a level of the game's own quality setting to a tier: the lowest level is Low, the
+        /// highest High, anything between Medium. With a single level, or none, it is Medium.
+        /// </summary>
+        public static DiscoveryQuality FromLevel(int level, int levelCount)
         {
-            int limit = Mathf.Min(result.Length, count);
-            int chosen = 0;
-
-            for (int i = 0; i < count; i++)
+            if (levelCount <= 1)
             {
-                float distance = sqrDistances[i];
+                return DiscoveryQuality.Medium;
+            }
 
-                // Find where it belongs among those chosen so far. Equal distances keep the order found.
-                int position = chosen;
-                while (position > 0 && sqrDistances[result[position - 1]] > distance)
-                {
-                    position--;
-                }
+            return level <= 0 ? DiscoveryQuality.Low : level >= levelCount - 1 ? DiscoveryQuality.High : DiscoveryQuality.Medium;
+        }
+    }
 
-                if (position >= limit)
-                {
-                    continue;
-                }
+    /// <summary>
+    /// Keeps the nearest few of whatever it is offered, nearest first. Candidates can be offered a
+    /// few at a time, over several frames, so that looking through a whole level costs the same per
+    /// frame however large the level is; and however many are offered, only this many are kept and
+    /// attended to. Plain C#, no allocation after it is made.
+    /// </summary>
+    public sealed class NearestFew<T> where T : class
+    {
+        private readonly T[] items;
+        private readonly float[] distances;
 
-                int last = Mathf.Min(chosen, limit - 1);
-                for (int j = last; j > position; j--)
-                {
-                    result[j] = result[j - 1];
-                }
+        public NearestFew(int capacity)
+        {
+            items = new T[Mathf.Max(1, capacity)];
+            distances = new float[items.Length];
+        }
 
-                result[position] = i;
-                if (chosen < limit)
+        public int Capacity => items.Length;
+
+        public int Count { get; private set; }
+
+        public T this[int index] => items[index];
+
+        public float DistanceAt(int index)
+        {
+            return distances[index];
+        }
+
+        public void Clear()
+        {
+            Array.Clear(items, 0, Count);
+            Count = 0;
+        }
+
+        /// <summary>
+        /// Offers a candidate with its (squared) distance. It is kept if it is among the nearest so far.
+        /// One that is already kept is not taken twice. Equal distances keep the order offered.
+        /// </summary>
+        /// <param name="limit">Keep at most this many, if smaller than the capacity.</param>
+        public void Offer(T item, float sqrDistance, int limit = int.MaxValue)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            int room = Mathf.Clamp(limit, 1, items.Length);
+            for (int i = 0; i < Count; i++)
+            {
+                if (ReferenceEquals(items[i], item))
                 {
-                    chosen++;
+                    return;
                 }
             }
 
-            return chosen;
+            int position = Count;
+            while (position > 0 && distances[position - 1] > sqrDistance)
+            {
+                position--;
+            }
+
+            if (position >= room)
+            {
+                return;
+            }
+
+            int last = Mathf.Min(Count, room - 1);
+            for (int i = last; i > position; i--)
+            {
+                items[i] = items[i - 1];
+                distances[i] = distances[i - 1];
+            }
+
+            items[position] = item;
+            distances[position] = sqrDistance;
+            if (Count < room)
+            {
+                Count++;
+            }
+        }
+
+        public bool Contains(T item)
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                if (ReferenceEquals(items[i], item))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

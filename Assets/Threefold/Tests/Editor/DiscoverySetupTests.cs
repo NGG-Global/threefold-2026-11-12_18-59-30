@@ -90,6 +90,14 @@ namespace Threefold.Tests
                 Assert.AreEqual(Compatibility.CluesFor(WorldMagicDefaults.Settings(example)), clues.Clues, example.ToString());
             }
 
+            // What is left of a destroyed example is what moves when the blow that destroyed it is answered.
+            foreach (ExampleObject example in new[] { ExampleObject.WoodenBarricade, ExampleObject.HeatSensitiveStone, ExampleObject.ReinforcedDoor })
+            {
+                DiscoveryClues clues = assets.Prefabs[(int)example].GetComponent<DiscoveryClues>();
+                Assert.IsNotNull(clues.MotionTargetWhenDestroyed, example.ToString());
+                Assert.AreNotSame(clues.MotionTarget, clues.MotionTargetWhenDestroyed, example.ToString());
+            }
+
             // Built clues: straw, vents and cracks are parts of the object, hidden with it when it is destroyed.
             Transform straw = assets.Prefabs[(int)ExampleObject.WoodenBarricade].transform.Find("Whole/" + MagicalObjectSetup.CluesName);
             Transform vents = assets.Prefabs[(int)ExampleObject.HeatSensitiveStone].transform.Find("Whole/" + MagicalObjectSetup.CluesName);
