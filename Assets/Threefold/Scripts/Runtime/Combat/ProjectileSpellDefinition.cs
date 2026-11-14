@@ -1,4 +1,5 @@
 using Threefold.Pooling;
+using Threefold.WorldMagic;
 using UnityEngine;
 
 namespace Threefold.Combat
@@ -40,6 +41,17 @@ namespace Threefold.Combat
         [Min(0f)]
         [SerializeField] private float impactNoiseRadius = 9f;
 
+        [Header("Magic")]
+        [Tooltip("The magical effects each projectile carries, apart from its damage. Empty: its kind of magic decides " +
+                 "(an arcane shot charges, a fire shot heats), with the damage as the strength.")]
+        [SerializeField] private EffectPayload effects;
+
+        [Tooltip("Whether force can turn the projectiles aside (the Aegis guard and Aegis attacks), and how easily.")]
+        [SerializeField] private ProjectileDeflection deflection;
+
+        // Whether the deflection was ever set by the setup tooling, so it is filled once and then left to tuning.
+        [SerializeField, HideInInspector] private bool deflectionConfigured;
+
         public Projectile ProjectilePrefab => projectilePrefab;
         public PooledObject ImpactEffectPrefab => impactEffectPrefab;
         public float Damage => damage;
@@ -47,6 +59,22 @@ namespace Threefold.Combat
         public float MaxRange => maxRange;
         public float Radius => radius;
         public float ImpactNoiseRadius => impactNoiseRadius;
+        public EffectPayload Effects => effects;
+        public ProjectileDeflection Deflection => deflection;
+        public bool DeflectionConfigured => deflectionConfigured;
+
+        /// <summary>Sets the effects each projectile carries. Called by the setup tooling.</summary>
+        public void ConfigureEffects(EffectPayload payload)
+        {
+            effects = payload;
+        }
+
+        /// <summary>Sets whether and how force turns the projectiles aside. Called by the setup tooling, once.</summary>
+        public void ConfigureDeflection(ProjectileDeflection value)
+        {
+            deflection = value;
+            deflectionConfigured = true;
+        }
 
         /// <summary>Sets how many projectiles may exist at once and how far impacts are heard. Called by the setup tooling.</summary>
         public void ConfigureLimits(int maxProjectiles, float noiseRadius)
@@ -87,7 +115,8 @@ namespace Threefold.Combat
             if (instance != null && instance.TryGetComponent(out Projectile projectile))
             {
                 projectile.Launch(new ProjectileLaunch(context.Caster, context.Direction, speed, maxRange, radius,
-                    damage * context.DamageScale, hitLayers, impactEffectPrefab, impactNoiseRadius));
+                    damage * context.DamageScale, hitLayers, impactEffectPrefab, impactNoiseRadius, effects: effects,
+                    deflection: deflection));
             }
         }
     }

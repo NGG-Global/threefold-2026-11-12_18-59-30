@@ -73,6 +73,11 @@ separates approved decisions from proposals; do not present a proposal as decide
   movement of its own, so none depends on colour. Only the `DiscoveryDirector` has an update, and
   it attends to a bounded number of nearby objects. Its look is a proposal until the owner has
   reviewed it in Unity and on a device.
+- Combinations (`Docs/Combinations.md`) follow from properties and effects through the shared
+  relationships in `CombinationRules`: never add a rule keyed to a spell order, a discipline pair
+  or a kind of object. Creatures take effects through `CreatureEffectModel` with the same property
+  classes as objects; each kind of enemy gets some capabilities (heat, push, stagger force, armour,
+  ward), never all. Only designated projectiles can be deflected (`DeflectionRules`), once.
 - The visual style (`Docs/VisualStyle.md`) is a proposal until the owner has reviewed it in Unity
   and on a device. Its shader is `Assets/Threefold/Shaders/IllustratedLit.shader`. The shader's
   arithmetic is repeated in C# (`IllustratedLightingReference`) for tests and previews: change

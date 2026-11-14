@@ -59,7 +59,11 @@ The Mage has 100 health: five Slams, or nine Motes.
    surface (Guardian: resists 60% of a push and heats slowly; Wisp: thrown the full distance and
    heats quickly). See `Docs/Disciplines.md`. Since Sprint LM-03 heat and force reach an enemy as
    magical effects, by the same rules objects in the world use (`Docs/WorldMagic.md`), and the
-   Aegis swings carry a little force too, so each one shoves an enemy slightly.
+   Aegis swings carry a little force too, so each one shoves an enemy slightly. Since Sprint LM-06
+   a single strong force staggers an enemy whatever its poise (Guardian 3.5, Wisp 1.5), the
+   Guardian wears stone plates that heat and force break, and the Wisp has an arcane ward that
+   arcane charge disrupts; a third kind, the Cinder Wisp, fires motes that carry heat and can be
+   turned aside by the Aegis guard. See `Docs/Combinations.md`.
 9. **Defeat.** The enemy stops, stops blocking movement and shots, bursts, and sinks (Guardian) or
    fades (Wisp). It stays down until the level restarts.
 

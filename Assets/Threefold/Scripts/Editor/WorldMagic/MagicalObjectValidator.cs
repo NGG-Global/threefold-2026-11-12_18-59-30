@@ -196,6 +196,32 @@ namespace Threefold.EditorTools
                             "collider, so the object would move without what blocks and what is hit.");
                 }
             }
+
+            // LM-06: weight is counted by a load zone; without one, nobody ever stands on the object.
+            StabilitySettings stability = definition != null && definition.Properties.stability
+                ? definition.Properties.stabilitySettings
+                : null;
+            if (stability != null && stability.loadStressPerSecond > 0f)
+            {
+                LoadZone zone = magical.LoadZone;
+                if (zone == null)
+                {
+                    problem($"The magical object '{name}' gives way under weight, but has no Load Zone, so weight is never " +
+                            "counted. Add a trigger collider over its walking surface with a Load Zone, and set it on the object.");
+                }
+                else
+                {
+                    if (zone.Target != magical)
+                    {
+                        problem($"The Load Zone of '{name}' reports to another object (or none).");
+                    }
+
+                    if (!zone.TryGetComponent(out Collider zoneCollider) || !zoneCollider.isTrigger)
+                    {
+                        problem($"The Load Zone of '{name}' needs a collider marked as a trigger.");
+                    }
+                }
+            }
         }
 
         /// <summary>What LM-04 added: the identifier, and where the object's reactions go.</summary>

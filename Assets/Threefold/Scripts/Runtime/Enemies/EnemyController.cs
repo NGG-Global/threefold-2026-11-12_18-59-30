@@ -19,7 +19,7 @@ namespace Threefold.Enemies
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Health))]
     [RequireComponent(typeof(NavMeshAgent))]
-    public sealed class EnemyController : MonoBehaviour, IEnemyBody, IRestorable, IMagicEffectReceiver
+    public sealed class EnemyController : MonoBehaviour, IEnemyBody, IRestorable, IMagicEffectReceiver, IDamageModifier
     {
         private const float NavMeshSearchRadius = 2f;
         private const float StandPointSearchRadius = 1.5f;
@@ -104,6 +104,15 @@ namespace Threefold.Enemies
 
         /// <summary>Raised after every change of behaviour. Arguments: previous, new.</summary>
         public event Action<EnemyStateId, EnemyStateId> StateChanged;
+
+        /// <summary>
+        /// Raised for every change of the enemy's armour (Structural, as <see cref="StructuralState"/>) or
+        /// ward (Arcane, as <see cref="ArcaneState"/>): the property, the state it left and the state it entered.
+        /// </summary>
+        public event Action<EnemyController, WorldPropertyKind, int, int> DefenceChanged;
+
+        /// <summary>Raised when the enemy's defences were put back as a whole, for a restart. Whoever shows them looks afresh.</summary>
+        public event Action<EnemyController> DefencesRestored;
 
         public EnemyDefinition Definition => definition;
         public EnemyBrain Brain => brain;
@@ -222,6 +231,7 @@ namespace Threefold.Enemies
 
         private void OnEnable()
         {
+            health.AddModifier(this);
             health.Damaged += HandleDamaged;
             health.Defeated += HandleDefeated;
             health.Revived += HandleRevived;
@@ -235,6 +245,7 @@ namespace Threefold.Enemies
 
         private void OnDisable()
         {
+            health.RemoveModifier(this);
             health.Damaged -= HandleDamaged;
             health.Defeated -= HandleDefeated;
             health.Revived -= HandleRevived;
@@ -298,9 +309,14 @@ namespace Threefold.Enemies
             TryPlaceOnNavMesh();
             PrepareTelegraph();
 
-            effects = new CreatureEffectModel(tuning.heat, tuning.pushResistance, true);
+            effects = new CreatureEffectModel(tuning.heat, tuning.pushResistance, true, tuning.staggerForce, tuning.armour,
+                tuning.ward);
+            effects.StateChanged += HandleDefenceChanged;
             heat = new HeatCarrier(effects.Thermal);
             heat.Bind(health);
+
+            // Whoever shows the defences looks at them now that they exist.
+            DefencesRestored?.Invoke(this);
 
             brain = new EnemyBrain(this, tuning, tokens, id);
             brain.Alerted += HandleBrainAlerted;
@@ -341,6 +357,7 @@ namespace Threefold.Enemies
 
             ownTokens?.Update(deltaTime);
             heat?.Tick(deltaTime);
+            effects?.Tick(deltaTime);
             brain.HealthFraction = Health.Fraction;
             brain.Tick(deltaTime, observation);
 
@@ -574,6 +591,18 @@ namespace Threefold.Enemies
 
         public bool IsBurning => heat != null && heat.Meter.IsBurning;
 
+        /// <summary>How the enemy takes effects, with its armour and ward. Null until the enemy has started.</summary>
+        public CreatureEffectModel Effects => effects;
+
+        /// <summary>
+        /// Called by <see cref="Health"/> for every hit: armour and ward take their share of a hit with a
+        /// direction. A burn passes them.
+        /// </summary>
+        public float ModifyIncomingDamage(in DamageInfo damage, float amount)
+        {
+            return effects != null ? amount * effects.DamageMultiplier(damage.Direction.sqrMagnitude > 0.0001f) : amount;
+        }
+
         /// <summary>
         /// A magical effect arrives. Enemies take heat (unless their tuning makes them immune) and
         /// force: a push slides the enemy along its navigation surface, as a stagger does, by the
@@ -593,6 +622,13 @@ namespace Threefold.Enemies
             if (effects.IgnitedByLastEffect)
             {
                 heat.AnnounceIgnition();
+            }
+
+            // Force at its stagger force, armour breaking or a ward disrupted takes the enemy off its feet,
+            // unless it was staggered a moment ago. Whoever caused it is not revealed by it.
+            if (effects.StaggeredByLastEffect && brain.TakeImpact(effect.Direction))
+            {
+                CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.Knocked, health.AimPoint, tuning.staggerSeconds));
             }
 
             // A push takes over only from a weaker movement. The light force of a strike that has just
@@ -786,6 +822,31 @@ namespace Threefold.Enemies
             brain.HearNoise(noise.Position, noise.Radius);
         }
 
+        /// <summary>Every change of armour or ward is announced and shown, so none goes unseen.</summary>
+        private void HandleDefenceChanged(WorldPropertyKind kind, int from, int to)
+        {
+            Vector3 point = Health.AimPoint;
+            if (kind == WorldPropertyKind.Structural)
+            {
+                StatusKind status = to == (int)StructuralState.Destroyed ? StatusKind.ArmourBroken : StatusKind.ArmourCracked;
+                CombatEvents.RaiseStatus(new StatusEvent(gameObject, status, point, 0f));
+            }
+            else if (kind == WorldPropertyKind.Arcane)
+            {
+                if (to == (int)ArcaneState.Activated)
+                {
+                    float seconds = tuning != null && tuning.ward != null && tuning.ward.arcane != null ? tuning.ward.arcane.activeSeconds : 0f;
+                    CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.WardDisrupted, point, seconds));
+                }
+                else if (from == (int)ArcaneState.Activated)
+                {
+                    CombatEvents.RaiseStatus(new StatusEvent(gameObject, StatusKind.WardRestored, point, 0f));
+                }
+            }
+
+            DefenceChanged?.Invoke(this, kind, from, to);
+        }
+
         private void HandleBrainAlerted(EnemyBrain alertedBrain)
         {
             Alerted?.Invoke(this);
@@ -897,6 +958,7 @@ namespace Threefold.Enemies
         {
             knockbackRemaining = 0f;
             effects?.Restore();
+            DefencesRestored?.Invoke(this);
             hasLook = false;
             SetCollidersEnabled(true);
 

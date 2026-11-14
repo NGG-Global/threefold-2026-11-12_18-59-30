@@ -3,6 +3,7 @@ using Threefold.Combat;
 using Threefold.CombatFeedback;
 using Threefold.Enemies;
 using Threefold.Pooling;
+using Threefold.WorldMagic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.AI;
@@ -51,6 +52,23 @@ namespace Threefold.EditorTools
         private const string GuardianPrefabPath = Folder + "/RuinsGuardian.prefab";
         private const string WispPrefabPath = Folder + "/ArcaneWisp.prefab";
 
+        // LM-06: the Cinder Wisp, its fiery mote, and the look of armour and ward.
+        private const string CinderCorePath = Folder + "/CinderCore.mat";
+        private const string CinderShardPath = Folder + "/CinderShard.mat";
+        private const string CinderImpactPath = Folder + "/CinderImpact.prefab";
+        private const string CinderDefeatPath = Folder + "/CinderDefeat.prefab";
+        private const string CinderMotePrefabPath = Folder + "/CinderMote.prefab";
+        private const string CinderMoteSpellPath = Folder + "/CinderMote.asset";
+        private const string CinderDefinitionPath = Folder + "/CinderWisp.asset";
+        internal const string CinderPrefabPath = Folder + "/CinderWisp.prefab";
+        private const string WardShellPath = Folder + "/WardShell.mat";
+        private const string ArmourCrackPath = Folder + "/ArmourCrack.mat";
+        internal const string WardShellName = "WardShell";
+        internal const string PauldronLeftName = "PauldronLeft";
+        internal const string PauldronRightName = "PauldronRight";
+        internal const string FauldsName = "Faulds";
+        internal const string CrackName = "Crack";
+
         // Weathered slate stone with amber light for the Guardian; violet arcane light for the Wisp.
         // Both stay clear of the Mage's blue bolt and of the courtyard's warm stone (Art Bible, section 7).
         private static readonly Color GuardianStoneColor = new Color(0.4f, 0.42f, 0.47f, 1f);
@@ -60,6 +78,11 @@ namespace Threefold.EditorTools
         private static readonly Color WispCoreColor = new Color(1.5f, 0.75f, 2.6f, 1f);
         private static readonly Color WispShardColor = new Color(0.28f, 0.24f, 0.38f, 1f);
         private static readonly Color WispLight = new Color(0.82f, 0.52f, 1f, 1f);
+        private static readonly Color CinderCoreColor = new Color(2.6f, 1.05f, 0.25f, 1f);
+        private static readonly Color CinderShardColor = new Color(0.3f, 0.17f, 0.11f, 1f);
+        private static readonly Color CinderLight = new Color(1f, 0.55f, 0.2f, 1f);
+        private static readonly Color WardShellColor = new Color(0.78f, 0.6f, 1f, 0.16f);
+        private static readonly Color CrackColor = new Color(0.1f, 0.09f, 0.08f, 1f);
 
         private readonly StringBuilder report;
         private SharedAssets shared;
@@ -76,6 +99,8 @@ namespace Threefold.EditorTools
         public EnemyDifficulty Hard { get; private set; }
         public GameObject GuardianPrefab { get; private set; }
         public GameObject WispPrefab { get; private set; }
+        public EnemyDefinition CinderDefinition { get; private set; }
+        public GameObject CinderPrefab { get; private set; }
 
         /// <summary>Creates whatever is missing and returns the full set.</summary>
         internal static EnemyAssets Ensure(StringBuilder report)
@@ -105,12 +130,32 @@ namespace Threefold.EditorTools
 
             Projectile mote = EnsureMotePrefab(wispCore);
 
-            MeleeStrikeDefinition slam = EnsureStrike(SlamPath, "Guardian Slam", 24f, 2.7f, 110f, guardianImpact);
-            MeleeStrikeDefinition shockwave = EnsureStrike(ShockwavePath, "Guardian Shockwave", 18f, 3.6f, 360f, guardianImpact);
+            MeleeStrikeDefinition slam = EnsureStrike(SlamPath, "Guardian Slam", 24f, 2.7f, 110f, guardianImpact,
+                EnemyArchetypes.GuardianSlamEffects);
+            MeleeStrikeDefinition shockwave = EnsureStrike(ShockwavePath, "Guardian Shockwave", 18f, 3.6f, 360f, guardianImpact,
+                EnemyArchetypes.GuardianShockwaveEffects);
             ProjectileSpellDefinition moteSpell = EnsureMoteSpell(mote, wispImpact);
 
             GuardianDefinition = EnsureDefinition(GuardianDefinitionPath, "Ruins Guardian", EnemyArchetypes.RuinsGuardian());
             WispDefinition = EnsureDefinition(WispDefinitionPath, "Arcane Wisp", EnemyArchetypes.ArcaneWisp());
+
+            // The Cinder Wisp (LM-06): a Wisp of fire whose motes can be turned into what burns.
+            Material cinderCore = EnsureMaterial(CinderCorePath, () => CreateColorMaterial(UnlitShader, CinderCoreColor), report);
+            Material cinderShard = EnsureMaterial(CinderShardPath, () => CreateColorMaterial(LitShader, CinderShardColor), report);
+            PooledObject cinderImpact = EnsureEffectPrefab(CinderImpactPath, "CinderImpact", shared.Glow, CinderLight, 14, 0.6f, report);
+            PooledObject cinderDefeat = EnsureEffectPrefab(CinderDefeatPath, "CinderDefeat", shared.Glow, CinderLight, 26, 1f, report);
+            Projectile cinderMote = EnsureMotePrefab(CinderMotePrefabPath, "CinderMote", cinderCore, SpellElement.Fire,
+                new Color(1f, 0.85f, 0.5f), new Color(1f, 0.35f, 0.1f));
+            ProjectileSpellDefinition cinderSpell = EnsureCinderSpell(cinderMote, cinderImpact);
+            CinderDefinition = EnsureDefinition(CinderDefinitionPath, "Cinder Wisp", EnemyArchetypes.CinderWisp());
+
+            Material wardShell = EnsureMaterial(WardShellPath, () =>
+            {
+                Material material = CreateTelegraphMaterial();
+                material.color = WardShellColor;
+                return material;
+            }, report);
+            Material crack = EnsureMaterial(ArmourCrackPath, () => CreateColorMaterial(LitShader, CrackColor), report);
 
             Easy = EnsureDifficulty(EasyPath, EnemyDifficultySettings.Easy());
             Normal = EnsureDifficulty(NormalPath, EnemyDifficultySettings.Normal());
@@ -121,8 +166,16 @@ namespace Threefold.EditorTools
             var guardianParts = new Materials { Body = stone, Trim = trim, Core = guardianCore, Alert = alert, Area = area };
             var wispParts = new Materials { Body = shard, Trim = shard, Core = wispCore, Alert = alert, Area = area };
 
+            var cinderParts = new Materials { Body = cinderShard, Trim = cinderShard, Core = cinderCore, Alert = alert, Area = area };
+
             GuardianPrefab = EnsureGuardianPrefab(guardianParts, slam, shockwave, guardianDefeat);
             WispPrefab = EnsureWispPrefab(wispParts, moteSpell, wispDefeat);
+            CinderPrefab = EnsureWispPrefab(CinderPrefabPath, "CinderWisp", CinderDefinition, cinderParts, cinderSpell, cinderDefeat,
+                true);
+
+            // Armour and ward are shown for as long as they last; prefabs generated earlier are given the parts once.
+            EnsureDefenceVisuals(GuardianPrefabPath, trim, crack, null);
+            EnsureDefenceVisuals(WispPrefabPath, null, null, wardShell);
             AssetDatabase.SaveAssets();
         }
 
@@ -159,13 +212,20 @@ namespace Threefold.EditorTools
 
         private Projectile EnsureMotePrefab(Material coreMaterial)
         {
-            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(MotePrefabPath);
+            return EnsureMotePrefab(MotePrefabPath, "ArcaneMote", coreMaterial, SpellElement.Arcane,
+                new Color(0.95f, 0.75f, 1f), new Color(0.55f, 0.3f, 1f));
+        }
+
+        private Projectile EnsureMotePrefab(string path, string prefabName, Material coreMaterial, SpellElement element,
+            Color trailStart, Color trailEnd)
+        {
+            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (existing != null)
             {
                 return existing.GetComponent<Projectile>();
             }
 
-            var root = new GameObject("ArcaneMote");
+            var root = new GameObject(prefabName);
             root.AddComponent<PooledObject>();
 
             GameObject core = CreatePart(PrimitiveType.Sphere, "Core", root.transform, Vector3.zero,
@@ -176,7 +236,7 @@ namespace Threefold.EditorTools
 
             var gradient = new Gradient();
             gradient.SetKeys(
-                new[] { new GradientColorKey(new Color(0.95f, 0.75f, 1f), 0f), new GradientColorKey(new Color(0.55f, 0.3f, 1f), 1f) },
+                new[] { new GradientColorKey(trailStart, 0f), new GradientColorKey(trailEnd, 1f) },
                 new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0f, 1f) });
 
             TrailRenderer trail = root.AddComponent<TrailRenderer>();
@@ -189,16 +249,18 @@ namespace Threefold.EditorTools
             trail.shadowCastingMode = ShadowCastingMode.Off;
             trail.receiveShadows = false;
 
-            root.AddComponent<Projectile>().Bind(trail);
+            Projectile projectile = root.AddComponent<Projectile>();
+            projectile.Bind(trail);
+            projectile.Element = element;
 
-            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, MotePrefabPath);
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
-            report.AppendLine("Generated projectile prefab 'ArcaneMote'.");
+            report.AppendLine($"Generated projectile prefab '{prefabName}'.");
             return prefab.GetComponent<Projectile>();
         }
 
         private MeleeStrikeDefinition EnsureStrike(string path, string displayName, float damage, float reach, float arc,
-            PooledObject impact)
+            PooledObject impact, EffectPayload effects)
         {
             var existing = AssetDatabase.LoadAssetAtPath<MeleeStrikeDefinition>(path);
             if (existing != null)
@@ -210,6 +272,16 @@ namespace Threefold.EditorTools
                     report.AppendLine($"Reconnected '{displayName}' to its regenerated effect.");
                 }
 
+                // A strike generated before LM-06 carries no effect. It is given its force for objects once;
+                // after that its effects are left to tuning, even if set back to nothing.
+                if (!existing.EffectsConfigured)
+                {
+                    Undo.RecordObject(existing, "Enemy Assets");
+                    existing.ConfigureEffects(effects);
+                    EditorUtility.SetDirty(existing);
+                    report.AppendLine($"Gave '{displayName}' its force against objects ({effects.force:0.#}).");
+                }
+
                 return existing;
             }
 
@@ -218,6 +290,7 @@ namespace Threefold.EditorTools
             // No mana and no cooldown: the enemy's own pacing decides when it attacks.
             strike.ConfigureAbility(displayName, 0f, 0f);
             strike.ConfigureStrike(damage, reach, arc, impact);
+            strike.ConfigureEffects(effects);
             AssetDatabase.CreateAsset(strike, path);
             report.AppendLine($"Generated ability '{displayName}' ({damage:0} damage, {reach:0.#} m, {arc:0} degrees).");
             return strike;
@@ -235,6 +308,15 @@ namespace Threefold.EditorTools
                     report.AppendLine("Reconnected 'Arcane Mote' to its regenerated prefabs.");
                 }
 
+                // Generated before LM-06: designated as deflectable once, then left to tuning.
+                if (!existing.DeflectionConfigured)
+                {
+                    Undo.RecordObject(existing, "Enemy Assets");
+                    existing.ConfigureDeflection(EnemyArchetypes.MoteDeflection);
+                    EditorUtility.SetDirty(existing);
+                    report.AppendLine("Made the Arcane Mote deflectable: the Aegis guard and Aegis attacks can turn it aside.");
+                }
+
                 return existing;
             }
 
@@ -244,8 +326,37 @@ namespace Threefold.EditorTools
             // Slow enough to sidestep at 10 m: it takes about 0.8 s to arrive.
             spell.ConfigureProjectile(mote, impact, 12f, 13f, 22f, 0.22f);
             spell.ConfigureLimits(16, 6f);
+            spell.ConfigureDeflection(EnemyArchetypes.MoteDeflection);
             AssetDatabase.CreateAsset(spell, MoteSpellPath);
             report.AppendLine("Generated ability 'Arcane Mote' (12 damage, 13 m/s).");
+            return spell;
+        }
+
+        private ProjectileSpellDefinition EnsureCinderSpell(Projectile mote, PooledObject impact)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<ProjectileSpellDefinition>(CinderMoteSpellPath);
+            if (existing != null)
+            {
+                if (existing.ProjectilePrefab == null || existing.ImpactEffectPrefab == null)
+                {
+                    existing.ConfigureProjectile(mote, impact, existing.Damage, existing.Speed, existing.MaxRange, existing.Radius);
+                    EditorUtility.SetDirty(existing);
+                    report.AppendLine("Reconnected 'Cinder Mote' to its regenerated prefabs.");
+                }
+
+                return existing;
+            }
+
+            var spell = ScriptableObject.CreateInstance<ProjectileSpellDefinition>();
+            spell.ConfigureAbility("Cinder Mote", 0f, 0f);
+            spell.ConfigureProjectile(mote, impact, EnemyArchetypes.CinderMoteDamage, EnemyArchetypes.CinderMoteSpeed,
+                EnemyArchetypes.CinderMoteRange, EnemyArchetypes.CinderMoteRadius);
+            spell.ConfigureLimits(16, 6f);
+            spell.ConfigureEffects(EnemyArchetypes.CinderMoteEffects);
+            spell.ConfigureDeflection(EnemyArchetypes.MoteDeflection);
+            AssetDatabase.CreateAsset(spell, CinderMoteSpellPath);
+            report.AppendLine($"Generated ability 'Cinder Mote' ({EnemyArchetypes.CinderMoteDamage:0} damage, " +
+                              $"{EnemyArchetypes.CinderMoteEffects.heat:0} heat, deflectable).");
             return spell;
         }
 
@@ -255,6 +366,20 @@ namespace Threefold.EditorTools
             if (existing != null)
             {
                 FillReactionsToDisciplines(existing, displayName, tuning);
+
+                // Generated before LM-06: given its stagger by force, armour and ward once, from its archetype.
+                if (existing.DataVersion < EnemyArchetypes.DataVersion)
+                {
+                    Undo.RecordObject(existing, "Enemy Assets");
+                }
+
+                if (existing.Upgrade(tuning))
+                {
+                    EditorUtility.SetDirty(existing);
+                    report.AppendLine($"Updated '{displayName}' with how it answers the combinations (stagger by force, " +
+                                      "armour, ward where it has them). Its other values were kept.");
+                }
+
                 return existing;
             }
 
@@ -382,15 +507,21 @@ namespace Threefold.EditorTools
         /// </summary>
         private GameObject EnsureWispPrefab(Materials m, ProjectileSpellDefinition moteSpell, PooledObject defeatEffect)
         {
-            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(WispPrefabPath);
+            return EnsureWispPrefab(WispPrefabPath, "ArcaneWisp", WispDefinition, m, moteSpell, defeatEffect, false);
+        }
+
+        private GameObject EnsureWispPrefab(string path, string prefabName, EnemyDefinition definition, Materials m,
+            ProjectileSpellDefinition moteSpell, PooledObject defeatEffect, bool fiery)
+        {
+            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (existing != null)
             {
                 return existing;
             }
 
-            EnemyTuning tuning = WispDefinition.Tuning;
+            EnemyTuning tuning = definition.Tuning;
             const float hover = 1.6f;
-            var root = new GameObject("ArcaneWisp");
+            var root = new GameObject(prefabName);
 
             SphereCollider sphere = root.AddComponent<SphereCollider>();
             sphere.center = new Vector3(0f, hover, 0f);
@@ -431,12 +562,93 @@ namespace Threefold.EditorTools
 
             FinishEnemy(root, health, agent, visual, body.transform, null, null, orbit.transform, alertCue, eyes, castPoint,
                 new Collider[] { sphere }, defeatEffect, m, EnemyPresentation.MotionStyle.Floating, hover + 0.75f,
-                WispDefinition, new AbilityDefinition[] { moteSpell }, 0.7f, true);
+                definition, new AbilityDefinition[] { moteSpell }, 0.7f, true);
 
-            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, WispPrefabPath);
+            if (fiery && root.TryGetComponent(out EnemyTelegraph telegraph))
+            {
+                telegraph.SetColors(new Color(1f, 0.6f, 0.25f, 0.18f), new Color(1f, 0.45f, 0.15f, 0.4f),
+                    new Color(1f, 0.35f, 0.1f, 0.6f), CinderCoreColor);
+            }
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
-            report.AppendLine("Generated enemy prefab 'ArcaneWisp'.");
+            report.AppendLine($"Generated enemy prefab '{prefabName}'.");
             return prefab;
+        }
+
+        /// <summary>
+        /// Gives an enemy prefab what shows its defences, whether it was just generated or exists from an
+        /// earlier sprint: stone plates with cracks for armour, a pale shell for a ward, and the component
+        /// that shows them. Parts already there are kept; a prefab that has the component is left alone.
+        /// </summary>
+        private void EnsureDefenceVisuals(string path, Material plate, Material crack, Material shell)
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null || asset.GetComponent<CreatureStateVisuals>() != null)
+            {
+                return;
+            }
+
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                EnemyController controller = root.GetComponent<EnemyController>();
+                Transform body = root.transform.Find("Visual/Body");
+                if (controller == null || body == null)
+                {
+                    report.AppendLine($"WARNING: '{asset.name}' has no enemy body to show its defences on; skipped.");
+                    return;
+                }
+
+                var plates = new System.Collections.Generic.List<GameObject>();
+                var cracks = new System.Collections.Generic.List<GameObject>();
+                if (plate != null && crack != null)
+                {
+                    AddPlate(body.Find("ArmLeft"), PauldronLeftName, new Vector3(0f, 0.08f, 0f), new Vector3(0.52f, 0.22f, 0.62f),
+                        plate, crack, plates, cracks);
+                    AddPlate(body.Find("ArmRight"), PauldronRightName, new Vector3(0f, 0.08f, 0f), new Vector3(0.52f, 0.22f, 0.62f),
+                        plate, crack, plates, cracks);
+                    AddPlate(body, FauldsName, new Vector3(0f, 0.95f, 0.33f), new Vector3(0.95f, 0.45f, 0.06f), plate, crack,
+                        plates, cracks);
+                }
+
+                GameObject wardShell = null;
+                if (shell != null)
+                {
+                    wardShell = CreatePart(PrimitiveType.Sphere, WardShellName, body, new Vector3(0f, 1.6f, 0f),
+                        new Vector3(1.5f, 1.5f, 1.5f), shell);
+                    Renderer shellRenderer = wardShell.GetComponent<Renderer>();
+                    shellRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                    shellRenderer.receiveShadows = false;
+                }
+
+                root.AddComponent<CreatureStateVisuals>().Bind(controller, wardShell, plates.ToArray(), cracks.ToArray());
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                report.AppendLine($"Gave '{asset.name}' the look of its defences" +
+                                  (plates.Count > 0 ? " (stone plates that crack and fall away)." :
+                                      wardShell != null ? " (a pale ward shell while the ward holds)." : " (none to show)."));
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        private static void AddPlate(Transform parent, string name, Vector3 position, Vector3 scale, Material plate,
+            Material crack, System.Collections.Generic.List<GameObject> plates, System.Collections.Generic.List<GameObject> cracks)
+        {
+            if (parent == null || parent.Find(name) != null)
+            {
+                return;
+            }
+
+            GameObject part = CreatePart(PrimitiveType.Cube, name, parent, position, scale, plate);
+            GameObject line = CreatePart(PrimitiveType.Cube, CrackName, part.transform, new Vector3(0.1f, 0f, 0.52f),
+                new Vector3(0.7f, 0.12f, 0.05f), crack);
+            line.transform.localRotation = Quaternion.Euler(0f, 0f, 24f);
+            line.SetActive(false);
+            plates.Add(part);
+            cracks.Add(line);
         }
 
         private static NavMeshAgent AddAgent(GameObject root, float radius, float height, EnemyTuning tuning,

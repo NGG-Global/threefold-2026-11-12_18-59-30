@@ -82,6 +82,10 @@ namespace Threefold.WorldMagic
         [Tooltip("Layers that stop a pushed object.")]
         [SerializeField] private LayerMask obstacleLayers = Physics.DefaultRaycastLayers;
 
+        [Header("Weight")]
+        [Tooltip("Optional. Counts the creatures standing on the object, for an object that weight brings down.")]
+        [SerializeField] private LoadZone loadZone;
+
         [Header("Feedback hooks")]
         [SerializeField] private UnityEvent onDestroyed = new UnityEvent();
 
@@ -110,6 +114,11 @@ namespace Threefold.WorldMagic
         /// off. Whoever shows the state looks at it afresh; nothing that already happened is played again.
         /// </summary>
         public event Action<MagicalObject, StateReset> Restored;
+
+        /// <summary>Raised when the number of creatures standing on the object changes. Whoever shows the state looks again.</summary>
+        public event Action<MagicalObject> LoadChanged;
+
+        public LoadZone LoadZone => loadZone;
 
         public MagicalObjectDefinition Definition => definition;
 
@@ -267,6 +276,35 @@ namespace Threefold.WorldMagic
         }
 
         /// <summary>
+        /// Says how many creatures stand on the object. Weight bears only on an unstable object whose
+        /// stability says so; to anything else this means nothing. Called by its <see cref="LoadZone"/>.
+        /// </summary>
+        public void SetOccupants(int count)
+        {
+            EnsureProperties();
+
+            // The count is kept even while the object is switched off, so it is right when it comes back.
+            if (properties == null || !properties.SetOccupants(count) || !IsSwitchedOn)
+            {
+                return;
+            }
+
+            SendReactions();
+            LoadChanged?.Invoke(this);
+
+            if (!properties.IsAtRest && !awake)
+            {
+                awake = WorldSimulation.Wake(this);
+            }
+        }
+
+        /// <summary>Connects the zone that measures weight on the object. Called by the setup tooling.</summary>
+        public void BindLoadZone(LoadZone zone)
+        {
+            loadZone = zone;
+        }
+
+        /// <summary>
         /// One step of time, given by the world simulation while something on the object is changing.
         /// Not for anyone else to call.
         /// </summary>
@@ -276,6 +314,12 @@ namespace Threefold.WorldMagic
             {
                 awake = false;
                 return;
+            }
+
+            // Someone may have left without the physics engine saying so; weight is counted afresh.
+            if (loadZone != null && properties.Stability != null && properties.Stability.Occupants > 0)
+            {
+                loadZone.Recount();
             }
 
             awake = true;

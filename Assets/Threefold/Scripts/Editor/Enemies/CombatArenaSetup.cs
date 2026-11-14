@@ -513,7 +513,7 @@ namespace Threefold.EditorTools
             return route;
         }
 
-        private static EnemyDirector EnsureDirector(Scene scene, GameObject mage, EnemyAssets enemyAssets, StringBuilder report)
+        internal static EnemyDirector EnsureDirector(Scene scene, GameObject mage, EnemyAssets enemyAssets, StringBuilder report)
         {
             EnemyDirector director = FindInScene<EnemyDirector>(scene);
             if (director == null)

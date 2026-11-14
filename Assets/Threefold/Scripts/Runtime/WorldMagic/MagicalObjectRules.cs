@@ -125,6 +125,21 @@ namespace Threefold.WorldMagic
                     {
                         problems.Add("kinetic: the range it may move within must be above 0.");
                     }
+
+                    // A part held by a mechanism must be one the object can ever release.
+                    PropertyCondition unlock = kinetic.movableOnlyWhen;
+                    if ((unlock & MagicalPropertySet.KineticConditions) != 0)
+                    {
+                        problems.Add("kinetic: 'movable only when' names the movement itself (Moving, At Travel Limit), " +
+                                     "which cannot unlock it. Name a state of another property, such as Activated.");
+                    }
+
+                    PropertyCondition releasable = unlock & ~MagicalPropertySet.KineticConditions;
+                    if (releasable != PropertyCondition.None && (releasable & Reachable(settings)) == 0)
+                    {
+                        problems.Add($"kinetic: it moves only when '{releasable}', which the object can never reach with its " +
+                                     "properties, so nothing ever moves it.");
+                    }
                 }
             }
 
@@ -175,6 +190,11 @@ namespace Threefold.WorldMagic
                     if (stability.maxBraceSeconds <= 0f || stability.braceSeconds <= 0f)
                     {
                         problems.Add("stability: brace times must be above 0, or it can never be braced.");
+                    }
+
+                    if (stability.loadStressPerSecond > 0f && stability.stressLimit <= 0f)
+                    {
+                        problems.Add("stability: weight adds stress, but the stress limit is 0, so weight can never bring it down.");
                     }
                 }
             }
@@ -396,6 +416,10 @@ namespace Threefold.WorldMagic
             if (settings.stability)
             {
                 reachable |= PropertyCondition.Unstable | PropertyCondition.Braced | PropertyCondition.Collapsed;
+                if (settings.stabilitySettings != null && settings.stabilitySettings.loadStressPerSecond > 0f)
+                {
+                    reachable |= PropertyCondition.Loaded;
+                }
             }
 
             return reachable;

@@ -31,7 +31,7 @@ namespace Threefold.EditorTools
     /// tuned values are not lost. To regenerate with defaults, delete the folder
     /// Assets/Threefold/Generated/WorldMagic.
     /// </summary>
-    public static class MagicalObjectSetup
+    public static partial class MagicalObjectSetup
     {
         private const string MenuPath = "Threefold/Setup/Magical Objects";
         private const string MakeMenuPath = "Threefold/World Magic/Make Selection Magical";

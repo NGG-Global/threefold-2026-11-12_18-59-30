@@ -293,9 +293,42 @@ namespace Threefold.CombatFeedback
                     break;
 
                 case StatusKind.Pushed:
+                case StatusKind.Knocked:
+                case StatusKind.ArmourCracked:
                     if (pushEffect != null)
                     {
                         Pools.Spawn(pushEffect, status.Point, Quaternion.identity, MaxStatusEffects);
+                    }
+
+                    break;
+
+                // The combinations of LM-06: a turned shot, armour breaking, a ward giving way or forming
+                // again. Each is marked where it happens, so no change of state goes unseen.
+                case StatusKind.Deflected:
+                case StatusKind.WardDisrupted:
+                case StatusKind.WardRestored:
+                    if (guardEffect != null)
+                    {
+                        Pools.Spawn(guardEffect, status.Point, Quaternion.identity, MaxStatusEffects);
+                    }
+
+                    if (status.Kind == StatusKind.Deflected && cameraRig != null && combat != null &&
+                        status.Target == combat.gameObject)
+                    {
+                        cameraRig.AddTrauma(blockTrauma);
+                    }
+
+                    break;
+
+                case StatusKind.ArmourBroken:
+                    if (pushEffect != null)
+                    {
+                        Pools.Spawn(pushEffect, status.Point, Quaternion.identity, MaxStatusEffects);
+                    }
+
+                    if (guardEffect != null)
+                    {
+                        Pools.Spawn(guardEffect, status.Point, Quaternion.identity, MaxStatusEffects);
                     }
 
                     break;
