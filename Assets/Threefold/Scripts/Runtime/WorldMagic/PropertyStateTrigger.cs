@@ -22,6 +22,7 @@ namespace Threefold.WorldMagic
         [SerializeField] private bool latch;
 
         private MagicalObject subscribed;
+        private bool started;
 
         public MagicalObject Source => source;
         public PropertyCondition ActiveWhen => activeWhen;
@@ -61,7 +62,22 @@ namespace Threefold.WorldMagic
                 subscribed.Restored += HandleRestored;
             }
 
-            Evaluate();
+            if (started)
+            {
+                Evaluate();
+            }
+            else
+            {
+                // The state the scene starts in, perhaps a saved one: a lock opened in an earlier session
+                // is simply open. Nothing is announced, so nothing rumbles or chimes again.
+                bool holds = source != null && source.Meets(activeWhen);
+                SetElementActiveSilently(Decide(holds, IsActive, latch));
+            }
+        }
+
+        private void Start()
+        {
+            started = true;
         }
 
         private void OnDisable()

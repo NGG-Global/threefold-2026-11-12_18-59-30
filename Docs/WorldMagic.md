@@ -206,6 +206,9 @@ of an ordinary `PuzzleDoor`.
 `MagicalObject` also has an **On Destroyed** Unity Event and C# events for every change of state
 and every effect received.
 
+Since LM-04 a definition also says what is saved, what the object sets off in others, and what
+happens to it while it is switched off; see `Docs/WorldState.md`.
+
 ## Set up
 
 1. Pull `main` on the laptop and let Unity import. The Console must show no red errors.
@@ -278,10 +281,10 @@ at the end of the setup commands. It reports:
 - **Event-driven.** Nothing looks for objects each frame. An effect reaches an object only when
   an attack's own physics query (the one it already makes to find targets) or a projectile's
   impact finds its collider.
-- **Asleep by default.** A `MagicalObject` is switched off while at rest, so it has no update at
-  all. It wakes when an effect arrives and sleeps again once it has cooled, drained, stopped
-  moving and is no longer braced. `PropertyStateVisuals` sleeps the same way, except while an
-  unstable object sways.
+- **No update per object.** Since LM-04 a `MagicalObject` has no update of its own. While
+  something on it is changing it is advanced by the one world simulation, and at rest it costs
+  nothing (`Docs/WorldState.md`). `PropertyStateVisuals` has an update only while there is
+  something to show changing, or an unstable object in view sways.
 - **No Rigidbody is required.** Pushed objects are moved by their transform and stopped by one
   box sweep per push. The example parts that move carry a kinematic Rigidbody, as the puzzle
   doors do, so that physics treats their colliders as moving; the magic does not depend on it.
@@ -367,10 +370,9 @@ the setup command until the Unity job runs.
   something that itself moves.
 - Collapse is a pose the object moves into. Nothing is thrown, and a collapsing object does not
   hurt what it lands on.
-- Fire does not spread from one object to another, and a burning object does not heat creatures
-  next to it.
-- An object's state is not saved between sessions, except through a latched trigger with a
-  persistence key (`Docs/Puzzles.md`).
+- Since LM-04 fire spreads, and objects act on each other, only through the reaction rules in
+  their definitions, within fixed limits; and what is meant to last is saved
+  (`Docs/WorldState.md`).
 - Enemies do not use effects against objects on purpose; an enemy's fire bolt would heat a
   barricade it happens to hit.
 - Aim assist draws the Arcane Arrow to an arcane-reactive object that is not yet activated, the

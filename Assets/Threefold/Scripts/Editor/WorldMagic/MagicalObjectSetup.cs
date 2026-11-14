@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Threefold.Characters;
+using Threefold.Persistence;
 using Threefold.Pooling;
 using Threefold.Puzzles;
 using Threefold.WorldMagic;
@@ -37,7 +38,12 @@ namespace Threefold.EditorTools
         internal const string Folder = "Assets/Threefold/Generated/WorldMagic";
         internal const string GroupName = "MagicalObjects";
         internal const string GateInstanceName = "Crystal Gate";
+        internal const string ChainInstanceName = "Chain Barricade";
         private const string GatePrefabPath = Folder + "/CrystalGate.prefab";
+        private const string AssignIdsMenuPath = "Threefold/World Magic/Assign Persistent Ids";
+
+        /// <summary>How many barricades stand in the chain-reaction row: one more than a fire can reach.</summary>
+        internal const int ChainRowCount = 5;
 
         private static readonly Color StoneColor = new Color(0.45f, 0.44f, 0.42f, 1f);
         private static readonly Color PaleStoneColor = new Color(0.66f, 0.63f, 0.58f, 1f);
@@ -82,6 +88,16 @@ namespace Threefold.EditorTools
 
         /// <summary>The gate the crystal opens stands behind it.</summary>
         internal static readonly ExamplePlacement GatePlacement = new ExamplePlacement(new Vector3(-2.6f, 0f, 0f), 90f);
+
+        /// <summary>
+        /// A row of barricades behind the lane, each within reach of the next one's fire and of no
+        /// other. Lighting the first shows a chain reaction and where the depth limit ends it: with
+        /// the default limit of three, the fifth stays unlit.
+        /// </summary>
+        internal static ExamplePlacement ChainPlacement(int index)
+        {
+            return new ExamplePlacement(new Vector3(-3.8f, 0f, 4f + index * 3.2f), 90f);
+        }
 
         /// <summary>The lane in the Discipline Range: along the left edge of its floor.</summary>
         internal static readonly Vector3 RangeLaneOrigin = new Vector3(-8.5f, 0f, -5f);
@@ -388,6 +404,15 @@ namespace Threefold.EditorTools
             var definition = AssetDatabase.LoadAssetAtPath<MagicalObjectDefinition>(path);
             if (definition != null)
             {
+                // A definition generated before LM-04 is given, once, what that sprint added: what is
+                // saved and its reactions. Those values did not exist before; every other value is kept.
+                if (definition.Upgrade(WorldMagicDefaults.Settings(example)))
+                {
+                    EditorUtility.SetDirty(definition);
+                    report.AppendLine($"Updated definition '{WorldMagicDefaults.Name(example)}' with what is saved and how " +
+                                      "it reacts. Its other values were kept.");
+                }
+
                 return definition;
             }
 
@@ -847,10 +872,176 @@ namespace Threefold.EditorTools
                 report.AppendLine("Connected the crystal gate to the arcane crystal: it is open while the crystal is activated.");
             }
 
+            // The chain-reaction row: the same barricade, five times. They have no identifier, so a
+            // restart brings them back and the chain can be tried again.
+            GameObject barricadePrefab = assets.Prefabs[(int)ExampleObject.WoodenBarricade];
+            for (int i = 0; i < ChainRowCount && barricadePrefab != null; i++)
+            {
+                string instanceName = $"{ChainInstanceName} {i + 1}";
+                if (group.transform.Find(instanceName) == null)
+                {
+                    PlaceInGroup(barricadePrefab, group.transform, instanceName, ChainPlacement(i));
+                    placed++;
+                }
+            }
+
+            // The six examples keep what their definitions name, under an identifier of their own.
+            int identified = 0;
+            MagicalObject doorObject = null;
+            for (int i = 0; i < WorldMagicDefaults.Count; i++)
+            {
+                var example = (ExampleObject)i;
+                Transform instance = group.transform.Find(WorldMagicDefaults.Name(example));
+                if (instance == null || !instance.TryGetComponent(out MagicalObject magical))
+                {
+                    continue;
+                }
+
+                if (example == ExampleObject.ReinforcedDoor)
+                {
+                    doorObject = magical;
+                }
+
+                bool keepsSomething = magical.Definition != null && magical.Definition.Properties.persisted != PersistedState.None;
+                if (keepsSomething && string.IsNullOrEmpty(magical.PersistentId))
+                {
+                    Undo.RecordObject(magical, DialogTitle);
+                    magical.FillPersistentId(MakePersistentId(scene, instance.name));
+                    MarkChanged(magical);
+                    identified++;
+                }
+            }
+
+            if (identified > 0)
+            {
+                report.AppendLine($"Gave {identified} example object(s) a persistent id: what their definitions name is saved.");
+            }
+
+            // The crystal feeds the door's lock: activating it gives the lock a head start.
+            if (crystal != null && doorObject != null && crystal.LinkedTargetCount == 0)
+            {
+                Undo.RecordObject(crystal, DialogTitle);
+                crystal.FillLinkedTargets(new[] { doorObject.gameObject });
+                MarkChanged(crystal);
+                report.AppendLine("Linked the arcane crystal to the reinforced door: when it activates, it charges the door's lock.");
+            }
+
+            // The budgets of the world simulation, where they can be tuned for this scene.
+            if (group.GetComponent<WorldSimulationBudgets>() == null)
+            {
+                Undo.AddComponent<WorldSimulationBudgets>(group);
+                report.AppendLine($"Added the world simulation budgets to '{GroupName}' (provisional values).");
+            }
+
             report.AppendLine(placed > 0
                 ? $"Placed {placed} example object(s) in '{GroupName}'."
                 : $"Kept the example objects in '{GroupName}'.");
             return group;
+        }
+
+        /// <summary>An identifier from the scene and the object's name: readable, and stable as long as neither is renamed.</summary>
+        internal static string MakePersistentId(Scene scene, string objectName)
+        {
+            string sceneName = string.IsNullOrEmpty(scene.name) ? "Scene" : scene.name;
+            return sceneName + "/" + objectName;
+        }
+
+        // -------------------------------------------------------- identifiers
+
+        /// <summary>
+        /// Gives every selected magical object that has none a persistent id, or, with nothing
+        /// selected, every magical object in the open scene whose definition keeps something. Ids that
+        /// exist are never changed: changing one would orphan what was saved under it.
+        /// </summary>
+        [MenuItem(AssignIdsMenuPath, false, 61)]
+        public static void AssignPersistentIds()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            var targets = new List<MagicalObject>();
+            foreach (GameObject selected in Selection.gameObjects)
+            {
+                if (!EditorUtility.IsPersistent(selected) && selected.TryGetComponent(out MagicalObject magical))
+                {
+                    targets.Add(magical);
+                }
+            }
+
+            bool fromSelection = targets.Count > 0;
+            if (!fromSelection)
+            {
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    foreach (MagicalObject magical in root.GetComponentsInChildren<MagicalObject>(true))
+                    {
+                        if (magical.Definition != null && magical.Definition.Properties.persisted != PersistedState.None)
+                        {
+                            targets.Add(magical);
+                        }
+                    }
+                }
+            }
+
+            var report = new StringBuilder();
+            int assigned = AssignPersistentIds(scene, targets, report);
+            if (assigned > 0)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+            }
+
+            string summary = assigned > 0
+                ? report.ToString().TrimEnd() + "\n\nSave the scene with Ctrl+S."
+                : fromSelection
+                    ? "Every selected magical object already has a persistent id."
+                    : "Every magical object in the scene that keeps something already has a persistent id.";
+            Debug.Log($"[Threefold] Assign Persistent Ids.\n{summary}");
+            EditorUtility.DisplayDialog(DialogTitle, summary, "OK");
+        }
+
+        [MenuItem(AssignIdsMenuPath, true)]
+        private static bool CanAssignPersistentIds()
+        {
+            return !EditorApplication.isPlayingOrWillChangePlaymode;
+        }
+
+        /// <summary>Fills empty ids so that every id in the scene is unique. Returns how many were assigned.</summary>
+        internal static int AssignPersistentIds(Scene scene, List<MagicalObject> targets, StringBuilder report)
+        {
+            var taken = new HashSet<string>();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                foreach (MagicalObject magical in root.GetComponentsInChildren<MagicalObject>(true))
+                {
+                    if (!string.IsNullOrEmpty(magical.PersistentId))
+                    {
+                        taken.Add(magical.PersistentId);
+                    }
+                }
+            }
+
+            int assigned = 0;
+            foreach (MagicalObject magical in targets)
+            {
+                if (magical == null || !string.IsNullOrEmpty(magical.PersistentId))
+                {
+                    continue;
+                }
+
+                string wanted = MakePersistentId(scene, magical.name);
+                string id = wanted;
+                for (int suffix = 2; taken.Contains(id); suffix++)
+                {
+                    id = $"{wanted} ({suffix})";
+                }
+
+                Undo.RecordObject(magical, DialogTitle);
+                magical.FillPersistentId(id);
+                MarkChanged(magical);
+                taken.Add(id);
+                assigned++;
+                report.AppendLine($"'{magical.name}': {id}");
+            }
+
+            return assigned;
         }
 
         private static GameObject PlaceInGroup(GameObject prefab, Transform group, string instanceName, ExamplePlacement placement)

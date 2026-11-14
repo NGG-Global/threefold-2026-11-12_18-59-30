@@ -1,4 +1,5 @@
 using Threefold.Combat;
+using Threefold.Persistence;
 using UnityEngine;
 
 namespace Threefold.WorldMagic
@@ -25,6 +26,30 @@ namespace Threefold.WorldMagic
     public static class WorldMagicDefaults
     {
         public static int Count => 6;
+
+        /// <summary>
+        /// The version of the values a newly generated example definition holds. Version 1 (Sprint
+        /// LM-04) added what is saved, what happens while the object is switched off, and its reactions.
+        /// </summary>
+        public const int DataVersion = 1;
+
+        /// <summary>
+        /// Gives settings generated before version 1 what that version introduced, taken from the
+        /// defaults of the same example. Those values did not exist before, so nothing tuned is lost;
+        /// every other value is left alone.
+        /// </summary>
+        public static void FillWorldState(MagicalPropertySettings settings, MagicalPropertySettings defaults)
+        {
+            if (settings == null || defaults == null)
+            {
+                return;
+            }
+
+            settings.persisted = defaults.persisted;
+            settings.whenInactive = defaults.whenInactive;
+            settings.critical = defaults.critical;
+            settings.emissions = defaults.emissions ?? new ReactionEmission[0];
+        }
 
         public static string Name(ExampleObject example)
         {
@@ -93,6 +118,20 @@ namespace Threefold.WorldMagic
                     activationThreshold = 100f, decayDelay = 2f, decayPerSecond = 15f,
                     activation = ArcaneActivation.Timed, activeSeconds = 10f,
                 },
+
+                // Its activation lasts ten seconds: temporary by nature, so nothing of it is saved. It is a
+                // mechanism, so it is always simulated, and what it sends on is never dropped.
+                persisted = PersistedState.None,
+                critical = true,
+                emissions = new[]
+                {
+                    new ReactionEmission
+                    {
+                        when = PropertyCondition.Activated, timing = EmissionTiming.OnEnter, effect = MagicEffectKind.ArcaneCharge,
+                        magnitude = 75f, radius = 0f, toLinkedTargets = true, targets = EffectTargets.Objects,
+                        priority = ReactionPriority.Critical,
+                    },
+                },
             };
         }
 
@@ -116,6 +155,19 @@ namespace Threefold.WorldMagic
                 {
                     integrity = 60f, weakenedFraction = 0.6f, fracturedFraction = 0.25f,
                     forceThreshold = 1f, forceDamage = 10f, brittleness = 1f, burnDamagePerSecond = 12f,
+                },
+
+                // A barrier that has burnt down or been broken stays gone. While it burns it heats what
+                // stands within reach, once a second: this is how fire spreads, and the only way.
+                persisted = PersistedState.Destruction,
+                emissions = new[]
+                {
+                    new ReactionEmission
+                    {
+                        when = PropertyCondition.Burning, timing = EmissionTiming.WhileHolding, interval = 1f,
+                        effect = MagicEffectKind.Heat, magnitude = 18f, radius = 2.6f, targets = EffectTargets.All,
+                        priority = ReactionPriority.Normal,
+                    },
                 },
             };
         }
@@ -141,6 +193,18 @@ namespace Threefold.WorldMagic
                     integrity = 100f, weakenedFraction = 0.6f, fracturedFraction = 0.25f,
                     forceThreshold = 1.5f, forceDamage = 4f, brittleness = 0.25f, heatedBrittleness = 8f,
                 },
+
+                // Shattered stays shattered. The burst of fragments gives what is near a light shove: of
+                // low priority, the first thing to be left out when there is too much to do.
+                persisted = PersistedState.Destruction,
+                emissions = new[]
+                {
+                    new ReactionEmission
+                    {
+                        when = PropertyCondition.Destroyed, timing = EmissionTiming.OnEnter, effect = MagicEffectKind.Force,
+                        magnitude = 2f, radius = 2.5f, targets = EffectTargets.All, priority = ReactionPriority.Low,
+                    },
+                },
             };
         }
 
@@ -158,6 +222,9 @@ namespace Threefold.WorldMagic
                     resistance = 0.2f, minimumForce = 1.5f, mode = KineticMode.Axis, localAxis = Vector3.forward,
                     minTravel = 0f, maxTravel = 6f, maxStepPerPush = 4f, moveSpeed = 4f,
                 },
+
+                // Where it was left is where it is found.
+                persisted = PersistedState.Position,
             };
         }
 
@@ -183,6 +250,18 @@ namespace Threefold.WorldMagic
                     integrity = 80f, weakenedFraction = 0.6f, fracturedFraction = 0.25f,
                     forceThreshold = 1f, forceDamage = 8f, brittleness = 1f,
                 },
+
+                // Once down it stays down. Coming down, it shoves what stands around it hard enough to
+                // topple another structure like itself: a chain, which the depth limit ends.
+                persisted = PersistedState.Collapse,
+                emissions = new[]
+                {
+                    new ReactionEmission
+                    {
+                        when = PropertyCondition.Collapsed, timing = EmissionTiming.OnEnter, effect = MagicEffectKind.Force,
+                        magnitude = 3.5f, radius = 3.5f, targets = EffectTargets.All, priority = ReactionPriority.Normal,
+                    },
+                },
             };
         }
 
@@ -206,6 +285,11 @@ namespace Threefold.WorldMagic
                 {
                     activationThreshold = 150f, decayDelay = 3f, decayPerSecond = 10f, activation = ArcaneActivation.Latch,
                 },
+
+                // A door that was opened or broken through stays so, and the damage done to it is kept.
+                // The charge on its lock is temporary and is lost on a reload, like any other.
+                persisted = PersistedState.Destruction | PersistedState.Damage | PersistedState.Activation,
+                critical = true,
             };
         }
     }

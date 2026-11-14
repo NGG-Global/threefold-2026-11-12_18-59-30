@@ -2,6 +2,7 @@ using System;
 using Threefold.Cameras;
 using Threefold.Characters;
 using Threefold.Combat;
+using Threefold.Persistence;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -108,7 +109,21 @@ namespace Threefold.Objectives
                 objective.ResetProgress();
             }
 
+            // The world takes its saved state again: what is persistent stays as it is, and everything
+            // temporary (heat, charge, braces, a glide) is reset.
+            WorldState.ReloadWorld();
+
             Restarted?.Invoke();
+        }
+
+        /// <summary>
+        /// Forgets everything that was saved about the world, on disk as well, and starts a new
+        /// attempt: solved puzzles are unsolved, opened gates closed, destroyed barriers whole.
+        /// </summary>
+        public void NewGame()
+        {
+            WorldState.NewGame();
+            Restart();
         }
 
         private void Awake()

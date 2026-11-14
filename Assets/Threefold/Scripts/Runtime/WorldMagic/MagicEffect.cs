@@ -91,9 +91,17 @@ namespace Threefold.WorldMagic
         /// </summary>
         public readonly int EventId;
 
+        /// <summary>
+        /// How far the effect is from what the player did. 0: delivered by an attack. 1: sent out by
+        /// an object that an attack changed. 2: by an object that was changed by such an effect, and
+        /// so on. Chain reactions stop at a set depth (see ReactionScheduler).
+        /// </summary>
+        public readonly int Depth;
+
         public MagicEffect(MagicEffectKind kind, float magnitude, Vector3 direction, float duration, Vector3 point,
-            GameObject source, int discipline, EffectTargets targets, int eventId)
+            GameObject source, int discipline, EffectTargets targets, int eventId, int depth = 0)
         {
+            Depth = depth < 0 ? 0 : depth;
             Kind = kind;
             Magnitude = magnitude;
             Direction = direction;

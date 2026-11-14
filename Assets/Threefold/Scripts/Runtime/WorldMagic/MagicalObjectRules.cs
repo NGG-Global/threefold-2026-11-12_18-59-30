@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Threefold.Persistence;
 
 namespace Threefold.WorldMagic
 {
@@ -172,7 +173,162 @@ namespace Threefold.WorldMagic
                 }
             }
 
+            ValidatePersistence(settings, problems);
+            ValidateEmissions(settings, problems);
+
             return problems.Count - before;
+        }
+
+        /// <summary>
+        /// Parts named to be saved that the object does not have. Only the deliberate choices are
+        /// checked (damage, position and the two exceptions); the standard three are harmless on any object.
+        /// </summary>
+        private static void ValidatePersistence(MagicalPropertySettings settings, List<string> problems)
+        {
+            PersistedState saved = settings.persisted;
+            if ((saved & PersistedState.Damage) != 0 && !settings.structural)
+            {
+                problems.Add("persistence: damage is to be saved, but the object has no structural property.");
+            }
+
+            if ((saved & PersistedState.Position) != 0 && !settings.kinetic)
+            {
+                problems.Add("persistence: the position is to be saved, but the object cannot be moved.");
+            }
+
+            if ((saved & PersistedState.Heat) != 0 && !settings.thermal)
+            {
+                problems.Add("persistence: heat is to be saved, but the object has no thermal property.");
+            }
+
+            if ((saved & PersistedState.Charge) != 0 && !settings.arcane)
+            {
+                problems.Add("persistence: charge is to be saved, but the object has no arcane property.");
+            }
+        }
+
+        /// <summary>Reaction rules that can never fire, reach nothing, or would run for ever.</summary>
+        private static void ValidateEmissions(MagicalPropertySettings settings, List<string> problems)
+        {
+            if (settings.emissions == null)
+            {
+                return;
+            }
+
+            PropertyCondition reachable = Reachable(settings);
+            for (int i = 0; i < settings.emissions.Length; i++)
+            {
+                ReactionEmission rule = settings.emissions[i];
+                string label = $"reaction {i + 1}";
+                if (rule == null)
+                {
+                    problems.Add($"{label}: the entry is empty.");
+                    continue;
+                }
+
+                if (rule.when == PropertyCondition.None)
+                {
+                    problems.Add($"{label}: it has no condition, so it never fires.");
+                }
+                else if ((rule.when & reachable) == 0)
+                {
+                    problems.Add($"{label}: it waits for '{rule.when}', which the object can never reach with its properties.");
+                }
+
+                if (rule.magnitude <= 0f)
+                {
+                    problems.Add($"{label}: its magnitude is 0, so it does nothing.");
+                }
+
+                if (rule.radius <= 0f && !rule.toLinkedTargets)
+                {
+                    problems.Add($"{label}: it has no radius and does not go to linked targets, so it reaches nothing.");
+                }
+
+                if (rule.targets == EffectTargets.None)
+                {
+                    problems.Add($"{label}: it is meant for neither creatures nor objects.");
+                }
+                else if (rule.effect == MagicEffectKind.Stabilize && (rule.targets & EffectTargets.Objects) == 0)
+                {
+                    problems.Add($"{label}: a brace means nothing to creatures; it has to include objects.");
+                }
+
+                if (rule.timing == EmissionTiming.WhileHolding)
+                {
+                    // Only conditions that end by themselves make a sensible repeating reaction.
+                    const PropertyCondition Lasting = PropertyCondition.Weakened | PropertyCondition.Fractured |
+                                                      PropertyCondition.Destroyed | PropertyCondition.Collapsed |
+                                                      PropertyCondition.AtTravelLimit;
+                    if ((rule.when & PropertyCondition.Destroyed) != 0 && (rule.when & ~PropertyCondition.Destroyed) == 0)
+                    {
+                        problems.Add($"{label}: it repeats while the object is destroyed, but a destroyed object sends nothing. Use On Enter.");
+                    }
+                    else if ((rule.when & Lasting) != 0)
+                    {
+                        problems.Add($"{label}: it repeats while '{rule.when & Lasting}' holds, a state that does not end by itself. " +
+                                     "The object would be simulated for good. Use On Enter, or a state that passes.");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// What happens to a state when the world is reloaded, for an object with these settings and an
+        /// identifier: persistent if it is saved, temporary if it is reset. (Immediate things, such as
+        /// an impact or a burst, are events and never states.)
+        /// </summary>
+        public static PersistenceTier TierOf(PropertyCondition condition, MagicalPropertySettings settings)
+        {
+            if (settings == null)
+            {
+                return PersistenceTier.Temporary;
+            }
+
+            PersistedState saved = settings.persisted;
+            bool kept;
+            switch (condition)
+            {
+                case PropertyCondition.Heated:
+                    kept = (saved & PersistedState.Heat) != 0;
+                    break;
+
+                case PropertyCondition.Weakened:
+                case PropertyCondition.Fractured:
+                    kept = (saved & PersistedState.Damage) != 0;
+                    break;
+
+                case PropertyCondition.Destroyed:
+                    kept = (saved & (PersistedState.Destruction | PersistedState.Damage)) != 0;
+                    break;
+
+                case PropertyCondition.Charged:
+                    kept = (saved & PersistedState.Charge) != 0;
+                    break;
+
+                case PropertyCondition.Activated:
+                {
+                    ArcaneActivation mode = settings.arcaneSettings != null ? settings.arcaneSettings.activation : ArcaneActivation.Latch;
+                    kept = ((saved & PersistedState.Activation) != 0 && mode == ArcaneActivation.Latch) ||
+                           ((saved & PersistedState.Charge) != 0 && mode == ArcaneActivation.WhileCharged);
+                    break;
+                }
+
+                case PropertyCondition.AtTravelLimit:
+                    kept = (saved & PersistedState.Position) != 0;
+                    break;
+
+                case PropertyCondition.Collapsed:
+                    kept = (saved & PersistedState.Collapse) != 0;
+                    break;
+
+                default:
+                    // Burning, moving, braced and unstable never outlast a reload.
+                    kept = false;
+                    break;
+            }
+
+            return kept ? PersistenceTier.Persistent : PersistenceTier.Temporary;
         }
 
         /// <summary>True if an object with these settings has a property that this kind of effect acts on.</summary>

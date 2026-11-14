@@ -1,4 +1,5 @@
 using System;
+using Threefold.Combat;
 using UnityEngine;
 
 namespace Threefold.WorldMagic
@@ -156,6 +157,16 @@ namespace Threefold.WorldMagic
         public void Restore()
         {
             Integrity = settings.integrity;
+        }
+
+        /// <summary>Sets the integrity from a saved state, kept within what the structure can hold.</summary>
+        public void SetIntegrity(float value)
+        {
+            Integrity = float.IsNaN(value) ? settings.integrity : Mathf.Clamp(value, 0f, settings.integrity);
+            if (Integrity < 0.0001f)
+            {
+                Integrity = 0f;
+            }
         }
     }
 
@@ -367,6 +378,47 @@ namespace Threefold.WorldMagic
             Offset = Vector3.zero;
             TargetOffset = Vector3.zero;
         }
+
+        /// <summary>Completes a glide at once: the object is where it was going.</summary>
+        public void Finish()
+        {
+            Offset = TargetOffset;
+        }
+
+        /// <summary>
+        /// Puts the object at rest at a saved offset, kept within the limits it has now: on its axis and
+        /// between its stops, or within its range. Limits may have been retuned since the state was saved.
+        /// </summary>
+        public void Place(Vector3 offset, Vector3 axisWorld)
+        {
+            if (float.IsNaN(offset.x) || float.IsNaN(offset.y) || float.IsNaN(offset.z))
+            {
+                offset = Vector3.zero;
+            }
+
+            if (settings.mode == KineticMode.Axis)
+            {
+                if (axisWorld.sqrMagnitude < 0.0001f)
+                {
+                    offset = Vector3.zero;
+                }
+                else
+                {
+                    axisWorld.Normalize();
+                    float travel = Mathf.Clamp(Vector3.Dot(offset, axisWorld), Mathf.Min(settings.minTravel, 0f),
+                        Mathf.Max(settings.maxTravel, 0f));
+                    offset = axisWorld * travel;
+                }
+            }
+            else
+            {
+                offset.y = 0f;
+                offset = Vector3.ClampMagnitude(offset, settings.maxRange);
+            }
+
+            Offset = offset;
+            TargetOffset = offset;
+        }
     }
 
     // ---------------------------------------------------------------- arcane
@@ -418,6 +470,10 @@ namespace Threefold.WorldMagic
         [Tooltip("Timed activation: seconds it stays activated.")]
         [Min(0.1f)]
         public float activeSeconds = 8f;
+
+        [Tooltip("Timed activation: what more charge does while it is activated. Ignore: nothing. Refresh: the " +
+                 "active time starts again. Extend: one active time is added, up to twice the active time in all.")]
+        public StackPolicy activeStacking = StackPolicy.Ignore;
     }
 
     /// <summary>
@@ -468,8 +524,16 @@ namespace Threefold.WorldMagic
 
             if (activated && settings.activation != ArcaneActivation.WhileCharged)
             {
-                // Already switched on; more charge changes nothing.
-                return false;
+                // Already switched on. A latch takes no more; a timed activation may be renewed, by policy.
+                if (settings.activation != ArcaneActivation.Timed || settings.activeStacking == StackPolicy.Ignore)
+                {
+                    return false;
+                }
+
+                activeRemaining = settings.activeStacking == StackPolicy.Refresh
+                    ? settings.activeSeconds
+                    : Mathf.Min(activeRemaining + settings.activeSeconds, settings.activeSeconds * 2f);
+                return true;
             }
 
             sinceLastCharge = 0f;
@@ -528,6 +592,40 @@ namespace Threefold.WorldMagic
         public void Restore()
         {
             Deactivate();
+        }
+
+        /// <summary>
+        /// Drops what is temporary: charge, and an activation that only lasts for a time or while
+        /// charge remains. A latched activation is not temporary and stays.
+        /// </summary>
+        public void ClearTemporary()
+        {
+            if (activated && settings.activation == ArcaneActivation.Latch)
+            {
+                return;
+            }
+
+            Deactivate();
+        }
+
+        /// <summary>
+        /// Sets the state from a saved one. A timed activation is never restored as running: it is
+        /// temporary by nature, and comes back as the charge it held, if charge was saved at all.
+        /// </summary>
+        public void Load(float charge, bool wasActivated)
+        {
+            Deactivate();
+            Charge = float.IsNaN(charge) ? 0f : Mathf.Clamp(charge, 0f, settings.activationThreshold);
+
+            if (wasActivated && settings.activation == ArcaneActivation.Latch)
+            {
+                activated = true;
+                Charge = settings.activationThreshold;
+            }
+            else if (wasActivated && settings.activation == ArcaneActivation.WhileCharged && Charge > 0f)
+            {
+                activated = true;
+            }
         }
 
         private void Deactivate()
@@ -602,6 +700,14 @@ namespace Threefold.WorldMagic
         [Tooltip("The longest a brace can last, however often it is renewed.")]
         [Min(0.1f)]
         public float maxBraceSeconds = 6f;
+
+        [Tooltip("What a new brace does to one that is running. Refresh: the longer of the two counts. Extend: the " +
+                 "new time is added, up to the longest a brace can last. Ignore: the first brace runs its course.")]
+        public StackPolicy braceStacking = StackPolicy.Refresh;
+
+        [Tooltip("A single force of at least this strength breaks a brace before its time. 0: a brace holds against anything.")]
+        [Min(0f)]
+        public float braceBreakForce;
     }
 
     /// <summary>
@@ -663,6 +769,19 @@ namespace Threefold.WorldMagic
             }
 
             float duration = seconds > 0f ? seconds : settings.braceSeconds;
+            if (braceRemaining > 0f)
+            {
+                switch (settings.braceStacking)
+                {
+                    case StackPolicy.Ignore:
+                        return false;
+
+                    case StackPolicy.Extend:
+                        braceRemaining = Mathf.Min(braceRemaining + duration, settings.maxBraceSeconds);
+                        return true;
+                }
+            }
+
             braceRemaining = Mathf.Min(Mathf.Max(braceRemaining, duration), settings.maxBraceSeconds);
             return true;
         }
@@ -673,7 +792,25 @@ namespace Threefold.WorldMagic
         /// </summary>
         public bool ApplyForce(float magnitude)
         {
-            if (collapsed || magnitude <= 0f || !unstable || braceRemaining > 0f)
+            if (collapsed || magnitude <= 0f)
+            {
+                return false;
+            }
+
+            if (braceRemaining > 0f)
+            {
+                // A brace normally holds against anything. One that can be broken ends here and now; the
+                // blow that broke it is spent on the brace and does nothing more.
+                if (settings.braceBreakForce > 0f && magnitude + 0.0001f >= settings.braceBreakForce)
+                {
+                    EndBrace();
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!unstable)
             {
                 return false;
             }
@@ -724,9 +861,9 @@ namespace Threefold.WorldMagic
             if (braceRemaining > 0f)
             {
                 braceRemaining = Mathf.Max(0f, braceRemaining - deltaTime);
-                if (braceRemaining <= 0f && collapsePending)
+                if (braceRemaining <= 0f)
                 {
-                    collapsed = true;
+                    EndBrace();
                 }
 
                 return;
@@ -745,6 +882,40 @@ namespace Threefold.WorldMagic
             collapsePending = false;
             braceRemaining = 0f;
             Stress = 0f;
+        }
+
+        /// <summary>
+        /// Drops what is temporary: a brace and accumulated stress. A collapse that was only being held
+        /// off by the brace happens now; it was a consequence, not a temporary state.
+        /// </summary>
+        public void ClearTemporary()
+        {
+            if (collapsed)
+            {
+                return;
+            }
+
+            EndBrace();
+            Stress = 0f;
+        }
+
+        /// <summary>Marks the object as having come down, from a saved state.</summary>
+        public void SetCollapsed()
+        {
+            collapsed = true;
+            collapsePending = false;
+            braceRemaining = 0f;
+            Stress = 0f;
+        }
+
+        private void EndBrace()
+        {
+            braceRemaining = 0f;
+            if (collapsePending)
+            {
+                collapsePending = false;
+                collapsed = true;
+            }
         }
 
         private static bool Reached(StructuralTrigger trigger, StructuralState structure)
