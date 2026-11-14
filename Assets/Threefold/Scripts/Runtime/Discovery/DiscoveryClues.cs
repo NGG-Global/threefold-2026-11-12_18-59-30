@@ -38,10 +38,11 @@ namespace Threefold.Discovery
         [Tooltip("How strongly its clue shows when nothing is happening: a slow, faint breathing of its accent. Keep it low; " +
                  "for objects whose clue is a built feature (a rail, straw, vents) a trace is enough.")]
         [Range(0f, 1f)]
-        [SerializeField] private float ambientStrength = 0.2f;
+        [SerializeField] private float ambientStrength = ClueDefaults.TraceStrength;
 
-        [Tooltip("The colour of that breathing. A pale tint of the object's own colour reads as part of it.")]
-        [SerializeField] private Color accentColor = new Color(0.8f, 0.84f, 1f, 1f);
+        [Tooltip("The colour of that breathing. A pale tint of the object's own colour reads as part of it. It must not " +
+                 "look like the colour of a discipline the object does not answer.")]
+        [SerializeField] private Color accentColor = ClueDefaults.Neutral;
 
         [Tooltip("There is nothing left to find out about the object while any of these holds: no clue, no emphasis.")]
         [SerializeField] private PropertyCondition resolvedWhen =
@@ -98,6 +99,13 @@ namespace Threefold.Discovery
             source = magicalObject;
             visuals = stateVisuals;
             motionTarget = moving;
+        }
+
+        /// <summary>Sets the idle clue: how strongly it breathes when nothing happens, and in which colour.</summary>
+        public void SetIdleClue(float strength, Color accent)
+        {
+            ambientStrength = Mathf.Clamp01(strength);
+            accentColor = accent;
         }
 
         /// <summary>Sets the part that moves once the object is destroyed, if none is set. Returns true if it changed.</summary>
@@ -267,7 +275,10 @@ namespace Threefold.Discovery
 
             registryIndex = -1;
             DiscoveryDirector.Forget(this);
-            RestorePose();
+
+            // Everything shown goes with it: a tint or a wider sway left behind would still be there
+            // when the object is switched on again far from the player, where nothing attends to it.
+            ClearPresentation();
         }
 
         // Static state survives between Play sessions when domain reload is disabled in the Editor.

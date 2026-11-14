@@ -603,6 +603,51 @@ namespace Threefold.Tests
             Assert.IsTrue(platform.IsAtRest);
         }
 
+        [Test]
+        public void ClearingTemporaryStateKeepsTheConfiguredHeatAndChargeExceptions()
+        {
+            // A furnace that must stay hot, switched off with "Reset": before, its saved heat was erased.
+            MagicalPropertySettings stoneSettings = WorldMagicDefaults.Settings(ExampleObject.HeatSensitiveStone);
+            stoneSettings.persisted |= PersistedState.Heat;
+            var furnace = new MagicalPropertySet(stoneSettings);
+            furnace.Apply(Effect(MagicEffectKind.Heat, 80f));
+
+            furnace.ClearTemporary(stoneSettings.persisted);
+            Assert.AreEqual(80f, furnace.Thermal.Heat, 0.001f, "The exception is kept as a reload would restore it.");
+            Assert.AreEqual(80f, furnace.Capture(stoneSettings.persisted).Heat, 0.001f, "And it is still what is saved.");
+
+            furnace.ClearTemporary();
+            Assert.AreEqual(ThermalState.Unheated, furnace.Thermal.State, "Without the exception, heat is temporary.");
+
+            // The fire itself never survives, exception or not.
+            MagicalPropertySettings woodSettings = WorldMagicDefaults.Settings(ExampleObject.WoodenBarricade);
+            woodSettings.persisted |= PersistedState.Heat;
+            var barricade = new MagicalPropertySet(woodSettings);
+            barricade.Apply(Effect(MagicEffectKind.Heat, 100f));
+            barricade.ClearTemporary(woodSettings.persisted);
+            Assert.AreEqual(ThermalState.Unheated, barricade.Thermal.State);
+
+            // Charge named as an exception is kept; a timed activation comes back as its charge.
+            MagicalPropertySettings crystalSettings = WorldMagicDefaults.Settings(ExampleObject.ArcaneCrystal);
+            crystalSettings.persisted = PersistedState.Charge;
+            crystalSettings.arcaneSettings.decayPerSecond = 0f;
+            var crystal = new MagicalPropertySet(crystalSettings);
+            crystal.Apply(Effect(MagicEffectKind.ArcaneCharge, 40f));
+            crystal.ClearTemporary(crystalSettings.persisted);
+            Assert.AreEqual(40f, crystal.Arcane.Charge, 0.001f);
+
+            crystal.Apply(Effect(MagicEffectKind.ArcaneCharge, 100f));
+            Assert.AreEqual(ArcaneState.Activated, crystal.Arcane.State);
+            crystal.ClearTemporary(crystalSettings.persisted);
+            Assert.AreEqual(ArcaneState.Charged, crystal.Arcane.State);
+
+            // A very long absence keeps the exception too.
+            crystal.CatchUp(100000f, crystalSettings.persisted);
+            Assert.Greater(crystal.Arcane.Charge, 0f);
+            crystal.CatchUp(100000f);
+            Assert.AreEqual(ArcaneState.Uncharged, crystal.Arcane.State);
+        }
+
         // ------------------------------------------------ while switched off
 
         [Test]

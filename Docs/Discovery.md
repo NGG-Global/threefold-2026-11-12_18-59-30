@@ -38,6 +38,11 @@ Only two of these are animated: the pulse, which is a slow breathing of a pale t
 strength or less, and the sway. The rest are built parts. Nothing is outlined, and an object
 with no property has no clue.
 
+An object made magical with **Make Selection Magical** gets an idle clue that follows from its
+properties: the pale arcane pulse only if it takes arcane charge, otherwise a mere trace of a
+neutral tint that belongs to no discipline. Before, every new object pulsed in the arcane colour,
+so a crate that only burns looked like a crystal.
+
 ### Level 2: contextual resonance
 
 With a discipline selected, an object nearby may stir: its tint breathes a little faster in the
@@ -65,7 +70,12 @@ properties and state, not from a table:
 
 It follows the state. A door whose lock is open no longer answers Arcane; something alight no
 longer answers Flame; a structure that has come down can no longer be braced; what is destroyed
-answers nothing.
+answers nothing. Something movable answers force only if a push could really move it: not along
+an axis that points up or down (a push is horizontal), and not without room to travel.
+
+When the player switches to a discipline the object does not answer, its resonance fades in the
+colour of the discipline that caused it. It never takes the new discipline's colour, not even for
+the moment of the fade.
 
 Resonance promises a possibility, not success. The door resonates with Aegis because force can
 break it, yet a weak pulse does nothing to it. That is what level 3 is for.
@@ -154,7 +164,7 @@ On the Discovery object, under **Options**:
 | Option | Effect |
 | --- | --- |
 | Clue Intensity (0 to 2) | Strength of clues and resonance. 0 switches them off. The answer to an attempt is always shown |
-| Reduced Particles | No motes for small answers, and no repeating embers on something that burns. The single burst at a change of state stays |
+| Reduced Particles | No motes for small answers, and no repeating embers on something that burns. The single burst at a change of state stays, with a quarter of its particles |
 | Emphasize Motion | Movements half as large again, for players who cannot rely on colour or brightness |
 | Strong Resonance | Resonance 60% stronger |
 
@@ -164,7 +174,8 @@ supplements.
 **Lower graphics presets.** The director follows the game's own quality setting, the one the
 visual style's controller holds, if the scene has it: its lowest level counts as Low, its
 highest as High. Without it the tier set on the director applies (Medium by default). Only
-particles depend on the tier: on Low, small answers have no motes. The movement, its size and length, the tint, the sound and the haptic
+particles depend on the tier: on Low, small answers have no motes, and an object's burst at a
+change of state plays half its particles (three quarters on Medium). The movement, its size and length, the tint, the sound and the haptic
 pulse of an answer are the same on every level. Nothing relies on bloom or on post-processing,
 which the lower presets switch off.
 
@@ -177,7 +188,8 @@ Inspector, or from code through `DiscoveryDirector.Settings`.
   its body and fully only on the small parts that show charge. No emission, no bloom.
 - Movement: a shift of at most about 12 cm and a change of size of at most 5%, lasting under a second.
 - Particles: three motes for a small answer (none on the lowest quality level), and the bursts
-  the objects already had for changes of state.
+  the objects already had for changes of state, with fewer particles on lower levels and with
+  reduced particles. Before, those bursts always played in full whatever the options said.
 - Not used: outlines or highlights on interactable objects, floating icons, overlays or text,
   full-screen effects, extra transparent layers.
 
@@ -269,12 +281,13 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `DiscoveryTests` (32) | What each discipline offers, from its values. Resonance on compatible targets, for every example and discipline. No false indicators: wherever "could respond" is denied, the strongest attempt does nothing, in every state the examples reach; and where it is granted, a strong enough attempt works. Resonance following state, and its strength when near, aimed at and preparing. Each of the six answers, including insufficient power. Several properties on one object. Which changes count as a transition. What is shown for other objects' reactions, and repetition. Every answer with a movement and sound of its own; the same answer on every quality level; the options; no number revealed. Clues from properties. Escalation: delay, rise, hold, rest, attempts, progress, combat, leaving. An attempt on something already finished; a held guard; force judged on the object as it is now; the wider sway following the clue option; the game's quality levels. The nearest few of six hundred, looked through a few per frame. No allocation per frame |
+| `DiscoveryTests` (36) | What each discipline offers, from its values. Resonance on compatible targets, for every example and discipline. No false indicators: wherever "could respond" is denied, the strongest attempt does nothing, in every state the examples reach; and where it is granted, a strong enough attempt works. Resonance following state, and its strength when near, aimed at and preparing. Each of the six answers, including insufficient power. Several properties on one object. Which changes count as a transition. What is shown for other objects' reactions, and repetition. Every answer with a movement and sound of its own; the same answer on every quality level; the options; no number revealed. Clues from properties. Escalation: delay, rise, hold, rest, attempts, progress, combat, leaving. An attempt on something already finished; a held guard; force judged on the object as it is now; the wider sway following the clue option; the game's quality levels. The nearest few of six hundred, looked through a few per frame. No allocation per frame. Default clues that suggest no discipline the object does not answer; a fading resonance keeping its colour; no resonance with force where no push can move the object; fewer particles in state bursts on lower levels and with reduced particles |
 | `DiscoverySetupTests` (4) | One runs without Unity: every sound has a placeholder of its own. Three need Unity: the range's director and its connections; clue component, moving part and built clues on every example prefab; clues without a moving part or without a director reported |
 
 **Not covered by automated tests:** everything the components do in Play mode. That includes the
 director finding objects, telling what is aimed at, showing clues, resonance and answers, the
-sound and the haptic pulse, and how any of it looks.
+sound and the haptic pulse, the limit on a burst's particles taking effect before it plays, and
+how any of it looks.
 
 ## Known limits
 
@@ -294,3 +307,13 @@ sound and the haptic pulse, and how any of it looks.
 - Enemies and training dummies have no clues, resonance or answers; they keep the hit feedback
   they had.
 - The director attends to one player.
+- "In combat" means that the player dealt or took damage in the last 8 s. A fight in which nothing
+  lands for longer does not count, so escalation could rise during it.
+- An object whose definition counts it as resolved by something other than a latched activation,
+  a collapse or destruction (the door broken open with force) is answered as a transition, not as
+  completed.
+- There is no separate sound or haptic hook for an arcane charge reaching its threshold; it is
+  answered as a transition. Whether the brief's "charge threshold" means that or the Mage's own
+  charged attack is open.
+- A brace that is too weak against the Aegis guard is not answered, by design, to keep the guard
+  from producing a constant stream of answers.

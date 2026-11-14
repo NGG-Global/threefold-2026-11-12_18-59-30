@@ -26,6 +26,9 @@ namespace Threefold.Persistence
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Begin()
         {
+            // An identifier held by a Unity object that has been destroyed is free again.
+            PersistentIdRegistry.IsOwnerAlive = owner => !(owner is Object unityObject) || unityObject != null;
+
             bool onDisk = !Application.isEditor || KeepSavedStateInEditor;
             if (!onDisk)
             {
@@ -40,7 +43,7 @@ namespace Threefold.Persistence
             if (report.Loaded)
             {
                 Debug.Log($"[Threefold] Loaded the saved world state: {report.Read.Puzzles} puzzle record(s) and " +
-                          $"{report.Read.Objects} object record(s) from '{WorldState.FilePath}'.");
+                          $"{report.Read.Objects} object record(s) from '{DefaultFilePath}'.");
             }
 
             if (!string.IsNullOrEmpty(report.Problem))

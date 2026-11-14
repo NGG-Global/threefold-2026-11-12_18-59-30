@@ -226,6 +226,38 @@ namespace Threefold.WorldMagic
     public static class KineticRules
     {
         /// <summary>
+        /// How much of a push must go along the axis for it to count. A push is horizontal, so an axis
+        /// that points (nearly) straight up or down can never be moved along by one.
+        /// </summary>
+        public const float MinimumAlong = 0.2f;
+
+        /// <summary>
+        /// Whether some push could ever move an object of these settings, with its axis as it stands in
+        /// the world. False when it resists everything, has no room to move, or runs along an axis no
+        /// horizontal push has a share in. Used to keep the discovery system from promising movement.
+        /// </summary>
+        public static bool CanEverBePushed(KineticSettings settings, Vector3 axisWorld)
+        {
+            if (settings == null || settings.resistance >= 1f || settings.maxStepPerPush <= 0f)
+            {
+                return false;
+            }
+
+            if (settings.mode != KineticMode.Axis)
+            {
+                return settings.maxRange > 0f;
+            }
+
+            if (Mathf.Max(settings.maxTravel, 0f) <= Mathf.Min(settings.minTravel, 0f) || axisWorld.sqrMagnitude < 0.0001f)
+            {
+                return false;
+            }
+
+            Vector3 axis = axisWorld.normalized;
+            return new Vector2(axis.x, axis.z).magnitude >= MinimumAlong;
+        }
+
+        /// <summary>
         /// How far a force moves something: nothing below the minimum, otherwise the force less the
         /// share that is resisted.
         /// </summary>
@@ -321,7 +353,7 @@ namespace Threefold.WorldMagic
 
                 // Only the part of the push along the axis moves it; a push across the rail does nothing.
                 float along = Vector3.Dot(direction, axisWorld);
-                if (Mathf.Abs(along) < 0.2f)
+                if (Mathf.Abs(along) < KineticRules.MinimumAlong)
                 {
                     return 0f;
                 }

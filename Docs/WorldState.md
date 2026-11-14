@@ -71,8 +71,8 @@ rules around them.
   | Setting | Meaning |
   | --- | --- |
   | Pause (default) | Time stands still for it. It continues where it was |
-  | Catch Up | The time it was away is made up when it returns, in fixed steps, silently: no announcement, no reaction. After two minutes' worth, what is still temporary is dropped |
-  | Reset | Its temporary state is dropped the moment it is switched off |
+  | Catch Up | The time it was away is made up when it returns, in fixed steps, silently: no announcement, no reaction. After two minutes' worth, what is still temporary is dropped, except heat or charge named under Persisted |
+  | Reset | Its temporary state is dropped the moment it is switched off. Heat or charge named under Persisted is kept, as a reload would keep it |
 
   In every case what is persistent is written to the world state when the object is switched off.
 
@@ -114,6 +114,9 @@ A magical object is saved under its **Persistent Id**, a text that must be uniqu
 - An id that exists is never changed by tooling: changing it would orphan what was saved under it.
 - Two objects with one id are reported by the validation. At run time the second is refused and
   is simply not saved; the first is unaffected.
+- An id whose owner has been destroyed is free again, even if the owner never said so. (Unity does
+  not tell an object that was never switched on that it is destroyed; such an object also stops
+  listening to the world by itself, so nothing is called on it afterwards.)
 
 ### On disk
 
@@ -124,13 +127,23 @@ A magical object is saved under its **Persistent Id**, a text that must be uniqu
 | The Unity Editor with **Threefold > World State > Keep Saved State Between Play Sessions** ticked | As in a build |
 
 The file is plain text, one record per line, written in a fixed order. A save is written to a
-new file and then put in place of the old one, which is kept as a backup. Loading is cautious:
+new file, flushed to the storage, and then put in place of the old one, which is kept as a
+backup. Loading is cautious:
 
-- A file that is not a world state, or is from a newer version, is refused and nothing is changed.
+- A save that was written in full but never put in place (the app was ended between the two
+  steps) is the newest, and is used. Before, the older backup was loaded instead.
 - A damaged or cut-off file falls back to the backup. The Console says so.
 - A single unreadable line is left out and the rest is kept.
 - A number that is not a number is refused, and a value outside what an object can hold is
   brought within it: an integrity above the maximum, a position beyond the end of the rail.
+- **A file this version cannot use in full is never overwritten or deleted by a later save.** A
+  file that is not a world state, is from a newer version, is damaged or cannot be read is set
+  aside next to the save, under a name ending in `.unreadable`, and the Console says so. Before,
+  the next two saves rotated such a file into the backup's place and then deleted it, so a refused
+  save from a newer version was lost. If a file can be neither used nor set aside, nothing is
+  saved in that session, to keep it from being overwritten.
+- What was loaded from anything but a sound main file (the backup, an interrupted save, part of a
+  damaged file) is written again as a sound main file a few seconds later.
 
 ### Restart, checkpoint, new game
 
@@ -138,7 +151,7 @@ new file and then put in place of the old one, which is kept as a backup. Loadin
 | --- | --- | --- |
 | **Restart** | The world takes its saved state again. Persistent state stays; everything temporary is reset; objects without an id are as new. Puzzle elements are left as they are, as before; a latched property trigger stays latched, and one without a latch follows its object | R, the Restart button, `PrototypeSession.Restart()` |
 | **Checkpoint** | A copy of the store is taken, and the store can be put back to it; the world follows | `WorldState.SaveCheckpoint()`, `WorldState.RevertToCheckpoint()`. Nothing in the game calls these yet |
-| **New game** | Everything saved is forgotten, on disk too, and the level restarts | **Threefold > World State > New Game (Forget Saved State)**, `PrototypeSession.NewGame()` |
+| **New game** | Everything saved is forgotten, on disk too, and the level restarts. Files set aside as unreadable are left alone | **Threefold > World State > New Game (Forget Saved State)**, `PrototypeSession.NewGame()` |
 
 Loading is silent. A door that was opened earlier is simply open; a structure that had come down
 lies down. Nothing that already happened is announced or played again, and no reaction is sent.
@@ -210,7 +223,9 @@ a fire lit by the player reaches three further barricades in a row and stops at 
 **No loops, no duplicates.** A reaction to an attack keeps the attack's identity. A target takes
 each kind of effect once per identity, so an effect cannot come back to where it started, and a
 target reached by two paths is acted on once. The queue also refuses to hold the same effect of
-the same event for the same target twice.
+the same event for the same target twice. If the second copy is more urgent than the one that
+waits (a critical one behind a low one), the waiting one gives way instead, so a puzzle never
+loses its effect to a weaker copy that happened to be offered first.
 
 **Walls.** A reaction by distance is stopped by scenery between the two objects, by the same
 test an attack's area uses. Creatures do not shield what stands behind them. A reaction to a
@@ -224,12 +239,23 @@ are taken in the order the physics engine reports them, which is not guaranteed.
 
 **When there is too much to do.** What cannot be carried out in a frame waits for the next. When
 a queue is full, a normal or low reaction is refused, counted, and reported in the Console.
-**A critical reaction is never refused**: the queue grows for it, and that is counted too. Mark
-as critical the reactions a puzzle depends on.
+**A critical reaction is never refused for lack of room**: the queue grows for it, and that is
+counted too. Mark as critical the reactions a puzzle depends on.
+
+**A critical reaction is never lost without a word.** It can still not happen for three reasons
+that are part of the design: it would be deeper than the chain may go, its target had already
+taken the same effect of the same event by another path, or its target was destroyed, unloaded or
+switched off before it arrived. Each of these is reported in the Console at once, naming the
+target and the reason, so a puzzle that depends on it can be fixed. Before, these were dropped
+silently. A reload is the one exception: what was on its way belonged to the world as it was, and
+is dropped with the rest of the temporary state (the Console notes how many critical ones).
 
 **Objects that are gone.** A target is checked again at the moment of delivery. An object that
 is destroyed, unloaded or switched off leaves the simulation, and everything on its way to it is
 given up, so nothing is called on it afterwards. What it had already sent out still happens.
+
+**Reach.** At most 16 targets take a reaction sent by distance. When more stand within reach,
+the nearest 16 are kept, whatever order the physics engine reports them in.
 
 ## In the Discipline Range
 
@@ -347,9 +373,9 @@ job is enabled.
 
 | Test class | Covers |
 | --- | --- |
-| `WorldStateTests` (25) | The store and its revision; snapshots; the text format written and read back, in a fixed order, with awkward ids; refusal of foreign and newer files; damaged and cut-off text; the file with its backup; repeated saving and loading; restart, checkpoint and new game; objects asked for their present state before a save, a restart and a checkpoint; duplicate ids |
-| `MagicalPersistenceTests` (33) | Each persistent part restored, on each example; temporary state reset; the heat and charge exceptions; loading again and again; loading is silent; records that do not fit; rules between properties after a load; tiers; the three stacking policies; a breakable brace; clean-up on destruction; clearing temporary state; catching up; reaction rules firing once per entry and at their interval; reaction depth; a latch through a restart and through a replaced state; the update of an older definition keeping what was set by hand; the burn policy on a creature |
-| `ChainReactionTests` (25) | The queue: order, budget per frame, priorities, overflow, critical never refused, depth limit, duplicates, targets that are gone, cancelling, no nesting. The simulated set: budget, waiting, critical, order, leaving during a step. Whole chains with the examples: a fire along a row to the depth limit, a row of structures toppling, no way back, two paths acting once, a crystal feeding a linked lock, destruction in the middle of a chain, forty simultaneous critical reactions, low priority giving way, and a chain saved half-way and loaded |
+| `WorldStateTests` (30) | The store and its revision; snapshots; the text format written and read back, in a fixed order, with awkward ids; refusal of foreign and newer files; damaged and cut-off text; the file with its backup; repeated saving and loading; restart, checkpoint and new game; objects asked for their present state before a save, a restart and a checkpoint; duplicate ids; an id freed when its owner is gone; an interrupted save used; a file from a newer version and a damaged file set aside and never overwritten; saving stopped when a file can be neither used nor set aside |
+| `MagicalPersistenceTests` (34) | Each persistent part restored, on each example; temporary state reset; the heat and charge exceptions; loading again and again; loading is silent; records that do not fit; rules between properties after a load; tiers; the three stacking policies; a breakable brace; clean-up on destruction; clearing temporary state; catching up; reaction rules firing once per entry and at their interval; reaction depth; a latch through a restart and through a replaced state; the update of an older definition keeping what was set by hand; the burn policy on a creature; heat and charge exceptions kept when temporary state is cleared or time is made up |
+| `ChainReactionTests` (28) | The queue: order, budget per frame, priorities, overflow, critical never refused, depth limit, duplicates, a more urgent copy taking the place of a waiting one, every reaction given up reported, a critical reaction turned away by its target reported, targets that are gone, cancelling, no nesting. The simulated set: budget, waiting, critical, order, leaving during a step. Whole chains with the examples: a fire along a row to the depth limit, a row of structures toppling, no way back, two paths acting once, a crystal feeding a linked lock, destruction in the middle of a chain, forty simultaneous critical reactions, low priority giving way, and a chain saved half-way and loaded |
 | `WorldStateSetupTests` (5) | Needs Unity: the range's ids, chain row and link; duplicate ids reported; assigning ids; the update of an older definition; an id with nothing to save and a broken link |
 
 The chain tests use a small stand-in world that does what the component does in a scene (finds
@@ -358,8 +384,10 @@ the budgets are the real ones.
 
 **Not covered by automated tests:** everything the components do in Play mode. That includes a
 magical object saving and loading through the store in a running scene, the simulation's update,
-the physics query that finds a reaction's targets, the file being written on a device and on
-pause, the visuals suspending when unseen, and the Editor menu commands.
+the physics query that finds a reaction's targets (and keeping the nearest 16), the Console
+reports of lost critical reactions, an object destroyed without ever being switched on, the file
+being written and flushed on a device and on pause, the visuals suspending when unseen, and the
+Editor menu commands.
 
 ## Known limits
 
@@ -380,3 +408,9 @@ pause, the visuals suspending when unseen, and the Editor menu commands.
 - If two saved versions of the game disagree about an object's limits, the saved value is brought
   within the current limits; it is not migrated.
 - Save data is not encrypted or protected against editing.
+- Whether the flush to storage before a save is put in place reaches the device's storage on
+  Android has not been checked on hardware.
+- The search for a reaction's targets reads at most 48 colliders per query. In a place crowded
+  with scenery on the reaction layers, some objects within reach may not be seen.
+- Two scenes that share a name produce the same ids for objects that share a name. The validation
+  checks one scene at a time.

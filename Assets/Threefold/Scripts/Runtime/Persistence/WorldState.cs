@@ -35,6 +35,7 @@ namespace Threefold.Persistence
     {
         private static WorldStateSnapshot checkpoint;
         private static int savedRevision;
+        private static bool writeSoon;
 
         /// <summary>The store everything shares.</summary>
         public static WorldStateStore Current { get; } = new WorldStateStore();
@@ -51,7 +52,7 @@ namespace Threefold.Persistence
         public static bool SavesToDisk => !string.IsNullOrEmpty(FilePath);
 
         /// <summary>True if the store holds changes that have not been written to disk.</summary>
-        public static bool IsDirty => SavesToDisk && Current.Revision != savedRevision;
+        public static bool IsDirty => SavesToDisk && (Current.Revision != savedRevision || writeSoon);
 
         public static bool HasCheckpoint => checkpoint != null;
 
@@ -106,6 +107,7 @@ namespace Threefold.Persistence
             {
                 WorldStateFile.Delete(FilePath);
                 savedRevision = Current.Revision;
+                writeSoon = false;
             }
 
             Reloaded?.Invoke(WorldReload.StateReplaced);
@@ -133,19 +135,30 @@ namespace Threefold.Persistence
 
             LastSaveProblem = string.Empty;
             savedRevision = revision;
+            writeSoon = false;
             return true;
         }
 
         /// <summary>
         /// Reads the saved state from disk into the store and tells the world. With nothing saved, or
-        /// nothing readable, the store is left as it is.
+        /// nothing readable, the store is left as it is. A file that could not be used is never
+        /// overwritten: it is set aside first, and if that fails, this session keeps its state in
+        /// memory only.
         /// </summary>
         public static WorldStateLoadReport Load()
         {
             LastLoad = WorldStateFile.Load(FilePath, Current);
+            if (LastLoad.SaveBlocked)
+            {
+                FilePath = string.Empty;
+            }
+
             if (LastLoad.Loaded)
             {
                 savedRevision = Current.Revision;
+
+                // Taken from a backup, a pending save or part of a damaged file: written soon as a sound main file.
+                writeSoon = LastLoad.NeedsSave;
                 Reloaded?.Invoke(WorldReload.StateReplaced);
             }
 
@@ -159,6 +172,7 @@ namespace Threefold.Persistence
             checkpoint = null;
             FilePath = string.Empty;
             savedRevision = Current.Revision;
+            writeSoon = false;
             LastLoad = default;
             LastSaveProblem = string.Empty;
         }

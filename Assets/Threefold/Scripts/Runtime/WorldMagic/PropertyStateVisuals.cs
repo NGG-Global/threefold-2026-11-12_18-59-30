@@ -159,6 +159,13 @@ namespace Threefold.WorldMagic
         /// </summary>
         public static bool ReducedParticles { get; set; }
 
+        /// <summary>
+        /// The share of its particles a burst at a change of state plays, from 1 (all) down: set by the
+        /// discovery director from the quality level and the player's particle option. The burst is
+        /// never left out; it marks the change.
+        /// </summary>
+        public static float BurstShare { get; set; } = 1f;
+
         public MagicalObject Source => source;
         public int TintRendererCount => tintRenderers.Length;
 
@@ -471,7 +478,8 @@ namespace Threefold.WorldMagic
                 bool holds = entry != null && properties.Meets(entry.onEnter);
                 if (holds && !effectHeld[i] && playEffects && entry.effect != null)
                 {
-                    Pools.Spawn(entry.effect, source.AimPoint, Quaternion.identity, MaxEffects);
+                    PooledObject burst = Pools.Spawn(entry.effect, source.AimPoint, Quaternion.identity, MaxEffects);
+                    BurstParticleShare.Apply(burst, BurstShare);
                 }
 
                 effectHeld[i] = holds;
@@ -581,6 +589,7 @@ namespace Threefold.WorldMagic
         private static void ResetStatics()
         {
             ReducedParticles = false;
+            BurstShare = 1f;
         }
     }
 }

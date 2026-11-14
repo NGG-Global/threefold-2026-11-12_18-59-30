@@ -20,6 +20,13 @@ namespace Threefold.Persistence
         public static int DuplicateCount { get; private set; }
 
         /// <summary>
+        /// Says whether an owner still exists. The host supplies it: a Unity object that was destroyed
+        /// without ever giving its identifier up (one that was never switched on gets no OnDestroy)
+        /// must not keep it from the object that replaces it. Without one, every owner counts as alive.
+        /// </summary>
+        public static Func<object, bool> IsOwnerAlive { get; set; }
+
+        /// <summary>
         /// Claims an identifier for an object. True if the object now owns it, or already did. False
         /// if the identifier is empty or another object owns it.
         /// </summary>
@@ -34,6 +41,13 @@ namespace Threefold.Persistence
             {
                 if (ReferenceEquals(existing, owner))
                 {
+                    return true;
+                }
+
+                if (IsOwnerAlive != null && !IsOwnerAlive(existing))
+                {
+                    // The previous owner is gone without having said so: the identifier is free.
+                    Owners[id] = owner;
                     return true;
                 }
 

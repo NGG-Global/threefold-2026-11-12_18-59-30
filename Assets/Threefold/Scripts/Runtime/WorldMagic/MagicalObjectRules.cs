@@ -109,6 +109,12 @@ namespace Threefold.WorldMagic
                         {
                             problems.Add("kinetic: the axis has no direction.");
                         }
+                        else if (kinetic.localAxis.x * kinetic.localAxis.x + kinetic.localAxis.z * kinetic.localAxis.z <
+                                 KineticRules.MinimumAlong * KineticRules.MinimumAlong * kinetic.localAxis.sqrMagnitude)
+                        {
+                            problems.Add("kinetic: the axis points up or down. A push is horizontal, so unless the object " +
+                                         "is tilted, no push moves it along that axis.");
+                        }
 
                         if (kinetic.maxTravel <= kinetic.minTravel)
                         {

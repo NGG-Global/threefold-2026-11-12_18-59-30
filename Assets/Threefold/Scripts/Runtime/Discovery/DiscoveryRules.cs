@@ -406,6 +406,39 @@ namespace Threefold.Discovery
     /// says "this might work", never "this will work": it depends on kind, not on strength, and it
     /// is zero for an object nothing offered could change. Plain C#.
     /// </summary>
+    /// <summary>
+    /// The idle clue an object starts with when nobody has chosen one: a faint pulse in a pale arcane
+    /// tint only for what takes arcane charge, a mere trace of a neutral tint for an object whose clue
+    /// is a built feature (wood, vents, a rail, cracks), and nothing for an object with no clue. A
+    /// default must never suggest a discipline the object does not answer. Plain C#.
+    /// </summary>
+    public static class ClueDefaults
+    {
+        /// <summary>The pale glow of something that holds charge; the same as the examples' crystal and lock.</summary>
+        public static readonly Color ArcaneGlow = new Color(0.78f, 0.84f, 1f, 1f);
+
+        /// <summary>A pale warm white that belongs to no discipline.</summary>
+        public static readonly Color Neutral = new Color(1f, 0.96f, 0.86f, 1f);
+
+        public const float PulseStrength = 0.2f;
+        public const float TraceStrength = 0.08f;
+
+        public static float IdleStrength(ClueKinds clues)
+        {
+            if ((clues & ClueKinds.ArcanePulse) != 0)
+            {
+                return PulseStrength;
+            }
+
+            return clues != ClueKinds.None ? TraceStrength : 0f;
+        }
+
+        public static Color Accent(ClueKinds clues)
+        {
+            return (clues & ClueKinds.ArcanePulse) != 0 ? ArcaneGlow : Neutral;
+        }
+    }
+
     public static class ResonanceRules
     {
         /// <param name="compatible">Whether any effect of the selected discipline could change the object now.</param>
@@ -446,6 +479,17 @@ namespace Threefold.Discovery
         public static float Approach(float current, float target, float fadeSeconds, float deltaTime)
         {
             return Mathf.MoveTowards(current, target, deltaTime / Mathf.Max(0.05f, fadeSeconds));
+        }
+
+        /// <summary>
+        /// The colour a resonance is shown in. It takes the selected discipline's colour only while that
+        /// discipline resonates (<paramref name="target"/> above zero). A resonance that fades keeps the
+        /// colour of the discipline that caused it: switching to a discipline the object does not answer
+        /// must not tint it, even for the moment of the fade.
+        /// </summary>
+        public static Color ColourToShow(Color shownColour, Color disciplineColour, float target)
+        {
+            return target > 0f ? disciplineColour : shownColour;
         }
     }
 
@@ -832,8 +876,7 @@ namespace Threefold.Discovery
             cue.Amplitude = Mathf.Max(MinimumAmplitude, cue.Amplitude);
 
             // Particles are the one thing that costs: fewer on a weaker device, fewer still if asked.
-            float share = quality == DiscoveryQuality.Low ? 0.5f : quality == DiscoveryQuality.Medium ? 0.75f : 1f;
-            particles = Mathf.RoundToInt(particles * share);
+            particles = Mathf.RoundToInt(particles * QualityShare(quality));
             if (settings != null && settings.reducedParticles)
             {
                 bool significant = result.Changed &&
@@ -844,6 +887,27 @@ namespace Threefold.Discovery
             cue.Particles = particles;
             return cue;
         }
+
+        /// <summary>The share of particles played on a quality level: fewer on a weaker device.</summary>
+        public static float QualityShare(DiscoveryQuality quality)
+        {
+            return quality == DiscoveryQuality.Low ? 0.5f : quality == DiscoveryQuality.Medium ? 0.75f : 1f;
+        }
+
+        /// <summary>
+        /// The share of its particles an object's own burst at a change of state plays: the quality
+        /// level's share, and at most a quarter with reduced particles (three of a burst of twelve, as
+        /// for an answer). Never none: the burst marks a change of state, and its movement and tint
+        /// stay the same on every level.
+        /// </summary>
+        public static float StateBurstShare(DiscoveryQuality quality, DiscoverySettings settings)
+        {
+            float share = QualityShare(quality);
+            return settings != null && settings.reducedParticles ? Mathf.Min(share, ReducedBurstShare) : share;
+        }
+
+        /// <summary>What is left of a state burst with reduced particles.</summary>
+        public const float ReducedBurstShare = 0.25f;
 
         /// <summary>
         /// Where a cue's movement is at a moment of its course. The same curve on every device.

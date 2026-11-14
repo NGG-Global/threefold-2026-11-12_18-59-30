@@ -29,6 +29,7 @@ namespace Threefold.Tests
         {
             WorldState.ResetSession();
             PersistentIdRegistry.Clear();
+            PersistentIdRegistry.IsOwnerAlive = null;
             if (Directory.Exists(folder))
             {
                 Directory.Delete(folder, true);
@@ -358,6 +359,100 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void ASaveThatWasWrittenInFullButNeverPutInPlaceIsUsed()
+        {
+            var older = new WorldStateStore();
+            older.SetObject("range/barricade", Destroyed());
+            Assert.IsTrue(WorldStateFile.TrySave(SavePath, older, out _));
+
+            // The app is ended between the steps of the next save: the old file has become the backup,
+            // the new one is complete but still has its temporary name.
+            File.Move(SavePath, SavePath + WorldStateFile.BackupSuffix);
+            File.WriteAllText(SavePath + WorldStateFile.TempSuffix, WorldStateText.Write(SampleStore()));
+
+            var loaded = new WorldStateStore();
+            WorldStateLoadReport report = WorldStateFile.Load(SavePath, loaded);
+
+            Assert.IsTrue(report.Loaded && report.UsedPendingSave);
+            Assert.IsTrue(report.NeedsSave, "It is written in its proper place soon.");
+            Assert.AreEqual(WorldStateText.Write(SampleStore()), WorldStateText.Write(loaded), "The newest save, not the backup.");
+        }
+
+        [Test]
+        public void ASaveFromANewerVersionIsSetAsideAndNeverOverwritten()
+        {
+            Directory.CreateDirectory(folder);
+            string newer = WorldStateText.Header + " " + (WorldStateText.Version + 1) + "\nP a 1 1\nEND 1\n";
+            File.WriteAllText(SavePath, newer);
+
+            WorldState.FilePath = SavePath;
+            WorldStateLoadReport report = WorldState.Load();
+
+            Assert.IsFalse(report.Loaded);
+            Assert.AreEqual(1, report.SetAside);
+            Assert.IsNotEmpty(report.Problem);
+            Assert.AreEqual(newer, File.ReadAllText(SavePath + WorldStateFile.UnreadableSuffix), "Kept as it was.");
+
+            // Play goes on and is saved twice; before, the second save deleted the player's real file.
+            WorldState.Current.SetObject("range/barricade", Destroyed());
+            Assert.IsTrue(WorldState.Save());
+            WorldState.Current.SetObject("range/stone", Destroyed());
+            Assert.IsTrue(WorldState.Save());
+
+            Assert.AreEqual(newer, File.ReadAllText(SavePath + WorldStateFile.UnreadableSuffix), "Still there, unchanged.");
+            Assert.IsTrue(WorldStateFile.Load(SavePath, new WorldStateStore()).Loaded, "The new save is sound.");
+        }
+
+        [Test]
+        public void ADamagedSaveIsSetAsideAndTheGoodBackupIsKept()
+        {
+            var first = new WorldStateStore();
+            first.SetObject("range/barricade", Destroyed());
+            Assert.IsTrue(WorldStateFile.TrySave(SavePath, first, out _));
+            Assert.IsTrue(WorldStateFile.TrySave(SavePath, SampleStore(), out _));
+            string text = File.ReadAllText(SavePath);
+            File.WriteAllText(SavePath, text.Substring(0, text.Length / 2));
+
+            WorldState.FilePath = SavePath;
+            WorldStateLoadReport report = WorldState.Load();
+            Assert.IsTrue(report.Loaded && report.UsedBackup);
+            Assert.AreEqual(1, report.SetAside);
+            Assert.IsTrue(WorldState.IsDirty, "What was loaded is written soon as a sound main file.");
+
+            Assert.IsTrue(WorldState.Save());
+
+            // Before, this save moved the damaged file into the backup's place and deleted the good backup.
+            Assert.AreEqual(WorldStateText.Write(first), File.ReadAllText(SavePath + WorldStateFile.BackupSuffix),
+                "The good backup is still the backup.");
+            Assert.IsTrue(File.Exists(SavePath + WorldStateFile.UnreadableSuffix));
+            Assert.IsFalse(WorldState.IsDirty);
+        }
+
+        [Test]
+        public void AFileThatCanBeNeitherUsedNorSetAsideStopsSavingForTheSession()
+        {
+            Directory.CreateDirectory(folder);
+            string newer = WorldStateText.Header + " " + (WorldStateText.Version + 1) + "\nEND 0\n";
+            File.WriteAllText(SavePath, newer);
+
+            // Every name it could be set aside under is taken.
+            File.WriteAllText(SavePath + WorldStateFile.UnreadableSuffix, "x");
+            for (int i = 2; i <= 20; i++)
+            {
+                File.WriteAllText($"{SavePath}{WorldStateFile.UnreadableSuffix}-{i}", "x");
+            }
+
+            WorldState.FilePath = SavePath;
+            WorldStateLoadReport report = WorldState.Load();
+
+            Assert.IsTrue(report.SaveBlocked);
+            Assert.IsFalse(WorldState.SavesToDisk, "Kept in memory only.");
+            WorldState.Current.SetObject("range/barricade", Destroyed());
+            Assert.IsTrue(WorldState.Save());
+            Assert.AreEqual(newer, File.ReadAllText(SavePath), "The file it could not use is untouched.");
+        }
+
+        [Test]
         public void ASaveThatCannotBeWrittenIsReportedNotThrown()
         {
             // A file where the folder should be.
@@ -532,6 +627,25 @@ namespace Threefold.Tests
             // Once the owner is gone, the id is free again.
             Assert.IsTrue(PersistentIdRegistry.Unregister("range/barricade", first));
             Assert.IsTrue(PersistentIdRegistry.TryRegister("range/barricade", second));
+        }
+
+        [Test]
+        public void AnIdentifierWhoseOwnerIsGoneWithoutSayingSoIsFreeAgain()
+        {
+            var gone = new object();
+            var successor = new object();
+            var other = new object();
+            Assert.IsTrue(PersistentIdRegistry.TryRegister("range/door", gone));
+
+            // The host knows the first owner was destroyed; it never gave its identifier up.
+            PersistentIdRegistry.IsOwnerAlive = owner => !ReferenceEquals(owner, gone);
+
+            Assert.IsTrue(PersistentIdRegistry.TryRegister("range/door", successor),
+                "The object that replaces it after a reload keeps its saved state.");
+            Assert.IsFalse(PersistentIdRegistry.TryRegister("range/door", other), "A living owner still keeps its identifier.");
+            Assert.IsFalse(PersistentIdRegistry.Unregister("range/door", gone), "The old owner can no longer give it up.");
+            Assert.IsTrue(PersistentIdRegistry.IsRegistered("range/door"));
+            Assert.AreEqual(1, PersistentIdRegistry.DuplicateCount);
         }
 
         [Test]

@@ -714,6 +714,116 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void ADefaultClueNeverSuggestsADisciplineTheObjectDoesNotAnswer()
+        {
+            // Only what takes arcane charge pulses in the arcane glow; any other clue is a trace of a neutral tint.
+            foreach (ExampleObject example in Examples)
+            {
+                ClueKinds kinds = Compatibility.CluesFor(WorldMagicDefaults.Settings(example));
+                bool arcane = (kinds & ClueKinds.ArcanePulse) != 0;
+                Assert.AreEqual(arcane ? ClueDefaults.ArcaneGlow : ClueDefaults.Neutral, ClueDefaults.Accent(kinds), example.ToString());
+                Assert.AreEqual(arcane ? ClueDefaults.PulseStrength : ClueDefaults.TraceStrength, ClueDefaults.IdleStrength(kinds),
+                    example.ToString());
+            }
+
+            Assert.AreEqual(0f, ClueDefaults.IdleStrength(ClueKinds.None), "No property, no clue.");
+
+            // A crate that only burns, as Make Selection Magical would set it up: before, it pulsed like a crystal.
+            Assert.AreEqual(ClueDefaults.Neutral, ClueDefaults.Accent(ClueKinds.Flammable));
+
+            // The neutral tint is far from every discipline's colour, so it reads as none of them.
+            for (int slot = 0; slot < DisciplineCatalog.Count; slot++)
+            {
+                Color discipline = DisciplineCatalog.Get(slot).Color;
+                float distance = Vector3.Distance(new Vector3(ClueDefaults.Neutral.r, ClueDefaults.Neutral.g, ClueDefaults.Neutral.b),
+                    new Vector3(discipline.r, discipline.g, discipline.b));
+                Assert.Greater(distance, 0.3f, DisciplineCatalog.Get(slot).Name);
+            }
+        }
+
+        [Test]
+        public void AStateBurstPlaysFewerParticlesOnLowerLevelsAndWithReducedParticlesButIsNeverLeftOut()
+        {
+            var plain = new DiscoverySettings();
+            var reduced = new DiscoverySettings { reducedParticles = true };
+
+            Assert.AreEqual(1f, FeedbackPresentation.StateBurstShare(DiscoveryQuality.High, plain));
+            Assert.Less(FeedbackPresentation.StateBurstShare(DiscoveryQuality.Low, plain),
+                FeedbackPresentation.StateBurstShare(DiscoveryQuality.Medium, plain));
+            Assert.Less(FeedbackPresentation.StateBurstShare(DiscoveryQuality.Medium, plain),
+                FeedbackPresentation.StateBurstShare(DiscoveryQuality.High, plain));
+
+            foreach (DiscoveryQuality quality in new[] { DiscoveryQuality.Low, DiscoveryQuality.Medium, DiscoveryQuality.High })
+            {
+                float share = FeedbackPresentation.StateBurstShare(quality, reduced);
+                Assert.Greater(share, 0f, "The burst marks a change of state; it is never left out.");
+                Assert.LessOrEqual(share, FeedbackPresentation.StateBurstShare(quality, plain));
+                Assert.LessOrEqual(share, FeedbackPresentation.ReducedBurstShare);
+            }
+
+            // Before, these values were worked out but the objects' bursts ignored them and always played
+            // twelve. A burst of twelve now plays three with reduced particles, as an answer does at most,
+            // and half on the lowest level, as the answers do.
+            Assert.AreEqual(3, Mathf.RoundToInt(12 * FeedbackPresentation.StateBurstShare(DiscoveryQuality.High, reduced)));
+            Assert.AreEqual(6, Mathf.RoundToInt(12 * FeedbackPresentation.StateBurstShare(DiscoveryQuality.Low, plain)));
+            Assert.AreEqual(FeedbackPresentation.QualityShare(DiscoveryQuality.Low),
+                FeedbackPresentation.StateBurstShare(DiscoveryQuality.Low, plain), "One share per level for answers and bursts.");
+        }
+
+        [Test]
+        public void AFadingResonanceKeepsTheColourOfTheDisciplineThatCausedIt()
+        {
+            MagicalPropertySet crystal = Example(ExampleObject.ArcaneCrystal);
+            Color arcane = DisciplineCatalog.Get((int)MagicDiscipline.Arcane).Color;
+            Color flame = DisciplineCatalog.Get((int)MagicDiscipline.Flame).Color;
+            var settings = new ResonanceSettings();
+            var options = new DiscoverySettings();
+
+            // Aimed at with Arcane: it resonates in Arcane's colour.
+            bool arcaneFits = Compatibility.Matching(crystal, Compatibility.OfDefaultDiscipline(MagicDiscipline.Arcane)) != EffectKinds.None;
+            float target = ResonanceRules.Strength(arcaneFits, 3f, true, false, settings, options);
+            Assert.Greater(target, 0f);
+            Color shown = ResonanceRules.ColourToShow(default, arcane, target);
+            Assert.AreEqual(arcane, shown);
+
+            // Switched to Flame, which the crystal does not answer. The resonance fades, and it fades in
+            // Arcane's colour: before, it took Flame's orange for the moment of the fade.
+            bool flameFits = Compatibility.Matching(crystal, Compatibility.OfDefaultDiscipline(MagicDiscipline.Flame)) != EffectKinds.None;
+            Assert.IsFalse(flameFits);
+            target = ResonanceRules.Strength(flameFits, 3f, true, false, settings, options);
+            Assert.AreEqual(0f, target);
+            Assert.AreEqual(arcane, ResonanceRules.ColourToShow(shown, flame, target));
+            Assert.AreNotEqual(flame, ResonanceRules.ColourToShow(shown, flame, target));
+        }
+
+        [Test]
+        public void AnObjectThatNoPushCanMoveDoesNotResonateWithForce()
+        {
+            // A lift: along an axis that points up, a horizontal push has no share.
+            MagicalPropertySet lift = Example(ExampleObject.MovablePlatform);
+            lift.KineticAxis = Vector3.up;
+            Assert.IsFalse(lift.CouldRespondTo(MagicEffectKind.Force), "Before, it resonated with Aegis and never moved.");
+            lift.Apply(Effect(MagicEffectKind.Force, 1000f));
+            Run(lift, 3f);
+            Assert.AreEqual(0f, lift.Kinetic.Offset.magnitude, 0.0001f, "And indeed the strongest push does nothing.");
+
+            // No room to travel.
+            MagicalPropertySettings stuck = WorldMagicDefaults.Settings(ExampleObject.MovablePlatform);
+            stuck.kineticSettings.minTravel = 0f;
+            stuck.kineticSettings.maxTravel = 0f;
+            var block = new MagicalPropertySet(stuck) { KineticAxis = Vector3.forward };
+            Assert.IsFalse(block.CouldRespondTo(MagicEffectKind.Force));
+
+            // A slanted axis still has a horizontal share: it resonates, and a push does move it.
+            MagicalPropertySet ramp = Example(ExampleObject.MovablePlatform);
+            ramp.KineticAxis = new Vector3(0f, 1f, 1f);
+            Assert.IsTrue(ramp.CouldRespondTo(MagicEffectKind.Force));
+            ramp.Apply(Effect(MagicEffectKind.Force, 1000f));
+            Run(ramp, 3f);
+            Assert.Greater(ramp.Kinetic.Offset.magnitude, 0f);
+        }
+
+        [Test]
         public void LingeringStrengthensCluesOnlyAfterAWhileAndNotWithoutPause()
         {
             var settings = new AttentionSettings { delaySeconds = 10f, rampSeconds = 4f, holdSeconds = 3f, restSeconds = 8f, maxBoost = 1f };

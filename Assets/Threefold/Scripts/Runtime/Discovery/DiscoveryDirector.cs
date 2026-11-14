@@ -101,6 +101,8 @@ namespace Threefold.Discovery
         private readonly AttentionState[] attentionStates = new AttentionState[MaxTrackedLimit];
         private readonly DiscoveryClues[] previousTracked = new DiscoveryClues[MaxTrackedLimit];
         private readonly float[] previousShown = new float[MaxTrackedLimit];
+        private readonly Color[] shownColour = new Color[MaxTrackedLimit];
+        private readonly Color[] previousShownColour = new Color[MaxTrackedLimit];
         private readonly AttentionState[] previousAttention = new AttentionState[MaxTrackedLimit];
         private int trackedCount;
 
@@ -295,8 +297,10 @@ namespace Threefold.Discovery
                 return;
             }
 
-            // The one particle option that concerns the objects' own effects is passed on to them.
+            // The particle options that concern the objects' own effects are passed on to them: no
+            // repeating embers with reduced particles, and fewer particles in a burst at a change of state.
             PropertyStateVisuals.ReducedParticles = settings.reducedParticles;
+            PropertyStateVisuals.BurstShare = FeedbackPresentation.StateBurstShare(Quality, settings);
 
             float deltaTime = Time.deltaTime;
             scanTimer -= deltaTime;
@@ -363,6 +367,7 @@ namespace Threefold.Discovery
         {
             Array.Copy(tracked, previousTracked, trackedCount);
             Array.Copy(shown, previousShown, trackedCount);
+            Array.Copy(shownColour, previousShownColour, trackedCount);
             Array.Copy(attentionStates, previousAttention, trackedCount);
             int previousCount = trackedCount;
 
@@ -378,6 +383,7 @@ namespace Threefold.Discovery
                 tracked[selected] = clues;
                 int before = Array.IndexOf(previousTracked, clues, 0, previousCount);
                 shown[selected] = before >= 0 ? previousShown[before] : 0f;
+                shownColour[selected] = before >= 0 ? previousShownColour[before] : default;
                 attentionStates[selected] = before >= 0 ? previousAttention[before] : default;
                 selected++;
             }
@@ -466,6 +472,7 @@ namespace Threefold.Discovery
                 float target = ResonanceRules.Strength(compatible, distance, i == aimed, preparing, resonance, settings);
                 float before = shown[i];
                 shown[i] = ResonanceRules.Approach(before, target, resonance.fadeSeconds, deltaTime);
+                shownColour[i] = ResonanceRules.ColourToShow(shownColour[i], disciplineColor, target);
                 if (before < ResonanceThreshold && shown[i] >= ResonanceThreshold)
                 {
                     clues.RaiseResonance();
@@ -489,7 +496,7 @@ namespace Threefold.Discovery
                 float resonanceGlow = FeedbackPresentation.Breath(time, shown[i], true);
                 if (resonanceGlow >= ambientGlow)
                 {
-                    clues.ShowAccent(disciplineColor, resonanceGlow);
+                    clues.ShowAccent(shownColour[i], resonanceGlow);
                 }
                 else
                 {
