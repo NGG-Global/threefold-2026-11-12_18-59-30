@@ -58,11 +58,9 @@ Unity's own test run they are inconclusive, because Unity's Mono does not count 
 | 8 | `be1b39d` (LM-08 branch head), tests only | **Green.** EditMode: 878 tests, **873 passed, 0 failed**, 5 inconclusive (the five allocation tests, listed by name). 13 minutes |
 
 | 9 | `ed638fa` (`main`, merge of PR #22), tests and APK | **Interrupted**, not a code failure: 12 minutes into the EditMode tests the log reads "The runner has received a shutdown signal" (the laptop or its runner service stopped) |
-| 10 | `ed638fa` (`main`), tests and APK | Started again at 17:48 UTC on 14 November; **queued** until the laptop runner is online |
-
-Until run 10 completes, the latest APK is run 6's (`27284d7`). Its game code is the same as `main`'s: the
-runtime scripts and shaders are identical; `main` differs only in an Editor validation rule, tests, the
-workflow and documentation.
+| 10 | `ed638fa` (`main`), tests and APK | **Stopped at once**: "The project is open in the Unity Editor". Run 9's Unity, cut off mid-run, had left `Temp\UnityLockfile` in the runner's copy of the project |
+| 12 | `738ce5c` (`main`), tests and APK | Stopped at once, same cause |
+| 13 | `11552e1` (`main` plus the scripts' handling of a lock left by an interrupted run), tests and APK | **Succeeded.** The scripts set the leftover lock aside (renamed, not deleted). EditMode: 878 tests, 873 passed, **0 failed**, 5 inconclusive. APK built in 6 minutes (the runner's import cache was warm). Artifact `threefold-android-development-13` (54.2 MB zip). The game code is the same as `main`'s |
 
 Later runs are recorded below as they complete.
 
