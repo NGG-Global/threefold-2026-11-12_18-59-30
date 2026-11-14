@@ -134,6 +134,9 @@ namespace Threefold.Tests
             settings.kineticSettings = new KineticSettings { localAxis = Vector3.zero };
             AssertOneProblem(settings, "kinetic: the axis has no direction");
 
+            settings.kineticSettings = new KineticSettings { localAxis = Vector3.up };
+            AssertOneProblem(settings, "kinetic: the axis points up or down");
+
             settings.kineticSettings = new KineticSettings { mode = KineticMode.GroundPlane, maxRange = 0f };
             AssertOneProblem(settings, "kinetic: the range");
 

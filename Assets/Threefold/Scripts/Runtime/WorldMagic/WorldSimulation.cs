@@ -1,3 +1,4 @@
+using Threefold.Persistence;
 using UnityEngine;
 
 namespace Threefold.WorldMagic
@@ -83,9 +84,11 @@ namespace Threefold.WorldMagic
 
         /// <summary>
         /// An object is gone (destroyed, unloaded, switched off): it leaves the simulation and whatever
-        /// was on its way to it is given up, so nothing calls into it afterwards.
+        /// was on its way to it is given up, so nothing calls into it afterwards. A critical reaction
+        /// given up is reported, unless <paramref name="report"/> is false because the object's state
+        /// was just set as a whole (a reload, a restore) and what was on its way is meant to go.
         /// </summary>
-        public static void Forget(ISimulated item, IMagicEffectReceiver receiver)
+        public static void Forget(ISimulated item, IMagicEffectReceiver receiver, bool report = true)
         {
             if (instance == null)
             {
@@ -93,7 +96,7 @@ namespace Threefold.WorldMagic
             }
 
             instance.simulation.Remove(item);
-            instance.scheduler.Cancel(receiver);
+            instance.scheduler.Cancel(receiver, report);
         }
 
         /// <summary>Sets the budgets. Called by <see cref="WorldSimulationBudgets"/>.</summary>
@@ -137,6 +140,8 @@ namespace Threefold.WorldMagic
             instance = this;
             simulation = new SimulationSet(budgets);
             scheduler = new ReactionScheduler(budgets) { IsValidTarget = IsAlive };
+            scheduler.Refused += ReportCritical;
+            WorldState.Reloaded += HandleWorldReloaded;
         }
 
         private void OnDestroy()
@@ -144,7 +149,58 @@ namespace Threefold.WorldMagic
             if (instance == this)
             {
                 instance = null;
+                WorldState.Reloaded -= HandleWorldReloaded;
             }
+        }
+
+        /// <summary>
+        /// The world takes its state from the store again. What was on its way belonged to the world as
+        /// it was, and is dropped: a restarted enemy is not heated by a fire that no longer burns.
+        /// </summary>
+        private void HandleWorldReloaded(WorldReload reload)
+        {
+            int criticalForgotten = scheduler.Clear();
+            if (criticalForgotten > 0)
+            {
+                Debug.Log($"[Threefold] The world was reloaded with {criticalForgotten} critical reaction(s) still on their " +
+                          "way. They were dropped with the rest of the temporary state.");
+            }
+        }
+
+        /// <summary>
+        /// A puzzle may depend on a critical reaction, so every one that is not carried out is reported
+        /// at once, with the reason. They are rare by design; flavour reactions are summarised instead.
+        /// </summary>
+        private void ReportCritical(QueuedReaction reaction, EnqueueResult reason)
+        {
+            if (reaction.Priority != ReactionPriority.Critical)
+            {
+                return;
+            }
+
+            Object context = reaction.Target as Object;
+            string target = context != null ? $"'{context.name}'" : "a target that is gone";
+            string why;
+            switch (reason)
+            {
+                case EnqueueResult.DepthLimit:
+                    why = $"it would be {reaction.Effect.Depth} steps from what the player did, and chains may go " +
+                          $"{budgets.maxDepth} (World Simulation Budgets)";
+                    break;
+                case EnqueueResult.Duplicate:
+                    why = "the target takes each kind of effect once per event, and this one has already reached it, " +
+                          "or is on its way, from the same event by another path";
+                    break;
+                case EnqueueResult.InvalidTarget:
+                    why = "the target was destroyed, unloaded or switched off before it arrived";
+                    break;
+                default:
+                    why = reason.ToString();
+                    break;
+            }
+
+            Debug.LogWarning($"[Threefold] A critical reaction ({reaction.Effect.Kind} {reaction.Effect.Magnitude:0.##}) for " +
+                             $"{target} was not carried out: {why}. Check the puzzle that depends on it.", context);
         }
 
         private void Update()
@@ -182,7 +238,7 @@ namespace Threefold.WorldMagic
             }
 
             Debug.LogWarning($"[Threefold] {dropped - reportedDrops} reaction(s) of normal or low priority were dropped because " +
-                             $"the reaction queue was full (capacity {budgets.queueCapacity}). Critical reactions are never dropped.");
+                             $"the reaction queue was full (capacity {budgets.queueCapacity}). Critical reactions are never refused for lack of room.");
             reportedDrops = dropped;
             sinceRefusalLog = 0f;
         }

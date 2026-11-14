@@ -156,6 +156,7 @@ namespace Threefold.Tests
             public readonly List<string> Journal;
             public Action<MagicEffect> OnReceive;
             public bool Valid = true;
+            public EffectResponse Response = EffectResponse.Applied;
 
             public Recorder(string name, List<string> journal)
             {
@@ -167,7 +168,7 @@ namespace Threefold.Tests
             {
                 Journal.Add($"{Name}:{effect.EventId}");
                 OnReceive?.Invoke(effect);
-                return EffectResponse.Applied;
+                return Response;
             }
         }
 
@@ -338,8 +339,8 @@ namespace Threefold.Tests
 
             Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(first, Queued(7), ReactionPriority.Normal));
             Assert.AreEqual(EnqueueResult.Duplicate, scheduler.Enqueue(first, Queued(7), ReactionPriority.Normal));
-            Assert.AreEqual(EnqueueResult.Duplicate, scheduler.Enqueue(first, Queued(7, 2), ReactionPriority.Critical),
-                "By another path, at another depth and priority: still the same effect of the same event.");
+            Assert.AreEqual(EnqueueResult.Duplicate, scheduler.Enqueue(first, Queued(7, 2), ReactionPriority.Low),
+                "By another path, at another depth and a lower priority: still the same effect of the same event.");
 
             // Another target, another kind of effect, another event: none of these is a duplicate.
             Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(second, Queued(7), ReactionPriority.Normal));
@@ -351,6 +352,124 @@ namespace Threefold.Tests
             Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(first, Queued(0), ReactionPriority.Normal));
 
             Assert.AreEqual(2, scheduler.Statistics.Duplicates);
+        }
+
+        [Test]
+        public void AMoreUrgentCopyTakesThePlaceOfALessUrgentOneThatWaits()
+        {
+            var journal = new List<string>();
+            var door = new Recorder("door", journal);
+            var refused = new List<string>();
+            var scheduler = new ReactionScheduler();
+            scheduler.Refused += (reaction, reason) => refused.Add($"{reaction.Priority}:{reason}");
+
+            // A weak flavour reaction of an event is waiting when the critical one of the same event comes.
+            Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(door, Queued(7), ReactionPriority.Low));
+            Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(door, Queued(7), ReactionPriority.Critical),
+                "A puzzle must not lose its effect to a weaker copy that happened to be offered first.");
+            CollectionAssert.AreEqual(new[] { "Low:Duplicate" }, refused, "The copy that gave way is reported.");
+            Assert.AreEqual(1, scheduler.Count);
+            Assert.AreEqual(1, scheduler.CriticalCount);
+
+            // Equal or lower urgency is still a duplicate, as before.
+            Assert.AreEqual(EnqueueResult.Duplicate, scheduler.Enqueue(door, Queued(7), ReactionPriority.Critical));
+            Assert.AreEqual(EnqueueResult.Duplicate, scheduler.Enqueue(door, Queued(7), ReactionPriority.Normal));
+
+            Assert.AreEqual(1, scheduler.Process(100));
+            CollectionAssert.AreEqual(new[] { "door:7" }, journal, "Delivered once.");
+            Assert.AreEqual(3, scheduler.Statistics.Duplicates);
+        }
+
+        [Test]
+        public void AFullQueueNeverCostsBothCopiesOfAnEffect()
+        {
+            var journal = new List<string>();
+            var door = new Recorder("door", journal);
+            var filler = new Recorder("filler", journal);
+            var scheduler = new ReactionScheduler(new ReactionBudgets { queueCapacity = 4 });
+
+            Assert.AreEqual(EnqueueResult.Queued, scheduler.Enqueue(door, Queued(7), ReactionPriority.Low));
+            for (int i = 0; i < 4; i++)
+            {
+                scheduler.Enqueue(filler, Queued(100 + i), ReactionPriority.Normal);
+            }
+
+            // A more urgent copy finds its queue full: it is refused, and the waiting copy stays.
+            Assert.AreEqual(EnqueueResult.QueueFull, scheduler.Enqueue(door, Queued(7), ReactionPriority.Normal));
+            scheduler.Process(100);
+            CollectionAssert.Contains(journal, "door:7", "Before, both copies were lost.");
+        }
+
+        [Test]
+        public void AListenerMayOfferMoreWhileReactionsAreReported()
+        {
+            var journal = new List<string>();
+            var leaving = new Recorder("leaving", journal);
+            var other = new Recorder("other", journal);
+            var reported = new List<int>();
+            var scheduler = new ReactionScheduler();
+            bool acted = false;
+            scheduler.Refused += (reaction, reason) =>
+            {
+                reported.Add(reaction.Effect.EventId);
+                if (acted)
+                {
+                    return;
+                }
+
+                // In the middle of a report, a listener offers a more urgent copy (which makes the waiting
+                // one give way, itself a report) and cancels elsewhere (another report).
+                acted = true;
+                scheduler.Enqueue(other, Queued(50), ReactionPriority.Critical);
+                scheduler.Cancel(other);
+            };
+
+            scheduler.Enqueue(other, Queued(50), ReactionPriority.Low);
+            scheduler.Enqueue(leaving, Queued(1), ReactionPriority.Normal);
+            scheduler.Enqueue(leaving, Queued(2), ReactionPriority.Normal);
+            scheduler.Enqueue(leaving, Queued(3), ReactionPriority.Critical);
+
+            Assert.AreEqual(3, scheduler.Cancel(leaving));
+            CollectionAssert.IsSubsetOf(new[] { 3, 1, 2 }, reported, "Every reaction given up is reported, whatever the listener does.");
+        }
+
+        [Test]
+        public void EveryReactionThatIsGivenUpIsReported()
+        {
+            var journal = new List<string>();
+            var leaving = new Recorder("leaving", journal);
+            var refused = new List<string>();
+            var scheduler = new ReactionScheduler();
+            scheduler.Refused += (reaction, reason) => refused.Add($"{reaction.Priority}:{reason}");
+
+            scheduler.Enqueue(leaving, Queued(1), ReactionPriority.Normal);
+            scheduler.Enqueue(leaving, Queued(2), ReactionPriority.Critical);
+            Assert.AreEqual(EnqueueResult.DepthLimit, scheduler.Enqueue(leaving, Queued(3, 4), ReactionPriority.Critical));
+
+            // Switched off or unloaded while they wait.
+            Assert.AreEqual(2, scheduler.Cancel(leaving));
+
+            CollectionAssert.AreEqual(new[] { "Critical:DepthLimit", "Critical:InvalidTarget", "Normal:InvalidTarget" }, refused,
+                "Nothing waiting for a target disappears without a word, least of all a critical reaction.");
+        }
+
+        [Test]
+        public void ACriticalReactionThatItsTargetTurnsAwayIsReported()
+        {
+            var journal = new List<string>();
+            var door = new Recorder("door", journal) { Response = EffectResponse.Duplicate };
+            var refused = new List<string>();
+            var scheduler = new ReactionScheduler();
+            scheduler.Refused += (reaction, reason) => refused.Add($"{reaction.Priority}:{reason}");
+
+            // The door had already taken charge from this event by another path, so these change nothing.
+            scheduler.Enqueue(door, Queued(9, 1, MagicEffectKind.ArcaneCharge), ReactionPriority.Normal);
+            scheduler.Enqueue(door, Queued(10, 1, MagicEffectKind.ArcaneCharge), ReactionPriority.Critical);
+            Assert.AreEqual(2, scheduler.Process(100));
+
+            CollectionAssert.AreEqual(new[] { "Critical:Duplicate" }, refused,
+                "Only the critical one is worth a report; loops are still prevented the same way.");
+            Assert.AreEqual(1, scheduler.Statistics.TurnedAway);
         }
 
         [Test]

@@ -74,6 +74,9 @@ namespace Threefold.WorldMagic
         /// <summary>Critical reactions taken beyond the queue capacity.</summary>
         public long CriticalOverflow;
 
+        /// <summary>Critical reactions delivered that their target turned away, because it had taken the same effect of the same event by another path.</summary>
+        public long TurnedAway;
+
         /// <summary>The most that waited at one time.</summary>
         public int PeakWaiting;
     }
@@ -86,12 +89,16 @@ namespace Threefold.WorldMagic
     ///
     /// - Depth: an effect deeper than the limit is refused, so a chain ends. The depth travels with
     ///   the effect and with the state it causes, so a slow chain (a fire spreading) ends as well.
-    /// - Duplicates: the same kind of effect from the same event is not queued twice for a target.
+    /// - Duplicates: the same kind of effect from the same event is not queued twice for a target. If
+    ///   the second is more urgent than the one that waits (a critical one behind a low one), the
+    ///   waiting one gives way, so a puzzle never loses its effect to a weaker copy.
     /// - Order: critical first, then normal, then low; within a priority, first offered, first out.
     /// - Overflow: a full queue refuses normal and low reactions, counts them and reports them
     ///   through <see cref="Refused"/>. A critical reaction is always taken; the queue grows for it.
     /// - Validity: a target is checked again at the moment of delivery, and everything waiting for
     ///   a target can be cancelled when it is destroyed or unloaded.
+    /// - Every reaction that is refused, given up or turned away by its target as a duplicate is
+    ///   reported through <see cref="Refused"/>, so the host can make a lost critical one visible.
     ///
     /// Plain C#. Time, physics and Unity objects are the host's business.
     /// </summary>
@@ -101,6 +108,7 @@ namespace Threefold.WorldMagic
         private readonly Queue<QueuedReaction> normal;
         private readonly Queue<QueuedReaction> low;
         private readonly Queue<QueuedReaction> scratch;
+        private readonly List<QueuedReaction> givenUp = new List<QueuedReaction>(16);
         private ReactionStatistics statistics;
         private long nextSequence;
         private bool processing;
@@ -147,12 +155,14 @@ namespace Threefold.WorldMagic
                 return Refuse(reaction, EnqueueResult.DepthLimit);
             }
 
-            if (IsWaiting(target, effect.Kind, effect.EventId))
+            int waiting = WaitingPriority(target, effect.Kind, effect.EventId);
+            if (waiting >= (int)priority)
             {
                 statistics.Duplicates++;
                 return Refuse(reaction, EnqueueResult.Duplicate);
             }
 
+            // Room is checked before a waiting copy gives way, so a full queue never costs both copies.
             Queue<QueuedReaction> queue = QueueFor(priority);
             if (priority == ReactionPriority.Critical)
             {
@@ -166,6 +176,12 @@ namespace Threefold.WorldMagic
             {
                 statistics.Dropped++;
                 return Refuse(reaction, EnqueueResult.QueueFull);
+            }
+
+            if (waiting >= 0)
+            {
+                // A more urgent copy of an effect that already waits: the waiting one gives way.
+                RemoveWaiting(target, effect.Kind, effect.EventId, priority);
             }
 
             nextSequence++;
@@ -208,9 +224,18 @@ namespace Threefold.WorldMagic
                         continue;
                     }
 
-                    reaction.Target.ReceiveEffect(reaction.Effect);
+                    EffectResponse response = reaction.Target.ReceiveEffect(reaction.Effect);
                     statistics.Delivered++;
                     delivered++;
+
+                    if (response == EffectResponse.Duplicate && reaction.Priority == ReactionPriority.Critical)
+                    {
+                        // The target had already taken this kind of effect from the same event by another
+                        // path, so this one changed nothing. That is how loops are prevented, but a puzzle
+                        // may have counted on it, so it is reported rather than passed over.
+                        statistics.TurnedAway++;
+                        Refused?.Invoke(reaction, EnqueueResult.Duplicate);
+                    }
                 }
             }
             finally
@@ -223,27 +248,42 @@ namespace Threefold.WorldMagic
 
         /// <summary>
         /// Gives up everything waiting for a target, because it was destroyed, unloaded or switched off.
-        /// Reactions the target itself sent out earlier are kept: what it set off still happens.
+        /// Reactions the target itself sent out earlier are kept: what it set off still happens. Each
+        /// reaction given up is reported through <see cref="Refused"/>, unless <paramref name="report"/>
+        /// is false: when the target's state was just set as a whole, what was on its way is meant to go.
         /// </summary>
         /// <returns>How many reactions were removed.</returns>
-        public int Cancel(IMagicEffectReceiver target)
+        public int Cancel(IMagicEffectReceiver target, bool report = true)
         {
             if (target == null)
             {
                 return 0;
             }
 
+            givenUp.Clear();
             int removed = CancelIn(critical, target) + CancelIn(normal, target) + CancelIn(low, target);
             statistics.Invalidated += removed;
+            if (report)
+            {
+                ReportGivenUp(EnqueueResult.InvalidTarget);
+            }
+
+            givenUp.Clear();
             return removed;
         }
 
-        /// <summary>Forgets everything that waits, for example when a level is left.</summary>
-        public void Clear()
+        /// <summary>
+        /// Forgets everything that waits, for example when the world is reloaded or a level is left.
+        /// Nothing is reported: what was on its way belonged to a world that is no longer there.
+        /// </summary>
+        /// <returns>How many critical reactions were among those forgotten.</returns>
+        public int Clear()
         {
+            int criticalForgotten = critical.Count;
             critical.Clear();
             normal.Clear();
             low.Clear();
+            return criticalForgotten;
         }
 
         public void ResetStatistics()
@@ -290,11 +330,84 @@ namespace Threefold.WorldMagic
             return target != null && (IsValidTarget == null || IsValidTarget(target));
         }
 
-        private bool IsWaiting(IMagicEffectReceiver target, MagicEffectKind kind, int eventId)
+        /// <summary>The priority of the same effect of the same event already waiting for the target, or -1.</summary>
+        private int WaitingPriority(IMagicEffectReceiver target, MagicEffectKind kind, int eventId)
         {
             // An effect without an identity is never a duplicate of anything.
-            return eventId != 0 && (IsWaitingIn(critical, target, kind, eventId) || IsWaitingIn(normal, target, kind, eventId) ||
-                                    IsWaitingIn(low, target, kind, eventId));
+            if (eventId == 0)
+            {
+                return -1;
+            }
+
+            if (IsWaitingIn(critical, target, kind, eventId)) return (int)ReactionPriority.Critical;
+            if (IsWaitingIn(normal, target, kind, eventId)) return (int)ReactionPriority.Normal;
+            if (IsWaitingIn(low, target, kind, eventId)) return (int)ReactionPriority.Low;
+            return -1;
+        }
+
+        /// <summary>Takes out the waiting copies of an effect that are less urgent than <paramref name="than"/>, and reports them.</summary>
+        private void RemoveWaiting(IMagicEffectReceiver target, MagicEffectKind kind, int eventId, ReactionPriority than)
+        {
+            givenUp.Clear();
+            if (than > ReactionPriority.Normal)
+            {
+                RemoveFrom(normal, target, kind, eventId);
+            }
+
+            if (than > ReactionPriority.Low)
+            {
+                RemoveFrom(low, target, kind, eventId);
+            }
+
+            statistics.Duplicates += givenUp.Count;
+            ReportGivenUp(EnqueueResult.Duplicate);
+        }
+
+        private void RemoveFrom(Queue<QueuedReaction> queue, IMagicEffectReceiver target, MagicEffectKind kind, int eventId)
+        {
+            int count = queue.Count;
+            scratch.Clear();
+            for (int i = 0; i < count; i++)
+            {
+                QueuedReaction waiting = queue.Dequeue();
+                if (waiting.Effect.EventId == eventId && waiting.Effect.Kind == kind && ReferenceEquals(waiting.Target, target))
+                {
+                    givenUp.Add(waiting);
+                }
+                else
+                {
+                    scratch.Enqueue(waiting);
+                }
+            }
+
+            while (scratch.Count > 0)
+            {
+                queue.Enqueue(scratch.Dequeue());
+            }
+        }
+
+        /// <summary>
+        /// Reports what was taken out, once the queues are whole again. The list is copied first, so a
+        /// listener may offer or cancel more without disturbing the report in progress.
+        /// </summary>
+        private void ReportGivenUp(EnqueueResult reason)
+        {
+            if (givenUp.Count == 0)
+            {
+                return;
+            }
+
+            QueuedReaction[] batch = givenUp.ToArray();
+            givenUp.Clear();
+            if (Refused == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < batch.Length; i++)
+            {
+                Refused(batch[i], reason);
+            }
         }
 
         private static bool IsWaitingIn(Queue<QueuedReaction> queue, IMagicEffectReceiver target, MagicEffectKind kind, int eventId)
@@ -322,6 +435,7 @@ namespace Threefold.WorldMagic
                 if (ReferenceEquals(waiting.Target, target))
                 {
                     removed++;
+                    givenUp.Add(waiting);
                 }
                 else
                 {

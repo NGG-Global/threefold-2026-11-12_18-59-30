@@ -151,6 +151,9 @@ namespace Threefold.WorldMagic
         // Asked of the GameObject and the component, which is also right outside Play mode.
         private bool IsSwitchedOn => enabled && gameObject.activeInHierarchy;
 
+        /// <summary>What of this object is saved: the parts its definition names, if it has an identifier.</summary>
+        private PersistedState SavedParts => persistent && definition != null ? definition.Properties.persisted : PersistedState.None;
+
         public bool IsSimulationCritical => definition != null && definition.Properties.critical;
 
         public bool IsAimAssistAvailable =>
@@ -329,7 +332,7 @@ namespace Threefold.WorldMagic
                 // While it was off, time stood still for it, or is made up now, as its definition says.
                 if (definition.Properties.whenInactive == InactiveBehaviour.CatchUp)
                 {
-                    properties.CatchUp(Time.time - switchedOffAt);
+                    properties.CatchUp(Time.time - switchedOffAt, SavedParts);
                     ShowLoadedState(StateReset.Settled);
                     Persist();
                 }
@@ -357,7 +360,8 @@ namespace Threefold.WorldMagic
 
             if (definition != null && definition.Properties.whenInactive == InactiveBehaviour.Reset)
             {
-                properties.ClearTemporary();
+                // Heat or charge the definition saves as an exception is kept, or this would erase it.
+                properties.ClearTemporary(SavedParts);
                 ApplyOffset();
 
                 // Whoever shows or follows the state is told, or a door would stay open for a crystal
@@ -464,6 +468,11 @@ namespace Threefold.WorldMagic
         /// <summary>The world was reloaded: take what is saved, reset what is temporary.</summary>
         private void HandleWorldReloaded(WorldReload reload)
         {
+            if (LeftWithoutNotice())
+            {
+                return;
+            }
+
             if (properties == null)
             {
                 return;
@@ -484,7 +493,8 @@ namespace Threefold.WorldMagic
         {
             ApplyLoadedState();
 
-            WorldSimulation.Forget(this, this);
+            // The state was set as a whole: what was on its way to the object belonged to the old one.
+            WorldSimulation.Forget(this, this, false);
             awake = false;
             if (IsSwitchedOn && !properties.IsAtRest)
             {
@@ -510,9 +520,38 @@ namespace Threefold.WorldMagic
             }
         }
 
+        /// <summary>
+        /// True if this object was destroyed without OnDestroy (Unity skips it for an object that was
+        /// never switched on), yet still listens to the world. It stops listening and gives its
+        /// identifier up, so it neither touches a destroyed object nor overwrites what its successor saves.
+        /// </summary>
+        private bool LeftWithoutNotice()
+        {
+            if (this != null)
+            {
+                return false;
+            }
+
+            WorldState.Reloaded -= HandleWorldReloaded;
+            WorldState.Capturing -= Persist;
+            listensToWorld = false;
+            if (persistent)
+            {
+                PersistentIdRegistry.Unregister(persistentId, this);
+                persistent = false;
+            }
+
+            return true;
+        }
+
         /// <summary>Writes what is meant to last into the world state. Does nothing for an object without an identifier.</summary>
         private void Persist()
         {
+            if (LeftWithoutNotice())
+            {
+                return;
+            }
+
             if (persistent && properties != null)
             {
                 WorldState.Current.SetObject(persistentId, properties.Capture(definition.Properties.persisted));
@@ -622,7 +661,7 @@ namespace Threefold.WorldMagic
                 {
                     Collider other = ReactionOverlaps[i];
                     ReactionOverlaps[i] = null;
-                    if (other == null || found >= MaxReactionTargets || other.transform.IsChildOf(self))
+                    if (other == null || other.transform.IsChildOf(self))
                     {
                         continue;
                     }
@@ -635,6 +674,19 @@ namespace Threefold.WorldMagic
 
                     Vector3 point = other.bounds.ClosestPoint(origin);
                     float distance = (point - origin).sqrMagnitude;
+                    int known = IndexOfTarget(receiver, found);
+
+                    // When the list is full, only something nearer than the farthest in it can still
+                    // count, so the nearest are kept whatever order the physics engine reports them in.
+                    int farthest = -1;
+                    if (known < 0 && found >= MaxReactionTargets)
+                    {
+                        farthest = FarthestInReach(linkedCount, found);
+                        if (farthest < 0 || distance >= ReactionDistances[farthest])
+                        {
+                            continue;
+                        }
+                    }
 
                     // A wall stops a reaction as it stops an attack's area; creatures do not shield.
                     Transform targetTransform = receiver is Component component ? component.transform : other.transform;
@@ -643,7 +695,6 @@ namespace Threefold.WorldMagic
                         continue;
                     }
 
-                    int known = IndexOfTarget(receiver, found);
                     if (known >= 0)
                     {
                         // Several colliders of one target: it counts once, at its nearest point.
@@ -653,6 +704,14 @@ namespace Threefold.WorldMagic
                             ReactionPoints[known] = point;
                         }
 
+                        continue;
+                    }
+
+                    if (farthest >= 0)
+                    {
+                        ReactionTargets[farthest] = receiver;
+                        ReactionPoints[farthest] = point;
+                        ReactionDistances[farthest] = distance;
                         continue;
                     }
 
@@ -678,6 +737,21 @@ namespace Threefold.WorldMagic
                     -1, rule.targets, request.EventId, request.Depth);
                 WorldSimulation.React(receiver, effect, rule.priority);
             }
+        }
+
+        /// <summary>The farthest of the targets found by reach (after the linked ones), or -1 if there are none.</summary>
+        private static int FarthestInReach(int from, int to)
+        {
+            int farthest = -1;
+            for (int i = from; i < to; i++)
+            {
+                if (farthest < 0 || ReactionDistances[i] > ReactionDistances[farthest])
+                {
+                    farthest = i;
+                }
+            }
+
+            return farthest;
         }
 
         private static int IndexOfTarget(IMagicEffectReceiver receiver, int count)

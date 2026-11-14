@@ -339,6 +339,10 @@ namespace Threefold.EditorTools
 
                 DiscoveryClues clues = Undo.AddComponent<DiscoveryClues>(target);
                 clues.Bind(magical, target.GetComponent<PropertyStateVisuals>(), moving);
+
+                // Its idle clue follows from its properties: a crate that only burns must not pulse like a crystal.
+                ClueKinds kinds = Compatibility.CluesFor(magical.Definition != null ? magical.Definition.Properties : null);
+                clues.SetIdleClue(ClueDefaults.IdleStrength(kinds), ClueDefaults.Accent(kinds));
                 report.AppendLine(moving != null
                     ? $"'{target.name}': added DiscoveryClues; '{moving.name}' makes its small movements."
                     : $"'{target.name}': added DiscoveryClues without a moving part. Put its mesh on a child object and " +

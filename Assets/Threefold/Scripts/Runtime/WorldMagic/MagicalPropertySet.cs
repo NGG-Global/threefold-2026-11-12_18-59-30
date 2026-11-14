@@ -548,12 +548,30 @@ namespace Threefold.WorldMagic
         /// glide is completed; damage, a latched activation, a collapse and the position stay. Nothing
         /// is announced.
         /// </summary>
-        public void ClearTemporary()
+        /// <param name="keep">
+        /// What the object saves. Heat and charge named here are the configured exceptions: they are
+        /// kept as a reload would restore them (the heat without the fire, a timed activation as its
+        /// charge), so switching an object off cannot erase what a puzzle depends on.
+        /// </param>
+        public void ClearTemporary(PersistedState keep = PersistedState.None)
         {
+            PersistedState exceptions = keep & (PersistedState.Heat | PersistedState.Charge);
+            ObjectRecord kept = exceptions != PersistedState.None ? Capture(exceptions) : default;
+
             Thermal?.Clear();
             Arcane?.ClearTemporary();
             Stability?.ClearTemporary();
             Kinetic?.Finish();
+
+            if (Thermal != null && (kept.Saved & PersistedState.Heat) != 0)
+            {
+                Thermal.SetHeat(kept.Heat);
+            }
+
+            if (Arcane != null && (kept.Saved & PersistedState.Charge) != 0 && Arcane.State != ArcaneState.Activated)
+            {
+                Arcane.Load(kept.Charge, kept.Activated);
+            }
 
             silent = true;
             ApplyCouplings();
@@ -568,9 +586,10 @@ namespace Threefold.WorldMagic
         /// Makes up time the object was away for: it cools, drains, burns down and finishes its glide as
         /// if the time had passed, in fixed steps so the result does not depend on how long a frame was.
         /// Nothing is announced and no reaction is sent, because nobody was there. After two minutes
-        /// whatever is still temporary is simply dropped.
+        /// whatever is still temporary is simply dropped, except the heat and charge named in
+        /// <paramref name="keep"/> (see <see cref="ClearTemporary"/>).
         /// </summary>
-        public void CatchUp(float seconds)
+        public void CatchUp(float seconds, PersistedState keep = PersistedState.None)
         {
             if (seconds <= 0f || IsDestroyed)
             {
@@ -596,7 +615,7 @@ namespace Threefold.WorldMagic
 
             if (remaining > 0.0001f && !IsAtRest)
             {
-                ClearTemporary();
+                ClearTemporary(keep);
                 return;
             }
 
@@ -692,7 +711,8 @@ namespace Threefold.WorldMagic
                         return true;
                     }
 
-                    if (Kinetic != null && Kinetic.Settings.resistance < 1f && !collapsed && !braced)
+                    // Only if some push could really move it: not along an axis that points up, not without room.
+                    if (Kinetic != null && KineticRules.CanEverBePushed(Kinetic.Settings, kineticAxis) && !collapsed && !braced)
                     {
                         return true;
                     }

@@ -257,18 +257,43 @@ namespace Threefold.Persistence
 
         /// <summary>What went wrong, if anything did. Empty when there was simply nothing saved yet.</summary>
         public string Problem;
+
+        /// <summary>A save that was written in full but never put in place (the app was ended in between) was used: it is the newest.</summary>
+        public bool UsedPendingSave;
+
+        /// <summary>How many files this version could not use were set aside, under a name ending in <see cref="WorldStateFile.UnreadableSuffix"/>.</summary>
+        public int SetAside;
+
+        /// <summary>
+        /// A file that could not be used could not be set aside either. Saving to this place would
+        /// overwrite it, so the session must not save there.
+        /// </summary>
+        public bool SaveBlocked;
+
+        /// <summary>What was loaded did not come from a sound main file, so it should be written soon.</summary>
+        public bool NeedsSave;
     }
 
     /// <summary>
-    /// The world state on disk. A save is written to a new file first and then put in the place of
-    /// the old one, and the old one is kept as a backup: an interrupted write (the app killed, the
-    /// battery empty) cannot leave a half-written save as the only copy. Loading prefers a complete
-    /// main file, then a complete backup, then whatever of the main file could be read. Plain C#.
+    /// The world state on disk. A save is written to a new file first, flushed to the storage, and
+    /// then put in the place of the old one, which is kept as a backup: an interrupted write (the
+    /// app killed, the battery empty) cannot leave a half-written save as the only copy.
+    ///
+    /// Loading prefers a complete save that was written but never put in place (it is the newest),
+    /// then a complete main file, then a complete backup, then whatever of the main file or the
+    /// backup could be read.
+    ///
+    /// A file this version cannot use in full (damaged, cut short, from a newer version of the game,
+    /// unreadable) is never overwritten or deleted by a later save: it is set aside under a name
+    /// ending in <see cref="UnreadableSuffix"/>. If it cannot even be set aside, the load says that
+    /// saving must stop. Plain C#.
     /// </summary>
     public static class WorldStateFile
     {
         public const string BackupSuffix = ".bak";
-        private const string TempSuffix = ".tmp";
+        public const string TempSuffix = ".tmp";
+        public const string UnreadableSuffix = ".unreadable";
+        private const int MaxSetAside = 20;
 
         public static bool TrySave(string path, WorldStateStore store, out string problem)
         {
@@ -288,7 +313,7 @@ namespace Threefold.Persistence
                 }
 
                 string temp = path + TempSuffix;
-                File.WriteAllText(temp, WorldStateText.Write(store), new UTF8Encoding(false));
+                WriteThrough(temp, WorldStateText.Write(store));
 
                 if (File.Exists(path))
                 {
@@ -320,47 +345,85 @@ namespace Threefold.Persistence
                 return report;
             }
 
-            bool hasMain = TryReadFile(path, out string mainText, out string mainProblem);
-            bool hasBackup = TryReadFile(path + BackupSuffix, out string backupText, out _);
-            if (!hasMain && !hasBackup)
+            var main = new Candidate(path);
+            var backup = new Candidate(path + BackupSuffix);
+            var pending = new Candidate(path + TempSuffix);
+            if (!main.Exists && !backup.Exists && !pending.Exists)
             {
-                report.Problem = mainProblem;
                 return report;
             }
 
-            var main = new WorldStateStore();
-            WorldStateReadResult mainRead = hasMain ? WorldStateText.Read(mainText, main) : default;
-            if (mainRead.Ok && mainRead.Complete)
+            // The order of preference. A complete pending save is newer than the main file it was to replace.
+            Candidate used = null;
+            string problem = string.Empty;
+            if (pending.Sound)
             {
-                return Accept(main, mainRead, false, into);
+                used = pending;
+                report.UsedPendingSave = true;
+                problem = "The last save was interrupted before it was put in place; it was complete and has been used.";
+            }
+            else if (main.Sound)
+            {
+                used = main;
+            }
+            else if (backup.Sound)
+            {
+                used = backup;
+                report.UsedBackup = true;
+                problem = main.Exists ? "The saved world state was damaged; the previous save was used." : string.Empty;
+            }
+            else if (main.Read.Ok)
+            {
+                used = main;
+                problem = "The saved world state was damaged; part of it could not be read.";
+            }
+            else if (backup.Read.Ok)
+            {
+                used = backup;
+                report.UsedBackup = true;
+                problem = "The saved world state was damaged; part of the previous save was used.";
+            }
+            else if (pending.Read.Ok)
+            {
+                // A first save that was cut short: what of it could be read is better than nothing.
+                used = pending;
+                report.UsedPendingSave = true;
+                problem = "The last save was interrupted; the part of it that was written has been used.";
             }
 
-            var backup = new WorldStateStore();
-            WorldStateReadResult backupRead = hasBackup ? WorldStateText.Read(backupText, backup) : default;
-            if (backupRead.Ok && backupRead.Complete)
+            if (used != null)
             {
-                WorldStateLoadReport fromBackup = Accept(backup, backupRead, true, into);
-                fromBackup.Problem = hasMain ? "The saved world state was damaged; the previous save was used." : string.Empty;
-                return fromBackup;
+                into.CopyFrom(used.Store);
+                report.Loaded = true;
+                report.Read = used.Read;
+                report.NeedsSave = used != main || !main.Sound;
+            }
+            else
+            {
+                report.Read = main.Exists ? main.Read : backup.Read;
+                problem = FirstProblem(main, backup, pending);
             }
 
-            // Neither is whole. What could be read of the newer one is better than nothing.
-            if (mainRead.Ok)
+            // What this version could not use in full is kept aside, never overwritten by the next save.
+            // The pending file is only ever this game's own unfinished write, and the next save replaces it.
+            string blocked = string.Empty;
+            SetAsideIfUnsound(main, ref report, ref blocked);
+            SetAsideIfUnsound(backup, ref report, ref blocked);
+
+            if (report.SetAside > 0)
             {
-                WorldStateLoadReport partial = Accept(main, mainRead, false, into);
-                partial.Problem = "The saved world state was damaged; part of it could not be read.";
-                return partial;
+                problem = Join(problem, $"{report.SetAside} file(s) this version could not use were kept beside it, " +
+                                        $"ending in '{UnreadableSuffix}'.");
             }
 
-            if (backupRead.Ok)
+            if (report.SaveBlocked)
             {
-                WorldStateLoadReport partial = Accept(backup, backupRead, true, into);
-                partial.Problem = "The saved world state was damaged; part of the previous save was used.";
-                return partial;
+                problem = Join(problem, $"'{blocked}' could not be read or could not be set aside, so nothing will be " +
+                                        "saved in this session, to keep it from being overwritten. It is tried again " +
+                                        "the next time the game starts.");
             }
 
-            report.Read = mainRead;
-            report.Problem = !string.IsNullOrEmpty(mainRead.Problem) ? mainRead.Problem : backupRead.Problem;
+            report.Problem = problem;
             return report;
         }
 
@@ -385,11 +448,104 @@ namespace Threefold.Persistence
             }
         }
 
-        private static WorldStateLoadReport Accept(WorldStateStore read, WorldStateReadResult result, bool usedBackup,
-            WorldStateStore into)
+        /// <summary>One file that may hold the world state, read once.</summary>
+        private sealed class Candidate
         {
-            into.CopyFrom(read);
-            return new WorldStateLoadReport { Loaded = true, UsedBackup = usedBackup, Read = result, Problem = string.Empty };
+            public readonly string Path;
+            public readonly bool Exists;
+            public readonly string Problem;
+            public readonly WorldStateStore Store = new WorldStateStore();
+            public readonly WorldStateReadResult Read;
+
+            public Candidate(string path)
+            {
+                Path = path;
+                bool readable = TryReadFile(path, out string text, out string problem);
+                Exists = readable || !string.IsNullOrEmpty(problem);
+                Problem = problem;
+                Read = readable ? WorldStateText.Read(text, Store) : default;
+            }
+
+            /// <summary>Read in full, by this version.</summary>
+            public bool Sound => Read.Ok && Read.Complete;
+        }
+
+        private static void SetAsideIfUnsound(Candidate file, ref WorldStateLoadReport report, ref string blocked)
+        {
+            if (!file.Exists || file.Sound)
+            {
+                return;
+            }
+
+            // It could not be read at all (locked, a storage error): it may well be sound. It is left
+            // where it is, and nothing is saved over it in this session.
+            if (!string.IsNullOrEmpty(file.Problem))
+            {
+                report.SaveBlocked = true;
+                blocked = file.Path;
+                return;
+            }
+
+            if (TrySetAside(file.Path))
+            {
+                report.SetAside++;
+            }
+            else
+            {
+                report.SaveBlocked = true;
+                blocked = file.Path;
+            }
+        }
+
+        /// <summary>Moves a file to a free name ending in <see cref="UnreadableSuffix"/>. Never replaces anything.</summary>
+        private static bool TrySetAside(string path)
+        {
+            try
+            {
+                for (int i = 1; i <= MaxSetAside; i++)
+                {
+                    string target = i == 1 ? path + UnreadableSuffix : $"{path}{UnreadableSuffix}-{i}";
+                    if (!File.Exists(target))
+                    {
+                        File.Move(path, target);
+                        return true;
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException ||
+                                              exception is NotSupportedException || exception is ArgumentException)
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        /// <summary>Writes the text and asks for it to reach the storage before the file is put in place.</summary>
+        private static void WriteThrough(string path, string text)
+        {
+            using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                byte[] bytes = new UTF8Encoding(false).GetBytes(text);
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true);
+            }
+        }
+
+        private static string FirstProblem(Candidate main, Candidate backup, Candidate pending)
+        {
+            foreach (Candidate file in new[] { main, backup, pending })
+            {
+                if (!string.IsNullOrEmpty(file.Problem)) return file.Problem;
+                if (file.Exists && !string.IsNullOrEmpty(file.Read.Problem)) return file.Read.Problem;
+            }
+
+            return "The saved world state could not be read.";
+        }
+
+        private static string Join(string first, string second)
+        {
+            return string.IsNullOrEmpty(first) ? second : first + " " + second;
         }
 
         private static bool TryReadFile(string path, out string text, out string problem)
