@@ -1274,7 +1274,7 @@ namespace Threefold.EditorTools
             return assigned;
         }
 
-        private static GameObject PlaceInGroup(GameObject prefab, Transform group, string instanceName, ExamplePlacement placement)
+        internal static GameObject PlaceInGroup(GameObject prefab, Transform group, string instanceName, ExamplePlacement placement)
         {
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, group);
             instance.name = instanceName;
@@ -1286,7 +1286,7 @@ namespace Threefold.EditorTools
 
         // -------------------------------------------------------------- helpers
 
-        private static Transform Group(Transform parent, string name)
+        internal static Transform Group(Transform parent, string name)
         {
             var group = new GameObject(name);
             group.transform.SetParent(parent, false);
@@ -1294,13 +1294,13 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>A visual part without a collider.</summary>
-        private static GameObject Part(PrimitiveType type, string name, Transform parent, Vector3 position, Vector3 scale,
+        internal static GameObject Part(PrimitiveType type, string name, Transform parent, Vector3 position, Vector3 scale,
             Material material)
         {
             return CombatSetup.CreatePart(type, name, parent, position, scale, material);
         }
 
-        private static GameObject Part(PrimitiveType type, string name, Transform parent, Vector3 position, Vector3 scale,
+        internal static GameObject Part(PrimitiveType type, string name, Transform parent, Vector3 position, Vector3 scale,
             Material material, Vector3 eulerAngles)
         {
             GameObject part = CombatSetup.CreatePart(type, name, parent, position, scale, material);
@@ -1309,7 +1309,7 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>A block that is seen and is solid.</summary>
-        private static GameObject SolidPart(string name, Transform parent, Vector3 position, Vector3 scale, Material material)
+        internal static GameObject SolidPart(string name, Transform parent, Vector3 position, Vector3 scale, Material material)
         {
             GameObject part = CombatSetup.CreatePart(PrimitiveType.Cube, name, parent, position, scale, material);
             part.AddComponent<BoxCollider>();
@@ -1320,14 +1320,14 @@ namespace Threefold.EditorTools
         /// A collider that moves is given a kinematic body, as the puzzle doors are, so that physics
         /// treats it as moving. The magic itself does not need one.
         /// </summary>
-        private static void MakeMovingBody(GameObject part)
+        internal static void MakeMovingBody(GameObject part)
         {
             Rigidbody body = part.AddComponent<Rigidbody>();
             body.isKinematic = true;
             body.useGravity = false;
         }
 
-        private static Renderer[] Renderers(params GameObject[] parts)
+        internal static Renderer[] Renderers(params GameObject[] parts)
         {
             var renderers = new Renderer[parts.Length];
             for (int i = 0; i < parts.Length; i++)
@@ -1338,17 +1338,17 @@ namespace Threefold.EditorTools
             return renderers;
         }
 
-        private static ConditionTint Tint(PropertyCondition when, Color color, float strength)
+        internal static ConditionTint Tint(PropertyCondition when, Color color, float strength)
         {
             return new ConditionTint { when = when, color = color, strength = strength };
         }
 
-        private static ConditionObjects Shown(PropertyCondition when, bool invert, params GameObject[] objects)
+        internal static ConditionObjects Shown(PropertyCondition when, bool invert, params GameObject[] objects)
         {
             return new ConditionObjects { when = when, invert = invert, objects = objects };
         }
 
-        private static ConditionEffect Effect(PropertyCondition onEnter, PooledObject effect)
+        internal static ConditionEffect Effect(PropertyCondition onEnter, PooledObject effect)
         {
             return new ConditionEffect { onEnter = onEnter, effect = effect };
         }

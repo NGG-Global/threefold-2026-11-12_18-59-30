@@ -208,9 +208,20 @@ namespace Threefold.Enemies
             ConfigureAgent();
         }
 
-        /// <summary>Puts the enemy back at its post at full health, for a restart.</summary>
+        /// <summary>
+        /// True for an enemy whose defeat is part of the saved progress of a level (see <see cref="PersistentDefeat"/>):
+        /// a restart leaves it defeated.
+        /// </summary>
+        public bool StaysDefeated { get; set; }
+
+        /// <summary>Puts the enemy back at its post at full health, for a restart. An enemy that stays defeated is left as it is.</summary>
         public void Restore()
         {
+            if (StaysDefeated)
+            {
+                return;
+            }
+
             restoring = true;
             Health.Revive();
             restoring = false;

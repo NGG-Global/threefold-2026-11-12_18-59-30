@@ -5,6 +5,7 @@ using Threefold.Combat;
 using Threefold.CombatFeedback;
 using Threefold.Interface;
 using Threefold.Objectives;
+using Threefold.Puzzles;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -27,6 +28,9 @@ namespace Threefold.EditorTools
 
             /// <summary>What must be defeated. Null means the training constructs.</summary>
             public Health[] Targets;
+
+            /// <summary>Puzzle elements that must be active, such as the checkpoint at a level's way out. Null for none.</summary>
+            public PuzzleElement[] Goals;
         }
 
         private const string DialogTitle = "Objective Setup";
@@ -75,9 +79,20 @@ namespace Threefold.EditorTools
                 report.AppendLine("Added the session that restarts the level (R key, Start button, or the restart button).");
             }
 
+            // Goals are assigned when there are none, or when one was deleted; existing ones are kept.
+            if (options.Goals != null && options.Goals.Length > 0 && (objective.Goals.Count == 0 || HasMissingGoals(objective)))
+            {
+                Undo.RecordObject(objective, DialogTitle);
+                objective.SetGoals(options.Goals);
+                MarkChanged(objective);
+                report.AppendLine($"Assigned {options.Goals.Length} goal(s) to the objective.");
+            }
+
+            bool hasGoals = objective.Goals.Count > 0;
+
             // Targets are (re)assigned when there are none, or when some were deleted, for example
-            // after the arena's enemies were removed to be generated again.
-            if (objective.TotalCount == 0 || HasMissingTargets(objective))
+            // after the arena's enemies were removed to be generated again. A level with goals may have none.
+            if ((objective.TotalCount == 0 || HasMissingTargets(objective)) && !(hasGoals && options.Targets != null && options.Targets.Length == 0))
             {
                 Health[] targets = options.Targets;
                 if (targets == null)
@@ -101,6 +116,19 @@ namespace Threefold.EditorTools
 
             EnsureHud(scene, objective, session, options.CompletionHeading, report);
             EnsureDefeatPanel(scene, session, report);
+        }
+
+        private static bool HasMissingGoals(DefeatTargetsObjective objective)
+        {
+            foreach (PuzzleElement goal in objective.Goals)
+            {
+                if (goal == null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool HasMissingTargets(DefeatTargetsObjective objective)

@@ -224,6 +224,50 @@ namespace Threefold.Persistence
 
         // -------------------------------------------------------------- whole
 
+        /// <summary>
+        /// Forgets every puzzle record and object record whose key or identifier starts with the prefix,
+        /// such as everything of one level, and keeps the rest. Returns how many records were forgotten.
+        /// </summary>
+        public int RemoveWithPrefix(string prefix)
+        {
+            if (string.IsNullOrEmpty(prefix))
+            {
+                return 0;
+            }
+
+            int removed = RemoveKeys(puzzles, prefix) + RemoveKeys(objects, prefix);
+            if (removed > 0)
+            {
+                Touch();
+            }
+
+            return removed;
+        }
+
+        private static int RemoveKeys<T>(Dictionary<string, T> records, string prefix)
+        {
+            List<string> doomed = null;
+            foreach (string key in records.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    (doomed ?? (doomed = new List<string>())).Add(key);
+                }
+            }
+
+            if (doomed == null)
+            {
+                return 0;
+            }
+
+            foreach (string key in doomed)
+            {
+                records.Remove(key);
+            }
+
+            return doomed.Count;
+        }
+
         /// <summary>Forgets everything, as at the start of a new game.</summary>
         public void Clear()
         {

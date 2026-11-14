@@ -113,6 +113,26 @@ namespace Threefold.Persistence
             Reloaded?.Invoke(WorldReload.StateReplaced);
         }
 
+        /// <summary>
+        /// Forgets what is saved under keys and identifiers that start with <paramref name="prefix"/>, such
+        /// as everything of one level, keeps everything else, and tells the world, which puts what was
+        /// forgotten back to how it starts. The checkpoint is dropped as well, because it may hold what was
+        /// just forgotten. Returns how many records were forgotten.
+        /// </summary>
+        public static int ForgetScope(string prefix)
+        {
+            if (string.IsNullOrEmpty(prefix))
+            {
+                return 0;
+            }
+
+            Capturing?.Invoke();
+            int removed = Current.RemoveWithPrefix(prefix);
+            checkpoint = null;
+            Reloaded?.Invoke(WorldReload.StateReplaced);
+            return removed;
+        }
+
         /// <summary>Writes the store to disk if it has changed. Returns false only if a write was tried and failed.</summary>
         public static bool Save()
         {

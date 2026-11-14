@@ -154,7 +154,8 @@ backup. Loading is cautious:
 | Operation | What it does | How |
 | --- | --- | --- |
 | **Restart** | The world takes its saved state again. Persistent state stays; everything temporary is reset; objects without an id are as new. Puzzle elements are left as they are, as before; a latched property trigger stays latched, and one without a latch follows its object | R, the Restart button, `PrototypeSession.Restart()` |
-| **Checkpoint** | A copy of the store is taken, and the store can be put back to it; the world follows | `WorldState.SaveCheckpoint()`, `WorldState.RevertToCheckpoint()`. Nothing in the game calls these yet |
+| **Checkpoint** | A copy of the store is taken, and the store can be put back to it; the world follows | `WorldState.SaveCheckpoint()`, `WorldState.RevertToCheckpoint()`. Since LM-07 the Broken Foundry's checkpoints take one; its diagnostics offer the return (`Docs/BrokenFoundry.md`) |
+| **Forget one level** | Everything saved under one prefix (one level's ids and keys) is forgotten; the rest is kept, and the world follows. The checkpoint is dropped | `WorldState.ForgetScope(prefix)`. Since LM-07: a restart after the foundry is complete replays it |
 | **New game** | Everything saved is forgotten, on disk too, and the level restarts. Files set aside as unreadable are left alone | **Threefold > World State > New Game (Forget Saved State)**, `PrototypeSession.NewGame()` |
 
 Loading is silent. A door that was opened earlier is simply open; a structure that had come down
@@ -399,7 +400,7 @@ Editor menu commands.
 - The four budgets are provisional. They have not been measured on any device.
 - On a device there is no control yet to clear the saved world; in the Editor there is the menu
   command. Until a control exists, a device build keeps what was saved until the app's data is cleared.
-- Nothing in the game takes a checkpoint yet. The operations exist and are tested.
+- Only the Broken Foundry (LM-07) takes checkpoints so far; the other levels do not.
 - The player's own state (position, health, mana, discipline) is not saved, and neither are
   enemies. A restart puts them back as before.
 - After a new game or a return to a checkpoint, puzzle switches, doors and logic gates follow

@@ -77,7 +77,7 @@ jobs:
           restore-keys: |
             Library-Threefold-Android-
 
-      # The build method assembles the playable scenes (playground and combat arena) from code,
+      # The build method assembles the playable scenes (playground, combat arena, Broken Foundry) from code,
       # validates them, applies the Android settings and builds a development APK signed with a
       # debug key.
       - name: Build development APK

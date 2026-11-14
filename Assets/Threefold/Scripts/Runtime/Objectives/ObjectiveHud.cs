@@ -216,9 +216,10 @@ namespace Threefold.Objectives
                 }
             }
 
+            // A count of one says nothing a title does not ("Find the way out   0 / 1"), so it is left out.
             if (titleLabel != null)
             {
-                titleLabel.text = objective.Title + "   " + defeated + " / " + total;
+                titleLabel.text = total > 1 ? objective.Title + "   " + defeated + " / " + total : objective.Title;
             }
 
             bool complete = objective.IsComplete;

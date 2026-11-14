@@ -518,7 +518,9 @@ namespace Threefold.WorldMagic
                 }
             }
 
-            if (Stability != null && (parts & PersistedState.Collapse) != 0 && Stability.State == StabilityState.Collapsed)
+            // A collapse that recovers by itself is temporary, like a brace, and is never saved.
+            if (Stability != null && (parts & PersistedState.Collapse) != 0 && Stability.State == StabilityState.Collapsed &&
+                !Stability.IsRecovering)
             {
                 record.Saved |= PersistedState.Collapse;
                 record.Collapsed = true;

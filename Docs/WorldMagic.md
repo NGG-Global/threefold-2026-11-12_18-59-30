@@ -212,6 +212,10 @@ happens to it while it is switched off; see `Docs/WorldState.md`.
 Since LM-05 an object also hints at what it responds to and answers what is tried on it, through
 a `DiscoveryClues` component that Make Selection Magical adds; see `Docs/Discovery.md`.
 
+Since LM-07 an unstable object can stand again by itself a set time after it came down, counted
+while nobody stands on it (Stability, **Recover Seconds**; 0, the default, keeps it down). Such a
+collapse is temporary: it is never saved. See `Docs/BrokenFoundry.md`.
+
 Since LM-06 a moving part can be held until a condition holds (**Movable Only When**, such as
 Activated), weight can bring an unstable object down (**Load Stress Per Second**, counted by a
 `LoadZone`), and creatures can wear armour and a ward that follow these same rules; see
