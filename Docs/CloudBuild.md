@@ -144,6 +144,13 @@ Download the artifact `threefold-android-logs-<number>` and give it to Claude Co
 A failing EditMode test does not stop the APK from being built, but the run is marked failed and
 the step "Run EditMode tests" lists the failed tests.
 
+**"The project is open in Unity: Temp\UnityLockfile is in use."** A Unity process still has the
+runner's copy of the project open. This happens when a build was cut off (the laptop shut down or
+restarted, or the runner was stopped) and its Unity kept running. Close your own Unity Editor (saving
+your work), then in Task Manager, Details tab, end any `Unity.exe` that is left, and start the build
+again. A lock file left behind by an interrupted run with no Unity running is set aside by the scripts
+automatically (renamed to `UnityLockfile.stale-...`, not deleted).
+
 If Unity stops before the build method starts, for example because activation failed or a
 script does not compile, the first two files do not exist. On Route 1 the cause is then only in
 the output of the "Build development APK" step, which must be copied from the run's page. This
