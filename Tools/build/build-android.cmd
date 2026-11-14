@@ -23,9 +23,18 @@ if not exist "%UNITY%" (
   exit /b 2
 )
 
+rem A Unity Editor that has this project open keeps Temp\UnityLockfile open, and Windows then refuses to
+rem move it. If it can be moved, no Unity has the project open: it was left behind by a run that was cut
+rem off (a shutdown, a restart, a stopped runner). It is set aside under another name, not deleted.
+set "STALE_LOCK=%PROJECT%\Temp\UnityLockfile.stale-%RANDOM%%RANDOM%"
 if exist "%PROJECT%\Temp\UnityLockfile" (
-  echo The project is open in the Unity Editor. Close Unity and run this again.
-  exit /b 3
+  move "%PROJECT%\Temp\UnityLockfile" "%STALE_LOCK%" >nul 2>&1
+  if errorlevel 1 (
+    echo The project is open in Unity: Temp\UnityLockfile is in use. Close the Unity Editor that has this
+    echo project open, or end a Unity.exe left running by an interrupted build in Task Manager, then run again.
+    exit /b 3
+  )
+  echo Set aside a Unity lock file left by an interrupted run ^(renamed to Temp\UnityLockfile.stale-...^).
 )
 
 if not exist "%PROJECT%\build" mkdir "%PROJECT%\build"
