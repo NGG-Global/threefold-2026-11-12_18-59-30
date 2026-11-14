@@ -3,8 +3,11 @@
 The workflow `.github/workflows/android-build.yml` builds an installable development APK and
 offers it for download from GitHub. It is started by hand and can be started from a tablet.
 
-**Status:** the workflow is written and its build code compiles. **No build has run and no APK
-has been produced.** Expect the first run to need fixes; send the logs to Claude Code.
+**Status (14 November 2026):** Route 2, the self-hosted runner on the owner's laptop
+(`LAPTOP-SG8SSFTD`), has built APKs; Route 1 has never run, because no licence secrets are set.
+Every run is listed in `Docs/LivingMagicTesting.md` with its commit and result. Since LM-08 the
+self-hosted job can also run the EditMode tests before building (input **editmode_tests**, on by
+default).
 
 ## The decision you need to make first: licensing
 
@@ -113,9 +116,12 @@ Things to know:
 
 1. Open the repository on GitHub and go to **Actions**.
 2. Choose **Android build** in the list on the left.
-3. Tap **Run workflow**, pick **github-hosted** or **self-hosted**, and tap the green button.
+3. Tap **Run workflow**, pick **self-hosted** (or **github-hosted** once licence secrets exist),
+   leave **Run the EditMode tests** ticked, and tap the green button.
 4. Open the run when it appears. When it has finished, scroll to **Artifacts**.
 5. Download `threefold-android-development-<number>`. It is a zip containing `Threefold.apk`.
+   The test results are in `threefold-editmode-tests-<number>` (`editmode-results.xml`, NUnit format).
+   The run's page shows the commit it was built from.
 6. Unzip it, open the APK and allow installation from that source when Android asks.
 
 Starting a second build cancels one that is still running, so only one build uses a runner at a time.
@@ -132,6 +138,10 @@ Download the artifact `threefold-android-logs-<number>` and give it to Claude Co
 | `build-report.txt` | Result, size, duration, each build step, every error and warning | Unity reached the build |
 | `threefold-build.log` | Everything Unity logged during scene assembly and the build | The build method started |
 | `android-build.log` | Unity's complete Editor log | Route 2 only |
+| `editmode-results.xml`, `editmode-tests.log` (test artifact) | Each EditMode test with its result and message; Unity's log of the test run | Route 2, when the tests were run |
+
+A failing EditMode test does not stop the APK from being built, but the run is marked failed and
+the step "Run EditMode tests" lists the failed tests.
 
 If Unity stops before the build method starts, for example because activation failed or a
 script does not compile, the first two files do not exist. On Route 1 the cause is then only in
@@ -143,21 +153,22 @@ The run's summary page says which case applies.
 
 Both routes call `Threefold.EditorTools.PrototypeBuild.BuildAndroid`, which:
 
-1. Assembles the Fantasy Playground scene from code, including all generated assets.
-2. Validates the scene and stops if a reference is missing.
+1. Assembles the Broken Foundry, the Combat Arena and the Fantasy Playground from code, including
+   all generated assets.
+2. Validates each scene and stops if anything is missing (for example a discipline without its
+   charged attack, which is how run 4 failed).
 3. Sets the package ID `com.nggglobal.threefold`, the product and company names, and landscape-only rotation.
-4. Builds a development APK (not an app bundle) containing that one scene.
+4. Builds a development APK (not an app bundle) containing those scenes. The diagnostics overlay's
+   **Next scene** button moves between them.
 
 Because the scene is assembled during the build, nothing generated has to be committed first.
 
 ## Not verified
 
-- No run of this workflow has taken place. Neither route has built anything.
-- Unity activation in the GameCI container with this project's licence.
-- That the project builds. A passing C# compile check does not show that Unity can import the
-  project, assemble the scene, compile it with IL2CPP or package an APK.
-- The Windows script and the self-hosted job, which have never run.
-- The duration and cost of a build.
+- Route 1: Unity activation in the GameCI container with this project's licence; it has never run.
+- That a built APK plays correctly: a successful build shows that Unity compiled, assembled,
+  validated and packaged the game, not how it plays or performs on a phone.
+- The licensing question above is unchanged; Route 2 uses Unity as building by hand on that PC would.
 
 ## Sources
 

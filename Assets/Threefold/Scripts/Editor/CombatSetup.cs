@@ -730,9 +730,11 @@ namespace Threefold.EditorTools
 
         private static void EnsureHud(Scene scene, GameObject mage, AbilityCaster caster, StringBuilder report)
         {
-            if (FindInScene<PlayerHud>(scene) != null)
+            PlayerHud existing = FindInScene<PlayerHud>(scene);
+            if (existing != null)
             {
                 report.AppendLine("Kept existing combat HUD.");
+                GiveBarsTheirOwnCanvas(existing, report);
                 return;
             }
 
@@ -772,6 +774,30 @@ namespace Threefold.EditorTools
 
             Undo.RegisterCreatedObjectUndo(root, DialogTitle);
             report.AppendLine($"Created '{HudName}' (health bar, mana bar, crosshair, damage numbers).");
+            GiveBarsTheirOwnCanvas(hud, report);
+        }
+
+        /// <summary>
+        /// A bar moves its fill on every frame while health or mana changes, and a change inside a canvas
+        /// rebuilds the whole canvas. A canvas of the bar's own limits that to the bar (LM-08). Nothing
+        /// else changes: a nested canvas takes its parent's sorting and scale.
+        /// </summary>
+        private static void GiveBarsTheirOwnCanvas(PlayerHud hud, StringBuilder report)
+        {
+            int added = 0;
+            foreach (ResourceBar bar in hud.GetComponentsInChildren<ResourceBar>(true))
+            {
+                if (bar.GetComponent<Canvas>() == null)
+                {
+                    Undo.AddComponent<Canvas>(bar.gameObject);
+                    added++;
+                }
+            }
+
+            if (added > 0)
+            {
+                report.AppendLine($"Gave {added} HUD bar(s) a canvas of their own, so a changing bar no longer rebuilds the whole HUD.");
+            }
         }
 
         private static ResourceBar BuildBar(string name, RectTransform parent, Vector2 position, Vector2 size, Color color)

@@ -134,6 +134,7 @@ namespace Threefold.EditorTools
 
             EnsureActionControls(touch, report);
             EnsureSprintIndicator(touch, report);
+            GiveMovingPartsTheirOwnCanvas(touch, report);
             CombinedCharacterInput combined = EnsureInputRouting(scene, mage, touch, report);
             EnsurePlayerActions(mage, combined, touch, report);
             EnsureSchemeSelector(scene, mage, touch, report);
@@ -143,6 +144,30 @@ namespace Threefold.EditorTools
                 Undo.RecordObject(touch, DialogTitle);
                 touch.MarkLayoutVersion(TouchControlsInput.CurrentLayoutVersion);
                 MarkChanged(touch);
+            }
+        }
+
+        /// <summary>
+        /// The joystick's knob and the ATTACK button's charge ring and aim marker change on every frame while
+        /// they are used, and a change inside a canvas rebuilds the whole canvas. A canvas of their own limits
+        /// that to them (LM-08). Nothing else changes: a nested canvas takes its parent's sorting and scale, and
+        /// the controls read touches directly, not through the canvas.
+        /// </summary>
+        private static void GiveMovingPartsTheirOwnCanvas(TouchControlsInput touch, StringBuilder report)
+        {
+            int added = 0;
+            foreach (Component part in new Component[] { touch.Joystick, touch.AttackGestureButton })
+            {
+                if (part != null && part.GetComponent<Canvas>() == null)
+                {
+                    Undo.AddComponent<Canvas>(part.gameObject);
+                    added++;
+                }
+            }
+
+            if (added > 0)
+            {
+                report.AppendLine($"Gave {added} touch control(s) a canvas of their own, so moving them no longer rebuilds every control.");
             }
         }
 

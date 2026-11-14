@@ -201,10 +201,15 @@ No full-screen edge detection is used.
 
 ## Quality levels
 
-| | Low | Medium | High |
+Since LM-08 the three levels are the player's **graphics presets**, Low as **Performance**, Medium
+as **Balanced** and High as **Quality**, chosen from the Graphics button in each level and kept
+between launches. Each also sets a frame-rate target. See `Docs/MobilePerformance.md`.
+
+| | Low (Performance) | Medium (Balanced) | High (Quality) |
 | --- | --- | --- | --- |
 | Intended for | Older or low-end phones | A mid-range Android phone | High-end phones, the Editor |
-| Contour lines | Off | On | On |
+| Frame-rate target (LM-08) | 30 | 60 | 60 |
+| Contour lines | On (off before LM-08) | On | On |
 | Shadows | Crisp edges, 512 map, 22 m | Soft edges (4 samples), 1024 map, 35 m | Soft edges, 2048 map, 50 m |
 | Render scale | 0.7 | 0.85 | 1.0 |
 | Anti-aliasing | Off | 2 samples | 4 samples |
@@ -222,7 +227,8 @@ for quality tiers "only after actual device profiling identifies useful trade-of
 the brief for this sprint asked for presets now. Treat the numbers as provisional until a device
 has been profiled.
 
-At the start the controller picks a level from what the device reports: on a phone, Low if it
+At the start the controller takes a level chosen earlier in the run, then the player's saved
+choice, and otherwise picks one from what the device reports: on a phone, Low if it
 has less than about 3.5 GB of memory or an old graphics level, otherwise Medium; never High. In
 the Editor and on desktop, High. This is a rough rule. Switch it off on the `VisualStyle` object
 (Choose Quality For Device) to set the level by hand.
@@ -264,7 +270,7 @@ acceptance evidence" (section 9).
 | Feature | Cost, reasoned from the code | How to switch it for comparison |
 | --- | --- | --- |
 | The lit shader | One texture sample, plus one more with paint variation. No normal map, no reflection probe, no physically based lighting. Ambient light is computed per vertex. Expected to cost about as much as URP's Simple Lit and less than URP Lit, which the grey-box materials use | Remove the style |
-| Contour line | The Mage's mesh is drawn twice: about 15,600 extra triangles and nine extra draws (one per material). Its pixels are a single flat colour. Switched off (F7, or Low), the nine draws remain but the hull is folded into a point and fills no pixels | F7, or the Low level |
+| Contour line | The Mage's mesh is drawn twice: about 15,600 extra triangles and nine extra draws (one per material). Its pixels are a single flat colour. Switched off (F7), the nine draws remain but the hull is folded into a point and fills no pixels. Since LM-08 it stays on at every level, as part of the illustrated look | F7 |
 | Shadows | One shadow map sample per pixel with crisp edges; four with soft edges | F6 |
 | Render scale | The largest single lever: at 0.7, half the pixels of full resolution are drawn | F6 |
 | Anti-aliasing | Usually cheap on phone graphics chips at 2 samples, but it adds memory | F6 |
