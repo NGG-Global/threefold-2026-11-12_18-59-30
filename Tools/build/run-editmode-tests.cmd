@@ -46,7 +46,7 @@ rem Summarise the NUnit results: totals, then the name and message of each faile
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$r = [xml](Get-Content -Raw '%OUT%\editmode-results.xml'); $t = $r.'test-run';" ^
   "Write-Output ('EditMode tests: {0} total, {1} passed, {2} failed, {3} inconclusive, {4} skipped' -f $t.total, $t.passed, $t.failed, $t.inconclusive, $t.skipped);" ^
-  "$r.SelectNodes('//test-case[@result=''Failed'']') | ForEach-Object { Write-Output ('FAILED ' + $_.fullname); Write-Output ('  ' + ($_.failure.message.InnerText -replace '\s+', ' ')) }"
+  "$r.SelectNodes('//test-case[@result=''Failed'']') | ForEach-Object { Write-Output ('FAILED ' + $_.fullname); Write-Output ('  ' + ($_.SelectSingleNode('failure/message').InnerText -replace '\s+', ' ')) }"
 
 if not "%UNITY_EXIT%"=="0" (
   echo.
