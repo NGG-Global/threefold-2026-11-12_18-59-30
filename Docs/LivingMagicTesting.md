@@ -49,6 +49,8 @@ Unity's own test run they are inconclusive, because Unity's Mono does not count 
 | 3 | `d0e21ea` (Sprint 11) | APK built, 54.6 MB |
 | 4 | `353d92c` (`main` after LM-07) | **Failed.** Unity compiled every script, assembled the Broken Foundry (validation and level checks passed), then stopped at the Combat Arena: "The Arcane / Flame / Aegis discipline has no charged attack". Cause: `ChargedProjectileDefinition` and `ChargedAreaDefinition` were declared in `ChargedAbilities.cs`, and Unity links an asset to a ScriptableObject only through a file of the same name. Fixed in LM-08 |
 
+| 5 | `b64de60` (LM-08 branch, with the fix) | **Succeeded** in 34 minutes on the runner (Unity's build step 26 minutes). The Broken Foundry, the Combat Arena and the Fantasy Playground were assembled and each passed validation (the foundry's level checks too); the charged abilities were regenerated with their scripts. 0 errors, 972 warnings (most from the Sentis package's shaders). APK artifact 55.4 MB (zip); Unity's report: 44.4 MB of user assets |
+
 Later runs are recorded below as they complete.
 
 ### Not tested
