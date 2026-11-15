@@ -1,6 +1,7 @@
 using Threefold.Cameras;
 using Threefold.Characters;
 using Threefold.Combat;
+using Threefold.CombatAnimation;
 using Threefold.Magic;
 using Threefold.Pooling;
 using Threefold.VisualStyle;
@@ -13,7 +14,9 @@ namespace Threefold.CombatFeedback
     /// Shows the disciplines' attacks: oriented melee slashes, the ground arc of each swing, a burst
     /// on every target struck, charge buildup at the hands, the sweep of a Flame Wave or Force Pulse,
     /// embers on a burning target, a spark where the guard stops or deflects a hit, light camera shake,
-    /// and the attack animation where the character has one.
+    /// and the attack animation where the character has one. While a <see cref="CombatAnimationDirector"/>
+    /// plays the combat animations, the animation triggers here are left alone, and a charge glows in the
+    /// hand the discipline's animation holds it in.
     ///
     /// It listens to <see cref="DisciplineCombat"/>, the caster, the guard and the combat events and
     /// changes nothing in the rules. Effects are pooled and short. Interrupted swings and cancelled
@@ -38,6 +41,9 @@ namespace Threefold.CombatFeedback
 
         [Tooltip("Optional. Hand sockets for charge loops. Resolved from the Mage when empty.")]
         [SerializeField] private DisciplineVfxSockets sockets;
+
+        [Tooltip("Optional. Says which hand holds a charge. Resolved from the Mage when empty.")]
+        [SerializeField] private CombatAnimationDirector animationDirector;
 
         [Tooltip("Optional. A spark is shown where the guard stops a hit.")]
         [SerializeField] private PlayerGuard guard;
@@ -241,8 +247,9 @@ namespace Threefold.CombatFeedback
                 activeSwing = SpawnShared(look.meleeSwingEffect, point, rotation, MaxSwingEffects);
             }
 
-            if (animationDriver != null && !animationDriver.TrySetTrigger(swing.Step.animationTrigger) &&
-                look.castGestureForMelee)
+            // The combat animation director plays the swing itself when it is active.
+            if (animationDriver != null && !animationDriver.CombatAnimationsActive &&
+                !animationDriver.TrySetTrigger(swing.Step.animationTrigger) && look.castGestureForMelee)
             {
                 animationDriver.TrySetTrigger(CharacterAnimationDriver.CastParameter);
             }
@@ -299,7 +306,7 @@ namespace Threefold.CombatFeedback
             DisciplineVfxSockets hands = ResolveSockets();
             if (activeCharge != null && hands != null)
             {
-                activeCharge.transform.SetParent(hands.RightHand, true);
+                activeCharge.transform.SetParent(ChargeHand(discipline, hands), true);
                 activeCharge.transform.localPosition = Vector3.zero;
                 activeCharge.transform.localRotation = Quaternion.identity;
             }
@@ -346,7 +353,8 @@ namespace Threefold.CombatFeedback
                 cameraRig.AddTrauma(charged.Charge.releaseTrauma * Mathf.Lerp(0.6f, 1f, context.Charge));
             }
 
-            if (animationDriver != null && look.chargedAnimationTrigger != CharacterAnimationDriver.CastParameter)
+            if (animationDriver != null && !animationDriver.CombatAnimationsActive &&
+                look.chargedAnimationTrigger != CharacterAnimationDriver.CastParameter)
             {
                 animationDriver.TrySetTrigger(look.chargedAnimationTrigger);
             }
@@ -550,6 +558,26 @@ namespace Threefold.CombatFeedback
             }
 
             return EffectPoint(transform.position, height);
+        }
+
+        /// <summary>
+        /// The hand a charge glows in: the one the discipline's charge animation holds it in, or the right hand
+        /// when no animation says.
+        /// </summary>
+        private Transform ChargeHand(DisciplineDefinition discipline, DisciplineVfxSockets hands)
+        {
+            if (animationDirector == null && subscribedCombat != null)
+            {
+                animationDirector = subscribedCombat.GetComponent<CombatAnimationDirector>();
+            }
+
+            if (animationDirector != null && animationDirector.IsActive &&
+                animationDirector.GetChargeEffector(discipline.Discipline) == CombatEffector.LeftHand)
+            {
+                return hands.LeftHand;
+            }
+
+            return hands.RightHand;
         }
 
         private DisciplineVfxSockets ResolveSockets()

@@ -36,7 +36,8 @@ Unity Editor, Windows tooling or a physical Android device.
 | Mage combat (spell, health, mana, dummy, HUD, feedback) | Written; compiled by Unity on the laptop runner; not yet played |
 | Fantasy Playground environment (generated level, lighting, modules) | Written; compiled by Unity on the laptop runner; not yet seen |
 | Objective, completion and restart loop | Written; compiled by Unity on the laptop runner; not yet played |
-| Animated Mage character (intermediate, CC0 mannequin base) | Written; model built and checked in Blender; not yet imported by Unity. See `Docs/Characters/Mage.md` |
+| Animated Mage character (intermediate, CC0 mannequin base) | Written; model built and checked in Blender; the first (10-clip) model was imported by Unity as a valid Humanoid on the laptop runner (Android build run 13); the 29-clip model with combat clips has not been imported yet. See `Docs/Characters/Mage.md` |
+| Combat animations, sprint 1: stances, three-step combos (two for Aegis), charge start, hold, release and cancel, block, stagger, aerial attacks, defeat, timing cues for effects | Written; rules tested outside Unity (39 tests, zero allocation per frame); compiled against the Unity assemblies; not yet imported, seen or played in Unity, or run on a device. See `Docs/CombatAnimationArchitecture.md` |
 | Traversal: ledges, climbing, vaulting, edge guarding, training course | Written; rules tested outside Unity; not yet run in Unity. See `Docs/Traversal.md` |
 | Enemy AI: Ruins Guardian, Arcane Wisp, Combat Arena, player defeat | Written; decision logic tested outside Unity (53 tests); not yet run in Unity. See `Docs/EnemyAI.md` |
 | Disciplines LM-02: Arcane, Flame and Aegis melee combos and charged attacks, heat, stagger, push, block, aim preview, Discipline Range | Written; combat rules tested outside Unity (88 tests); compiled by Unity on the laptop runner (Android build run 4); not yet played, or run on a device. See `Docs/Disciplines.md` |

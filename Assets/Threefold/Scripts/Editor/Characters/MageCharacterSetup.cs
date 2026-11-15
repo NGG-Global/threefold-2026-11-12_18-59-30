@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using Threefold.Characters;
 using Threefold.Combat;
+using Threefold.CombatAnimation;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -13,8 +14,9 @@ namespace Threefold.EditorTools
 {
     /// <summary>
     /// Replaces the Mage's placeholder capsule with the character model. It generates the
-    /// character's materials, its Animator Controller and a visual prefab, puts that prefab under
-    /// the Mage, hides the capsule, and connects the animation driver.
+    /// character's materials, its combat animation set, its Animator Controller (locomotion,
+    /// traversal, the combat layers built from the set, and the casting gesture) and a visual
+    /// prefab, puts that prefab under the Mage, hides the capsule, and connects the animation driver.
     ///
     /// It runs as part of the scene setup commands and the automated build. It is safe to run
     /// repeatedly: existing assets and an existing visual are kept. To regenerate them with
@@ -28,14 +30,18 @@ namespace Threefold.EditorTools
         private const string Folder = "Assets/Threefold/Generated/Characters/Mage";
         private const string ControllerPath = Folder + "/MageAnimator.controller";
         private const string MaskPath = Folder + "/MageUpperBody.mask";
+        private const string CombatMaskPath = Folder + "/MageCombatUpperBody.mask";
+        internal const string CombatAnimationSetPath = Folder + "/MageCombatAnimations.asset";
         private const string PrefabPath = Folder + "/MageVisual.prefab";
         private const string VisualName = "MageVisual";
         private const string ModelChildName = "Model";
         private const string MaterialPrefix = "MAGE_";
         private const float ExpectedHeight = 1.8f;
 
-        // Raised whenever the controller's layout changes, so existing controllers are rebuilt.
-        private const string ControllerVersion = "threefold-mage-controller-2";
+        // Raised whenever the controller's layout changes, so existing controllers are rebuilt. The combat
+        // animation set's signature is stored with it, so changing a clip in the set rebuilds it too.
+        // 3: the combat layers (Docs/CombatAnimationArchitecture.md).
+        private const string ControllerVersion = "threefold-mage-controller-3";
         private const float HardLandingSpeed = 13f;
 
         private const string LitShader = "Universal Render Pipeline/Lit";
@@ -95,7 +101,8 @@ namespace Threefold.EditorTools
 
             EnsureFolder(Folder);
             Dictionary<string, Material> materials = EnsureMaterials(report);
-            AnimatorController controller = EnsureController(report);
+            CombatAnimationSet combatAnimations = EnsureCombatAnimationSet(report);
+            AnimatorController controller = EnsureController(report, combatAnimations);
 
             GameObject visual;
             if (existing != null)
@@ -188,25 +195,19 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
-        /// Locomotion blended by speed, a jump and fall sequence, and an upper-body layer for casting,
-        /// so the Mage can cast while running.
+        /// Locomotion blended by speed, a jump and fall sequence, the combat layers built from the combat
+        /// animation set, and an upper-body layer for the casting gesture, so the Mage can cast while running.
         /// </summary>
-        private static AnimatorController EnsureController(StringBuilder report)
+        private static AnimatorController EnsureController(StringBuilder report, CombatAnimationSet combatAnimations)
         {
+            string version = ControllerVersion + (combatAnimations != null ? ":" + combatAnimations.ControllerSignature : string.Empty);
             AnimatorController existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
-            if (existing != null && GetVersion(ControllerPath) == ControllerVersion)
+            if (existing != null && GetVersion(ControllerPath) == version)
             {
                 return existing;
             }
 
-            var clips = new Dictionary<string, AnimationClip>();
-            foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(CharacterModelPostprocessor.MageModelPath))
-            {
-                if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__"))
-                {
-                    clips[clip.name] = clip;
-                }
-            }
+            Dictionary<string, AnimationClip> clips = LoadModelClips();
 
             AnimationClip Clip(string name)
             {
@@ -338,16 +339,25 @@ namespace Threefold.EditorTools
             AnimatorStateTransition landDone = land.AddTransition(locomotion);
             Configure(landDone, true, 0.6f, 0.15f);
 
-            // ---- upper-body layer: casting
+            // ---- combat layers: stance, full body, upper body
+            int combatStates = 0;
+            if (combatAnimations != null)
+            {
+                AvatarMask combatMask = EnsureCombatUpperBodyMask(combatAnimations.Library.tuning);
+                combatStates = CombatAnimatorBuilder.AddCombatLayers(controller, combatAnimations.Library, clips, combatMask, report);
+            }
+
+            // ---- upper-body layer: casting (the gesture used when the combat layers are not playing)
             AvatarMask mask = EnsureUpperBodyMask();
-            controller.AddLayer("Cast");
+            controller.AddLayer(CharacterAnimationDriver.CastLayer);
             AnimatorControllerLayer[] layers = controller.layers;
-            layers[1].defaultWeight = 1f;
-            layers[1].avatarMask = mask;
-            layers[1].blendingMode = AnimatorLayerBlendingMode.Override;
+            int castIndex = layers.Length - 1;
+            layers[castIndex].defaultWeight = 1f;
+            layers[castIndex].avatarMask = mask;
+            layers[castIndex].blendingMode = AnimatorLayerBlendingMode.Override;
             controller.layers = layers;
 
-            AnimatorStateMachine castMachine = controller.layers[1].stateMachine;
+            AnimatorStateMachine castMachine = controller.layers[castIndex].stateMachine;
             AnimatorState empty = castMachine.AddState("Empty");
             castMachine.defaultState = empty;
             AnimatorState cast = AddState(castMachine, "SpellShoot", Clip("SpellShoot"));
@@ -361,10 +371,107 @@ namespace Threefold.EditorTools
             Configure(castDone, true, 0.85f, 0.15f);
 
             EditorUtility.SetDirty(controller);
-            SetVersion(ControllerPath, ControllerVersion);
+            SetVersion(ControllerPath, version);
             report.AppendLine("Generated the Mage's Animator Controller (locomotion, jump, fall, land, hang, climb, " +
-                              "vault and an upper-body cast layer).");
+                              $"vault, combat layers with {combatStates} states, and an upper-body cast layer).");
             return controller;
+        }
+
+        /// <summary>The model's animation clips by name.</summary>
+        private static Dictionary<string, AnimationClip> LoadModelClips()
+        {
+            var clips = new Dictionary<string, AnimationClip>();
+            foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(CharacterModelPostprocessor.MageModelPath))
+            {
+                if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__"))
+                {
+                    clips[clip.name] = clip;
+                }
+            }
+
+            return clips;
+        }
+
+        internal static CombatAnimationSet LoadCombatAnimationSet()
+        {
+            return AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(CombatAnimationSetPath);
+        }
+
+        /// <summary>
+        /// The Mage's combat animation set: created from <see cref="CombatAnimationDefaults"/> if it does not
+        /// exist, and otherwise kept as tuned. Only the clip lengths are brought up to date from the model,
+        /// because they are measurements, not choices.
+        /// </summary>
+        internal static CombatAnimationSet EnsureCombatAnimationSet(StringBuilder report)
+        {
+            EnsureFolder(Folder);
+            CombatAnimationSet set = LoadCombatAnimationSet();
+            if (set == null)
+            {
+                set = ScriptableObject.CreateInstance<CombatAnimationSet>();
+                set.Configure(CombatAnimationDefaults.CreateMage(), CombatAnimationDefaults.DataVersion);
+                AssetDatabase.CreateAsset(set, CombatAnimationSetPath);
+                report.AppendLine("Generated the Mage's combat animation set 'MageCombatAnimations' (three disciplines, " +
+                                  "block, stagger, aerial and defeat slots).");
+            }
+
+            Dictionary<string, AnimationClip> clips = LoadModelClips();
+            int updated = 0;
+            set.Library.ForEachSlot((id, slot) =>
+            {
+                if (slot != null && slot.IsAssigned && clips.TryGetValue(slot.clip, out AnimationClip clip) &&
+                    Mathf.Abs(clip.length - slot.clipSeconds) > 0.001f)
+                {
+                    slot.clipSeconds = clip.length;
+                    updated++;
+                }
+            });
+
+            if (updated > 0)
+            {
+                EditorUtility.SetDirty(set);
+                AssetDatabase.SaveAssetIfDirty(set);
+                report.AppendLine($"Updated {updated} clip length(s) in the combat animation set from the model.");
+            }
+
+            return set;
+        }
+
+        /// <summary>
+        /// Brings the combat animation set and the Animator Controller up to date, without touching any scene.
+        /// Returns false if the model is missing or is not Humanoid.
+        /// </summary>
+        internal static bool ApplyCombatAnimations(StringBuilder report)
+        {
+            Avatar avatar = LoadSubAsset<Avatar>(CharacterModelPostprocessor.MageModelPath);
+            if (avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                report.AppendLine($"The model '{CharacterModelPostprocessor.MageModelPath}' is missing or has no valid Humanoid " +
+                                  "avatar, so nothing was changed.");
+                return false;
+            }
+
+            CombatAnimationSet set = EnsureCombatAnimationSet(report);
+            EnsureController(report, set);
+            return true;
+        }
+
+        private static AvatarMask EnsureCombatUpperBodyMask(CombatAnimationTuning tuning)
+        {
+            bool torso = tuning == null || tuning.upperBodyIncludesTorso;
+            AvatarMask mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(CombatMaskPath);
+            if (mask == null)
+            {
+                mask = new AvatarMask();
+                CombatAnimatorBuilder.ConfigureUpperBodyMask(mask, torso);
+                AssetDatabase.CreateAsset(mask, CombatMaskPath);
+                return mask;
+            }
+
+            // Derived from the set, so it follows the set's torso choice.
+            CombatAnimatorBuilder.ConfigureUpperBodyMask(mask, torso);
+            EditorUtility.SetDirty(mask);
+            return mask;
         }
 
         private static void ClearController(AnimatorController controller)

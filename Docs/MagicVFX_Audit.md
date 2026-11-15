@@ -352,6 +352,11 @@ Colours below are **proposals** from `DisciplineDefaults` / docs (cool blue-viol
 
 ## D. Animation integration
 
+> **Update, 15 November 2026.** The combat animation sprint added melee, charge, block and reaction
+> clips, hand information per slot, and timing cues anchored to the combat rules (hit window,
+> contact, release, recovery, cancellation) that effects can use instead of Animation Events. See
+> `Docs/CombatAnimationArchitecture.md`. The table below describes the state before that change.
+
 ### D.1 What exists today (Verified)
 
 | Piece | State |

@@ -196,6 +196,14 @@ namespace Threefold.EditorTools
                 }
             }
 
+            // The combat animations are optional; if their director is present, it must be connected.
+            if (mage.TryGetComponent(out Threefold.CombatAnimation.CombatAnimationDirector director))
+            {
+                if (director.AnimationSet == null) Problem("The Mage's combat animation director has no animation set.");
+                if (director.Driver == null) Problem("The Mage's combat animation director has no animation driver.");
+                if (director.Combat == null) Problem("The Mage's combat animation director has no discipline combat.");
+            }
+
             DefeatTargetsObjective objective = FindInScene<DefeatTargetsObjective>(scene);
             if (objective == null)
             {
