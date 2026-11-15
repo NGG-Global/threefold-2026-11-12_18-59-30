@@ -126,12 +126,19 @@ namespace Threefold.CombatAnimation
 
         /// <summary>Attacks, charges, block and reactions on the upper body; the legs keep moving.</summary>
         UpperBody = 2,
+
+        /// <summary>
+        /// The discipline's stance on the whole body, under the other combat layers, faded out quickly by speed: a low or
+        /// wide stance shows its legs while standing, and the legs walk normally as soon as the character moves.
+        /// </summary>
+        StanceFull = 3,
     }
 
     /// <summary>Names shared by the generated Animator Controller and the code that plays it.</summary>
     public static class CombatAnimatorNames
     {
         public const string StanceLayer = "CombatStance";
+        public const string StanceFullLayer = "CombatStanceFull";
         public const string FullBodyLayer = "CombatFullBody";
         public const string UpperBodyLayer = "CombatUpperBody";
 
@@ -141,19 +148,20 @@ namespace Threefold.CombatAnimation
         public const string EmptyState = "Empty";
         public const string TwinSuffix = "_B";
 
-        public const int LayerCount = 3;
+        public const int LayerCount = 4;
 
         public static string LayerName(CombatLayer layer)
         {
             switch (layer)
             {
+                case CombatLayer.StanceFull: return StanceFullLayer;
                 case CombatLayer.Stance: return StanceLayer;
                 case CombatLayer.FullBody: return FullBodyLayer;
                 default: return UpperBodyLayer;
             }
         }
 
-        /// <summary>The speed parameter of a layer, or null for the stance layer, which plays at normal speed.</summary>
+        /// <summary>The speed parameter of a layer, or null for the stance layers, which play at normal speed.</summary>
         public static string SpeedParameter(CombatLayer layer)
         {
             switch (layer)

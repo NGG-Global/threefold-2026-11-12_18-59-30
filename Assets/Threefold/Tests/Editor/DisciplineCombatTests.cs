@@ -196,12 +196,12 @@ namespace Threefold.Tests
 
             Wait(0.1f);
             Assert.AreEqual(1, Count(CombatCommandKind.MeleeHit));
-            Assert.AreEqual("Arcane Jab", Last(CombatCommandKind.MeleeHit).Step.name);
+            Assert.AreEqual("Rising Palm", Last(CombatCommandKind.MeleeHit).Step.name);
         }
 
         [TestCase(Arcane, 3)]
         [TestCase(Flame, 3)]
-        [TestCase(Aegis, 2)]
+        [TestCase(Aegis, 3)]
         public void RepeatedTapsWalkThroughTheWholeCombo(int discipline, int steps)
         {
             slot = discipline;
@@ -225,13 +225,14 @@ namespace Threefold.Tests
         public void TheComboWrapsToTheFirstSwingAfterTheLast()
         {
             slot = Aegis;
-            for (int i = 0; i < 60 && Count(CombatCommandKind.MeleeHit) < 3; i++)
+            for (int i = 0; i < 80 && Count(CombatCommandKind.MeleeHit) < 4; i++)
             {
                 Tap();
                 Wait(0.12f);
             }
 
-            Assert.AreEqual(0, All(CombatCommandKind.MeleeHit)[2].StepIndex);
+            Assert.AreEqual(2, All(CombatCommandKind.MeleeHit)[2].StepIndex, "Aegis has three strikes");
+            Assert.AreEqual(0, All(CombatCommandKind.MeleeHit)[3].StepIndex);
         }
 
         [Test]
@@ -251,7 +252,7 @@ namespace Threefold.Tests
         public void ATapDuringASwingIsRememberedAndChainsAtOnce()
         {
             Tap();
-            Wait(0.12f); // mid-recovery of the first swing (0.07 start-up + 0.2 recovery)
+            Wait(0.12f); // mid-recovery of the first swing (0.1 start-up + 0.17 recovery)
             Tap();
             Wait(0.5f);
 
@@ -460,7 +461,7 @@ namespace Threefold.Tests
             slot = Aegis;
             Tap();
             Wait(0.5f); // the Force Palm lands after 0.18 s; its 0.34 s recovery ends at about 0.52 s
-            Tap();      // the Bulwark Slam starts, lands 0.26 s later, then recovers for 0.46 s
+            Tap();      // the Bulwark Forearm starts, lands 0.2 s later, then recovers for 0.38 s
             for (int i = 0; i < 60 && Count(CombatCommandKind.MeleeHit) < 2; i++)
             {
                 Frame();
@@ -478,13 +479,16 @@ namespace Threefold.Tests
             Assert.AreEqual(2, Count(CombatCommandKind.MeleeStepStarted),
                 "Flicking block must not let the next swing start before the recovery is over.");
 
-            Wait(0.5f);
-            Tap();
-            Wait(0.5f);
+            // The tap made during the recovery is remembered and performed when the recovery ends.
+            for (int i = 0; i < 90 && Count(CombatCommandKind.MeleeStepStarted) < 3; i++)
+            {
+                Frame();
+            }
+
             List<CombatCommand> starts = All(CombatCommandKind.MeleeStepStarted);
             Assert.AreEqual(3, starts.Count);
             Assert.AreEqual(0, starts[2].StepIndex, "Blocking ends the combo; the next swing is the first.");
-            Assert.Greater(time - landed, fixture.Melee[Aegis].steps[1].recoverySeconds);
+            Assert.GreaterOrEqual(time - landed, fixture.Melee[Aegis].steps[1].recoverySeconds - Step);
         }
 
         [Test]
@@ -765,7 +769,7 @@ namespace Threefold.Tests
             Assert.AreEqual(1, starts[1].StepIndex);
             Assert.AreEqual(Flame, starts[2].Slot);
             Assert.AreEqual(0, starts[2].StepIndex, "A new discipline never starts in the middle of its combo.");
-            Assert.AreEqual("Ember Swipe", starts[2].Step.name);
+            Assert.AreEqual("Ember Fist", starts[2].Step.name);
         }
 
         [Test]

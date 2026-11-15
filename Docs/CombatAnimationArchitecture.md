@@ -53,6 +53,7 @@ The setup adds three layers between the locomotion layer and the casting layer:
 | Layer | Mask | Shows | Weight |
 | --- | --- | --- | --- |
 | Base Layer | none | Locomotion, jump, fall, land, traversal (unchanged) | 1 |
+| CombatStanceFull | none | The selected discipline's stance on the whole body, so a low or wide stance shows its legs (added in Sprint 2, `Docs/MartialStyles.md`) | Faded in while in combat and standing, out by 0.6 m/s |
 | CombatStance | upper body | The selected discipline's stance | Faded in while in combat and standing, out with speed |
 | CombatFullBody | none | Committed attacks while standing still, aerial attacks, defeat | 1 while playing, 0 otherwise |
 | CombatUpperBody | upper body | Every attack, charge, block and reaction; full-body slots while moving | 1 while playing, 0 otherwise |
@@ -183,6 +184,11 @@ important never resumes half-way; a hold (block, charge) does.
 
 ## The default slots
 
+**Since Sprint 2 the stances and strikes below are replaced by the martial styles** (`Docs/MartialStyles.md`):
+derived clips such as `Arcane_RisingPalm` and `Aegis_Slam`, three strikes for every discipline, a
+full-body stance layer, and the hand-over of whole-body strikes to the upper body when moving. The
+charge, block, reaction, aerial and defeat slots below are unchanged. The table records Sprint 1's choice.
+
 Chosen after measuring every candidate clip (`Tools/blender/analyse_combat_clips.py`) and reviewing
 rendered frames. Full timing values are in `CombatAnimationDefaults.cs`.
 
@@ -196,7 +202,7 @@ rendered frames. Full timing values are in `CombatAnimationDefaults.cs`.
 Shared reactions: block hold `Idle_Shield_Loop`, block impact `Idle_Shield_Break`, stagger
 `Hit_Chest`, heavy stagger `Hit_Head`, defeat `Death01`.
 
-The task asked for three-hit combinations. Aegis keeps its **two** strikes, as designed in
+The task asked for three-hit combinations. In Sprint 1 Aegis kept its **two** strikes, as designed in
 `Docs/Disciplines.md`; the architecture takes any number of attack slots, and a third Aegis step
 added to the data would reuse the second slot until a third is assigned.
 

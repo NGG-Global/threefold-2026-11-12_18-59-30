@@ -69,7 +69,7 @@ namespace Threefold.Tests
             Assert.IsNotNull(controller, "the Mage's Animator has the generated controller");
 
             var layers = controller.layers.ToDictionary(layer => layer.name);
-            foreach (CombatLayer layer in new[] { CombatLayer.Stance, CombatLayer.FullBody, CombatLayer.UpperBody })
+            foreach (CombatLayer layer in new[] { CombatLayer.StanceFull, CombatLayer.Stance, CombatLayer.FullBody, CombatLayer.UpperBody })
             {
                 Assert.IsTrue(layers.ContainsKey(CombatAnimatorNames.LayerName(layer)), CombatAnimatorNames.LayerName(layer));
             }
@@ -96,6 +96,12 @@ namespace Threefold.Tests
                     int twin = Animator.StringToHash(id.TwinStateName);
                     Assert.IsTrue(layers[layerName].stateMachine.states.Any(child => child.state.nameHash == twin),
                         $"{layerName} has {id.TwinStateName}");
+                }
+
+                if (id.Kind == CombatSlotKind.Stance)
+                {
+                    Assert.IsTrue(layers[CombatAnimatorNames.StanceFullLayer].stateMachine.states.Any(child => child.state.nameHash == hash),
+                        $"{CombatAnimatorNames.StanceFullLayer} has {id.StateName}");
                 }
 
                 if (slot.scope == CombatBodyScope.FullBody && id.Kind != CombatSlotKind.Defeat)

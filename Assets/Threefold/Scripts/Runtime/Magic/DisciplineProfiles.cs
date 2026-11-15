@@ -62,6 +62,20 @@ namespace Threefold.Magic
         [Range(0f, 1f)]
         public float moveSpeedMultiplier = 1f;
 
+        [Header("Commitment")]
+        [Tooltip("Movement speed during the committed part of the swing, around the hit, relative to normal. " +
+                 "0 roots the character; 1 does not slow it beyond the swing's own speed. The lower of the two applies.")]
+        [Range(0f, 1f)]
+        public float committedMoveSpeedMultiplier = 1f;
+
+        [Tooltip("The committed part starts this long before the hit (at most the start-up).")]
+        [Min(0f)]
+        public float commitBeforeHitSeconds;
+
+        [Tooltip("The committed part ends this long after the hit (at most the recovery).")]
+        [Min(0f)]
+        public float commitAfterHitSeconds;
+
         [Header("Presentation")]
         [Tooltip("Camera shake added when the swing connects, 0 to 1.")]
         [Range(0f, 1f)]
@@ -73,6 +87,29 @@ namespace Threefold.Magic
         /// <summary>Seconds from the tap until the next swing can start.</summary>
         public float TotalSeconds => startupSeconds + recoverySeconds;
 
+        /// <summary>True if the swing restricts movement more around its hit than during the rest of it.</summary>
+        public bool HasCommitment => committedMoveSpeedMultiplier < moveSpeedMultiplier &&
+                                     (commitBeforeHitSeconds > 0f || commitAfterHitSeconds > 0f);
+
+        /// <summary>
+        /// Movement allowed at a moment of the swing, relative to normal. <paramref name="sinceStart"/> is the time
+        /// since the swing started; the hit lands at the start-up. Outside the committed part, the swing's own
+        /// speed; inside it, the lower committed speed. Before the start and after the recovery: 1.
+        /// </summary>
+        public float MoveSpeedAt(float sinceStart)
+        {
+            if (sinceStart < 0f || sinceStart > TotalSeconds)
+            {
+                return 1f;
+            }
+
+            float hit = startupSeconds;
+            float from = hit - System.Math.Min(commitBeforeHitSeconds, startupSeconds);
+            float to = hit + System.Math.Min(commitAfterHitSeconds, recoverySeconds);
+            bool committed = HasCommitment && sinceStart >= from && sinceStart <= to;
+            return committed ? System.Math.Min(moveSpeedMultiplier, committedMoveSpeedMultiplier) : moveSpeedMultiplier;
+        }
+
         /// <summary>The magical effects the swing carries, apart from its damage.</summary>
         public EffectPayload Effects => new EffectPayload { heat = heat, force = force, targets = EffectTargets.All };
     }
@@ -83,9 +120,15 @@ namespace Threefold.Magic
     {
         public MeleeStepProfile[] steps = { new MeleeStepProfile() };
 
-        [Tooltip("A tap made this long before a swing can start is still performed. Makes quick taps reliable.")]
+        [Tooltip("A tap made this long before a swing can start is still performed. Makes quick taps reliable. A tap " +
+                 "made after the current swing has hit is always performed when its recovery ends.")]
         [Min(0f)]
         public float inputBufferSeconds = 0.3f;
+
+        [Tooltip("A second tap this soon after the tap that started a swing is taken as accidental (a double touch, a " +
+                 "bouncing button) and ignored. 0 switches the guard off.")]
+        [Range(0f, 0.2f)]
+        public float repeatGuardSeconds = 0.08f;
 
         [Tooltip("A swing turns towards a target that is at most this many degrees off the wanted direction. 0 switches it off.")]
         [Range(0f, 180f)]

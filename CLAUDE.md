@@ -60,6 +60,13 @@ separates approved decisions from proposals; do not present a proposal as decide
   `Recovered` or `Cancelled` cue. The starting slots are in `CombatAnimationDefaults`; the generated
   set is the truth afterwards. `Mage.fbx` changes only through `Tools/blender/build_mage.py`, checked
   with `compare_mage.py`.
+- The martial styles (`Docs/MartialStyles.md`) are clips derived from library motion by
+  `Tools/blender/martial_styles.py`: adapt authored motion (cut, join, retime, layered rotations,
+  hand poses), never generate a whole strike from nothing, and keep every strike starting and ending
+  on its discipline's stance (`analyse_martial_styles.py` must report 0.0 m joins). Slot moments come
+  from that tool's measurements of the exported model. Movement restriction of a strike is data
+  (`MeleeStepProfile` commitment), never code per discipline. A placeholder that stands in for a
+  missing motion (the Flame kick) is listed under "What needs new animation"; do not call it final.
 - How the world responds to magic (`Docs/WorldMagic.md`) follows from properties and effects, not
   from a script per object or a table of spell-on-object cases. The rules (`MagicalPropertySet`,
   the properties in `WorldProperties`, `CreatureEffectModel`, `MagicalObjectRules`) are plain C#;

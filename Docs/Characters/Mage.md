@@ -28,7 +28,7 @@ Rendered in Blender from the exported file, before Unity. Unity's lighting and m
 | Gear | Terracotta hood, shoulder mantle and short back cloak; belt with brass buckle and two pouches |
 | Magical motifs | A glowing crystal on the mantle's clasp and a glowing rune band on the left (casting) wrist |
 | Animations | Movement and traversal: Idle, Walk, Jog, Sprint, JumpStart, JumpLoop (fall), JumpLand, SpellShoot, ClimbUp, Hang (posed in code). Combat: 19 library clips for the disciplines' stances, strikes, charges, block, stagger, aerial attack and defeat (`Docs/CombatAnimationArchitecture.md`, listed in `Docs/AssetInventory.md`) |
-| Size | About 15,600 triangles, one skinned mesh, nine materials, 29 animation clips, 10.5 MB file (4.0 MB before the combat clips) |
+| Size | About 15,600 triangles, one skinned mesh, nine materials, 41 animation clips, 14.7 MB file (4.0 MB before the combat clips; 10.5 MB before the martial styles, `Docs/MartialStyles.md`) |
 
 Colours come from the art bible's provisional palette families: slate blue, dark umber,
 weathered terracotta, warm leather and a restrained brass.

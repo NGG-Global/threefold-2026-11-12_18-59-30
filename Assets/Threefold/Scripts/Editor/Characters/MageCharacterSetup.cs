@@ -4,6 +4,7 @@ using System.Text;
 using Threefold.Characters;
 using Threefold.Combat;
 using Threefold.CombatAnimation;
+using Threefold.Magic;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -41,7 +42,8 @@ namespace Threefold.EditorTools
         // Raised whenever the controller's layout changes, so existing controllers are rebuilt. The combat
         // animation set's signature is stored with it, so changing a clip in the set rebuilds it too.
         // 3: the combat layers (Docs/CombatAnimationArchitecture.md).
-        private const string ControllerVersion = "threefold-mage-controller-3";
+        // 4: the full-body stance layer of the martial styles (Docs/MartialStyles.md).
+        private const string ControllerVersion = "threefold-mage-controller-4";
         private const float HardLandingSpeed = 13f;
 
         private const string LitShader = "Universal Render Pipeline/Lit";
@@ -392,6 +394,12 @@ namespace Threefold.EditorTools
             return clips;
         }
 
+        /// <summary>The generated MageVisual prefab (model, materials, Animator), or null before the setup has run.</summary>
+        internal static GameObject LoadVisualPrefab()
+        {
+            return AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+        }
+
         internal static CombatAnimationSet LoadCombatAnimationSet()
         {
             return AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(CombatAnimationSetPath);
@@ -413,6 +421,22 @@ namespace Threefold.EditorTools
                 AssetDatabase.CreateAsset(set, CombatAnimationSetPath);
                 report.AppendLine("Generated the Mage's combat animation set 'MageCombatAnimations' (three disciplines, " +
                                   "block, stagger, aerial and defeat slots).");
+            }
+
+            var kept = new List<MagicDiscipline>();
+            int upgraded = set.Upgrade(kept);
+            if (upgraded >= 0)
+            {
+                EditorUtility.SetDirty(set);
+                AssetDatabase.SaveAssetIfDirty(set);
+                report.AppendLine($"Updated the combat animation set to the martial styles (Docs/MartialStyles.md): {upgraded} " +
+                                  "discipline(s) now use the new stances and strikes.");
+                foreach (MagicDiscipline discipline in kept)
+                {
+                    report.AppendLine($"Kept the {discipline} stance and strikes of the combat animation set as they are, because " +
+                                      "they were changed by hand. To use the martial styles, assign the clips listed in " +
+                                      "Docs/MartialStyles.md, then run Threefold > Animation > Apply Combat Animation Set.");
+                }
             }
 
             Dictionary<string, AnimationClip> clips = LoadModelClips();

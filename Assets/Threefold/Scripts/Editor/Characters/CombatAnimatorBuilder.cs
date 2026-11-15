@@ -9,6 +9,8 @@ namespace Threefold.EditorTools
     /// <summary>
     /// Adds the combat animation layers to an Animator Controller, from a combat animation set:
     ///
+    /// - CombatStanceFull (no mask): each discipline's stance on the whole body, shown while standing (a low or
+    ///   wide stance needs its legs and hips) and faded out quickly as the character moves;
     /// - CombatStance (upper-body mask): each discipline's stance;
     /// - CombatFullBody (no mask): full-body slots, aerial slots and defeat;
     /// - CombatUpperBody (upper-body mask): every action slot, including the full-body ones, which play here
@@ -22,13 +24,14 @@ namespace Threefold.EditorTools
     /// </summary>
     internal static class CombatAnimatorBuilder
     {
-        /// <summary>Adds the parameters and the three layers. Returns the number of states added.</summary>
+        /// <summary>Adds the parameters and the four layers. Returns the number of states added.</summary>
         internal static int AddCombatLayers(AnimatorController controller, CombatAnimationLibrary library,
             IReadOnlyDictionary<string, AnimationClip> clips, AvatarMask upperBodyMask, StringBuilder report)
         {
             AddSpeedParameter(controller, CombatAnimatorNames.FullBodySpeed);
             AddSpeedParameter(controller, CombatAnimatorNames.UpperBodySpeed);
 
+            AnimatorStateMachine stanceFull = AddLayer(controller, CombatAnimatorNames.StanceFullLayer, null);
             AnimatorStateMachine stance = AddLayer(controller, CombatAnimatorNames.StanceLayer, upperBodyMask);
             AnimatorStateMachine full = AddLayer(controller, CombatAnimatorNames.FullBodyLayer, null);
             AnimatorStateMachine upper = AddLayer(controller, CombatAnimatorNames.UpperBodyLayer, upperBodyMask);
@@ -52,8 +55,9 @@ namespace Threefold.EditorTools
                 switch (id.Kind)
                 {
                     case CombatSlotKind.Stance:
+                        AddState(stanceFull, id.StateName, clip, slot, null);
                         AddState(stance, id.StateName, clip, slot, null);
-                        added++;
+                        added += 2;
                         break;
 
                     case CombatSlotKind.Defeat:
