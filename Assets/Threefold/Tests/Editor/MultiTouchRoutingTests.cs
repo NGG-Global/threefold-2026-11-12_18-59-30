@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using NUnit.Framework;
+using Threefold.Characters;
 using Threefold.InputHandling;
 using Threefold.TouchControls;
 using UnityEngine;
@@ -527,5 +529,118 @@ namespace Threefold.Tests
             Assert.IsFalse(fan.IsCaptured);
         }
 
-    }
+    
+        // ------------------------------------------------------ aerial abilities
+
+        [Test]
+        public void AGlideHeldOnJumpSurvivesMovingAndTurningTheCameraAtTheSameTime()
+        {
+            // Sprint 4: the Flame glide propels while JUMP is held. With the thumb on the joystick and a second finger
+            // turning the camera, the third finger on JUMP keeps its own touch; lifting it stops the glide and a new
+            // tap resumes it, while the other two fingers carry on.
+            Vector2 jumpCentre = MobileControlsLayout.Default.Jump.Resolve(Screen);
+            Vector2 cameraStart = new Vector2(420f, 260f);
+            var model = new AerialAbilityModel(null, null, null, null);
+            var events = new List<AerialEvent>();
+            var motion = new AerialMotion();
+            bool wasHeld = false;
+            int frame = 0;
+
+            void Aerial(bool grounded = false, bool jumped = false)
+            {
+                bool held = jump.Held;
+                var input = new AerialFrameInput
+                {
+                    DeltaTime = 1f / 60f, Grounded = grounded, VerticalSpeed = grounded ? 0f : -1f, Gravity = 28f,
+                    JumpedFromGround = jumped, JumpPressed = held && !wasHeld, JumpHeld = held,
+                    Selected = AerialAbilityKind.Glide, Move = new Vector3(joystick.Value.x, 0f, joystick.Value.y),
+                    Facing = new Vector3(0f, 0f, 1f),
+                };
+                wasHeld = held;
+                model.Tick(input, ref motion, events);
+            }
+
+            // Thumb on the joystick, a finger dragging the camera.
+            Frame(() =>
+            {
+                router.Begin(1, JoystickCentre);
+                router.Begin(2, cameraStart);
+            });
+            Aerial(grounded: true);
+            Aerial(grounded: true);
+
+            // Every frame reports every finger still down, as Unity's touch list does.
+            Vector2 thumb = JoystickCentre + new Vector2(0f, 50f);
+            Vector2 look2 = cameraStart + new Vector2(10f, 0f);
+
+            // First jump: tap and release JUMP while moving and turning.
+            Frame(() =>
+            {
+                router.Move(1, thumb);
+                router.Move(2, look2);
+                router.Begin(3, jumpCentre);
+            });
+            Aerial(grounded: true);
+            Frame(() =>
+            {
+                router.Move(1, thumb);
+                router.Move(2, look2);
+                router.End(3, jumpCentre, false);
+            });
+            Aerial(jumped: true);
+
+            // Press and hold JUMP in the air: the glide starts and keeps going while the other fingers move.
+            Frame(() =>
+            {
+                router.Move(1, thumb);
+                router.Move(2, look2);
+                router.Begin(3, jumpCentre);
+            });
+            Aerial();
+            Assert.AreEqual(AerialState.Gliding, model.State);
+            for (frame = 0; frame < 30; frame++)
+            {
+                int i = frame;
+                look2 = cameraStart + new Vector2(10f + i * 3f, 0f);
+                thumb = JoystickCentre + new Vector2(30f, 40f);
+                Frame(() =>
+                {
+                    router.Move(1, thumb);
+                    router.Move(2, look2);
+                    router.Move(3, jumpCentre);
+                });
+                Aerial();
+                Assert.AreEqual(AerialState.Gliding, model.State, $"frame {i}");
+            }
+
+            Assert.IsTrue(joystick.IsCaptured);
+            Assert.IsTrue(look.IsCaptured);
+            Assert.IsTrue(jump.Held);
+            Assert.Greater(look.Total.x, 0f, "the camera turned during the glide");
+            Assert.AreNotEqual(Vector2.zero, joystick.Value, "and the Mage was steered");
+
+            // Lift JUMP: propulsion stops at once; the other fingers stay.
+            Frame(() =>
+            {
+                router.Move(1, thumb);
+                router.Move(2, look2);
+                router.End(3, jumpCentre, false);
+            });
+            Aerial();
+            Assert.AreEqual(AerialState.Idle, model.State);
+            Assert.IsTrue(joystick.IsCaptured && look.IsCaptured);
+
+            // Tap again: the glide resumes with the fuel left.
+            Frame(() =>
+            {
+                router.Move(1, thumb);
+                router.Move(2, look2);
+                router.Begin(3, jumpCentre);
+            });
+            Aerial();
+            Assert.AreEqual(AerialState.Gliding, model.State);
+            Assert.AreEqual(1, events.FindAll(e => e.Kind == AerialEventKind.Activated).Count);
+            Assert.AreEqual(1, events.FindAll(e => e.Kind == AerialEventKind.Resumed).Count);
+        }
+}
 }

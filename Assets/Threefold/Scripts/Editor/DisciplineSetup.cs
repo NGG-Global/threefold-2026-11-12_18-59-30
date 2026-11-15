@@ -412,6 +412,17 @@ namespace Threefold.EditorTools
                 }
             }
 
+            // Sprint 4: the disciplines' aerial abilities (Docs/AerialAbilities.md). Added once; its tuning is kept.
+            if (!mage.TryGetComponent(out AerialAbilities aerial))
+            {
+                aerial = Undo.AddComponent<AerialAbilities>(mage);
+                aerial.Bind(motor, input, disciplines, combat, mage.GetComponent<PlayerGuard>(), mage.GetComponent<Health>(),
+                    mage.GetComponent<TraversalController>(), FindInScene<ThirdPersonCamera>(scene));
+                MarkChanged(aerial);
+                report.AppendLine("Added the aerial abilities: in the air, a second press of Jump starts Arcane Ascension, " +
+                                  "Flame Fire Glide (hold) or Aegis Force Dash, by the selected discipline.");
+            }
+
             if (mage.TryGetComponent(out PlayerGuard guard) && guard.Health == null)
             {
                 Undo.RecordObject(guard, DialogTitle);

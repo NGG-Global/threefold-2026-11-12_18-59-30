@@ -43,7 +43,10 @@ namespace Threefold.EditorTools
         // animation set's signature is stored with it, so changing a clip in the set rebuilds it too.
         // 3: the combat layers (Docs/CombatAnimationArchitecture.md).
         // 4: the full-body stance layer of the martial styles (Docs/MartialStyles.md).
-        private const string ControllerVersion = "threefold-mage-controller-4";
+        private const string ControllerVersion = "threefold-mage-controller-5";
+
+        /// <summary>The upper-body layer of the Fire Glide pose.</summary>
+        internal const string AerialLayer = "Aerial";
         private const float HardLandingSpeed = 13f;
 
         private const string LitShader = "Universal Render Pipeline/Lit";
@@ -245,6 +248,7 @@ namespace Threefold.EditorTools
             controller.AddParameter(CharacterAnimationDriver.ShimmyParameter, AnimatorControllerParameterType.Float);
             controller.AddParameter(CharacterAnimationDriver.ClimbParameter, AnimatorControllerParameterType.Trigger);
             controller.AddParameter(CharacterAnimationDriver.VaultParameter, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(CharacterAnimationDriver.AerialMoveParameter, AnimatorControllerParameterType.Int);
 
             // Grounded starts true so the first frame does not play a fall.
             AnimatorControllerParameter[] parameters = controller.parameters;
@@ -341,6 +345,8 @@ namespace Threefold.EditorTools
             AnimatorStateTransition landDone = land.AddTransition(locomotion);
             Configure(landDone, true, 0.6f, 0.15f);
 
+            AddAerialStates(machine, fall, land, Clip);
+
             // ---- combat layers: stance, full body, upper body
             int combatStates = 0;
             if (combatAnimations != null)
@@ -372,10 +378,34 @@ namespace Threefold.EditorTools
             AnimatorStateTransition castDone = cast.AddTransition(empty);
             Configure(castDone, true, 0.85f, 0.15f);
 
+            // ---- upper-body layer: Fire Glide, the arms held out over the falling legs for as long as it propels.
+            // A layer of its own: the combat animation director silences the cast layer while it plays.
+            // Placeholder clip until a propulsion pose is made (Docs/AerialAbilities.md, "What needs new animation").
+            controller.AddLayer(AerialLayer);
+            layers = controller.layers;
+            int aerialIndex = layers.Length - 1;
+            layers[aerialIndex].defaultWeight = 1f;
+            layers[aerialIndex].avatarMask = mask;
+            layers[aerialIndex].blendingMode = AnimatorLayerBlendingMode.Override;
+            controller.layers = layers;
+
+            AnimatorStateMachine aerialMachine = controller.layers[aerialIndex].stateMachine;
+            AnimatorState aerialEmpty = aerialMachine.AddState("Empty");
+            aerialMachine.defaultState = aerialEmpty;
+            AnimatorState glidePose = AddState(aerialMachine, "AerialGlide", Clip("Spell_Simple_Idle_Loop"));
+            AnimatorStateTransition toGlide = aerialMachine.AddAnyStateTransition(glidePose);
+            toGlide.AddCondition(AnimatorConditionMode.Equals, 2f, CharacterAnimationDriver.AerialMoveParameter);
+            toGlide.canTransitionToSelf = false;
+            Configure(toGlide, false, 0f, 0.1f);
+            AnimatorStateTransition glideDone = glidePose.AddTransition(aerialEmpty);
+            glideDone.AddCondition(AnimatorConditionMode.NotEqual, 2f, CharacterAnimationDriver.AerialMoveParameter);
+            Configure(glideDone, false, 0f, 0.12f);
+
             EditorUtility.SetDirty(controller);
             SetVersion(ControllerPath, version);
             report.AppendLine("Generated the Mage's Animator Controller (locomotion, jump, fall, land, hang, climb, " +
-                              $"vault, combat layers with {combatStates} states, and an upper-body cast layer).");
+                              $"vault, aerial abilities, combat layers with {combatStates} states, an upper-body cast " +
+                              "layer and an upper-body aerial layer).");
             return controller;
         }
 
@@ -556,6 +586,44 @@ namespace Threefold.EditorTools
             {
                 tree.AddChild(clip, threshold);
             }
+        }
+
+        /// <summary>
+        /// The aerial abilities on the base layer, driven by the AerialMove integer, which gameplay sets every frame:
+        /// each pose lasts exactly as long as its ability and returns to the fall (or the landing) when the value
+        /// goes back to 0, so no pose can stay stuck. The clips are placeholders from the library until poses are
+        /// made for the abilities (Docs/AerialAbilities.md, "What needs new animation").
+        /// </summary>
+        private static void AddAerialStates(AnimatorStateMachine machine, AnimatorState fall, AnimatorState land,
+            System.Func<string, AnimationClip> clip)
+        {
+            // Arcane Ascension: the shared leap (a gathering crouch, arms rising, the body extending upwards).
+            AnimatorState ascend = AddState(machine, "AerialAscend", clip("NinjaJump_Start"));
+            ascend.speed = 1.3f;
+            AddAerialTransitions(machine, ascend, fall, land, 1);
+
+            // Aegis Force Dash: the two-handed shove of Push_Loop from its thrust (frame 37 of 81), played fast.
+            AnimatorState dash = AddState(machine, "AerialDash", clip("Push_Loop"));
+            dash.cycleOffset = 37f / 81f;
+            dash.speed = 2f;
+            AddAerialTransitions(machine, dash, fall, land, 3);
+        }
+
+        private static void AddAerialTransitions(AnimatorStateMachine machine, AnimatorState pose, AnimatorState fall,
+            AnimatorState land, int move)
+        {
+            AnimatorStateTransition enter = machine.AddAnyStateTransition(pose);
+            enter.AddCondition(AnimatorConditionMode.Equals, move, CharacterAnimationDriver.AerialMoveParameter);
+            enter.canTransitionToSelf = false;
+            Configure(enter, false, 0f, 0.06f);
+
+            AnimatorStateTransition toLand = pose.AddTransition(land);
+            toLand.AddCondition(AnimatorConditionMode.If, 0f, CharacterAnimationDriver.GroundedParameter);
+            Configure(toLand, false, 0f, 0.05f);
+
+            AnimatorStateTransition toFall = pose.AddTransition(fall);
+            toFall.AddCondition(AnimatorConditionMode.NotEqual, move, CharacterAnimationDriver.AerialMoveParameter);
+            Configure(toFall, false, 0f, 0.15f);
         }
 
         private static AnimatorState AddState(AnimatorStateMachine machine, string name, AnimationClip clip)

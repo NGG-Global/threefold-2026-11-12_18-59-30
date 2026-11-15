@@ -70,6 +70,20 @@ namespace Threefold.Magic
         [Tooltip("A ribbon that follows the charged projectile and fades where it ends.")]
         public PooledObject projectileTrailEffect;
 
+        [Header("Aerial ability (Docs/AerialAbilities.md)")]
+        [Tooltip("Played once when the discipline's aerial ability starts: Arcane's burst beneath the feet, Aegis's " +
+                 "compressed field and shockwave along the dash.")]
+        public PooledObject aerialBurstEffect;
+
+        [Tooltip("Held while the ability lasts and stopped the moment it ends: Arcane's rising ribbon, Flame's jets " +
+                 "(only while propelling), Aegis's short trail.")]
+        public PooledObject aerialSustainEffect;
+
+        public AerialEffectPlacement aerialSustainPlacement = AerialEffectPlacement.Body;
+
+        [Tooltip("Where a dash is stopped by a wall: a distinct flash on the wall.")]
+        public PooledObject aerialImpactEffect;
+
         [Header("Defence")]
         [Tooltip("Optional. A restrained barrier held in front of the Mage while blocking with this discipline.")]
         public PooledObject blockBarrierEffect;

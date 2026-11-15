@@ -35,6 +35,9 @@ should, can only be judged by playing. Expect tuning.
 
 **Jumping and landing**
 
+Since Sprint 4 a second press of Jump in the air starts the selected discipline's aerial ability; the first
+jump below is unchanged. See `Docs/AerialAbilities.md`.
+
 Coyote time (0.12 s), jump buffering (0.12 s), variable height and air control already existed
 and are unchanged. New:
 

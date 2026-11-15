@@ -68,6 +68,15 @@ namespace Threefold.EditorTools
             Ensure("AegisBarrier", report, root => Barrier(root, glow, aegis));
             Ensure("AegisDeflectFlash", report, root => DeflectFlash(root, glow, aegis));
 
+            // Aerial abilities (Sprint 4, Docs/AerialAbilities.md).
+            Ensure("ArcaneAscendBurst", report, root => AscendBurst(root, glow, arcane));
+            Ensure("ArcaneAscendRibbon", report, root => ProjectileRibbon(root, glow, Color.Lerp(arcane, new Color(0.55f, 0.7f, 1f), 0.4f)));
+            Ensure("FlameGlideIgnite", report, root => Contact(root, glow, flame, 8, 40f, 3f, 0.08f));
+            Ensure("FlameGlideJet", report, root => GlideJet(root, glow, flame, ember));
+            Ensure("AegisDashBurst", report, root => DeflectFlash(root, glow, aegis));
+            Ensure("AegisDashTrail", report, root => LimbTrail(root, glow, aegis, 0.14f, 0.12f, sparkle: false));
+            Ensure("AegisDashImpact", report, root => Ripple(root, glow, Color.Lerp(aegis, Color.white, 0.3f), 1.8f, horizontal: false));
+
             // The world: magic arriving at objects.
             Ensure("WorldChargeInflow", report, root => Inflow(root, glow, arcane, 70f, 10, 0.3f, 0.32f));
             Ensure("WorldBraceArrival", report, root => Inflow(root, glow, aegis, 0f, 18, 0.05f, 0.4f));
@@ -180,6 +189,50 @@ namespace Threefold.EditorTools
             cone.GetComponent<ParticleSystemRenderer>().velocityScale = 0.04f;
 
             root.AddComponent<PooledEffect>().Bind(null, 0.45f);
+        }
+
+        /// <summary>Arcane Ascension's start: a ring flat beneath the feet, a flash, and a narrow cone of motes rising (+Z is up).</summary>
+        private static void AscendBurst(GameObject root, Material glow, Color color)
+        {
+            Contact(root, glow, Color.Lerp(color, new Color(0.55f, 0.7f, 1f), 0.4f), 12, 10f, 6f, 0.05f);
+            ParticleSystem ring = Child(root, "GroundRing");
+            ring.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f); // the burst faces up; the ring lies flat
+            Main(ring, 0.3f, false, 0.3f, 0.3f, 1.6f, 1.6f, new Color(color.r, color.g, color.b, 0.5f), 0f, 2,
+                ParticleSystemSimulationSpace.World);
+            Burst(ring, 1);
+            Shape(ring, ParticleSystemShapeType.Sphere, 0.01f, enabled: false);
+            Fade(ring, false);
+            Grow(ring, 0.25f, 1f);
+            Render(ring, glow, ParticleSystemRenderMode.HorizontalBillboard);
+        }
+
+        /// <summary>
+        /// Flame Fire Glide: flames streaming straight down from the hand in world space, whatever the hand's angle,
+        /// and trailing behind as the Mage moves, with a few embers. Only while it propels.
+        /// </summary>
+        private static void GlideJet(GameObject root, Material glow, Color color, Color ember)
+        {
+            ParticleSystem jet = root.AddComponent<ParticleSystem>();
+            Main(jet, 1f, true, 0.16f, 0.26f, 0.08f, 0.16f, color, 0f, 40, ParticleSystemSimulationSpace.World);
+            Emission(jet, 70f, 0f);
+            Shape(jet, ParticleSystemShapeType.Sphere, 0.05f);
+            ParticleSystem.VelocityOverLifetimeModule velocity = jet.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.space = ParticleSystemSimulationSpace.World;
+            velocity.x = new ParticleSystem.MinMaxCurve(0f, 0f);
+            velocity.y = new ParticleSystem.MinMaxCurve(-6.5f, -4.5f);
+            velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
+            Fade(jet, true);
+            Render(jet, glow, ParticleSystemRenderMode.Billboard);
+
+            ParticleSystem embers = Child(root, "Embers");
+            Main(embers, 1f, true, 0.4f, 0.6f, 0.02f, 0.045f, ember, -0.15f, 12, ParticleSystemSimulationSpace.World);
+            Emission(embers, 14f, 0f);
+            Shape(embers, ParticleSystemShapeType.Sphere, 0.08f);
+            Fade(embers, true);
+            Render(embers, glow, ParticleSystemRenderMode.Billboard);
+
+            root.AddComponent<PooledEffect>().Bind(null, 30f, loop: true);
         }
 
         /// <summary>A soft disc that expands and fades: a pressure ripple. Flat on the ground when horizontal.</summary>

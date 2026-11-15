@@ -83,6 +83,9 @@ MagicalObject.AnyEffectReceived ──► WorldReactionVfx (plain C#) ──► 
   `MagicVfxGeometry`. The arc is exact, does not depend on a shape module's orientation, and emits the
   same number of particles per second at 15 or 120 frames per second (tested).
 
+The aerial abilities of Sprint 4 add their own effects through the same system (`AerialAbilityEffects`;
+see `Docs/AerialAbilities.md`).
+
 ## Quality levels and intensity
 
 | | Performance | Balanced, Quality |

@@ -32,6 +32,18 @@ namespace Threefold.Magic
         Chest = 2,
     }
 
+    /// <summary>Where an aerial ability's lasting effect sits on the body.</summary>
+    public enum AerialEffectPlacement
+    {
+        /// <summary>At the Mage's feet, following the body.</summary>
+        Body = 0,
+
+        Chest = 1,
+
+        /// <summary>One on each hand.</summary>
+        BothHands = 2,
+    }
+
     /// <summary>
     /// When a discipline's body effects (limb trails, gathering energy, charge buildup, lingering embers)
     /// start, grow and stop, relative to the moments of its attacks. Numbers only: which effect plays is in

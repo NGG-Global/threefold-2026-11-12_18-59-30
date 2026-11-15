@@ -76,6 +76,12 @@ separates approved decisions from proposals; do not present a proposal as decide
   `MagicVfxBudget`. Third-party pack prefabs are never edited: `MagicVfxPackAdapter` makes project-owned
   copies. Pack facts come from `Tools/vfx/analyse_vfx_packs.py`, not from prefab names. The look is a proposal
   until the owner has reviewed it in Unity and on a device.
+- Aerial abilities (`Docs/AerialAbilities.md`): the rules are one plain-C# state machine
+  (`AerialAbilityModel`, with `JumpPhysics` and `AerialSimulator`); `AerialAbilities` only feeds it and hands its
+  motion to `ThirdPersonMotor.ApplyAerialMotion`. The motor's first jump is not changed by them. One activation per
+  airborne sequence, whatever the discipline; which discipline has which ability is data (`abilityBySlot`). Keep
+  `AerialCourseLayoutTests` passing when tuning changes. Animator poses follow the `AerialMove` integer, never a
+  trigger; the three poses are placeholders listed under "What needs new animation".
 - How the world responds to magic (`Docs/WorldMagic.md`) follows from properties and effects, not
   from a script per object or a table of spell-on-object cases. The rules (`MagicalPropertySet`,
   the properties in `WorldProperties`, `CreatureEffectModel`, `MagicalObjectRules`) are plain C#;

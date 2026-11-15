@@ -922,6 +922,8 @@ namespace Threefold.EditorTools
                         changed |= Upgrade(ref look.limbTrailEffect, MagicVfxPrefabs.Load("ArcaneLimbTrail"));
                         changed |= Upgrade(ref look.contactEffect, MagicVfxPrefabs.Load("ArcaneContact"));
                         changed |= Upgrade(ref look.projectileTrailEffect, MagicVfxPrefabs.Load("ArcaneArrowRibbon"));
+                        changed |= Upgrade(ref look.aerialBurstEffect, MagicVfxPrefabs.Load("ArcaneAscendBurst"));
+                        changed |= FillAerialSustain(look, MagicVfxPrefabs.Load("ArcaneAscendRibbon"), AerialEffectPlacement.Body);
                         break;
 
                     case MagicDiscipline.Flame:
@@ -932,6 +934,8 @@ namespace Threefold.EditorTools
                         changed |= Upgrade(ref look.contactEffect, MagicVfxPrefabs.Load("FlameContact"));
                         changed |= Upgrade(ref look.lingerEffect, MagicVfxPrefabs.Load("FlameLinger"));
                         changed |= Upgrade(ref look.areaWaveEffect, MagicVfxPrefabs.Load("FlameWaveFront"));
+                        changed |= Upgrade(ref look.aerialBurstEffect, MagicVfxPrefabs.Load("FlameGlideIgnite"));
+                        changed |= FillAerialSustain(look, MagicVfxPrefabs.Load("FlameGlideJet"), AerialEffectPlacement.BothHands);
                         break;
 
                     case MagicDiscipline.Aegis:
@@ -944,6 +948,9 @@ namespace Threefold.EditorTools
                         changed |= Upgrade(ref look.areaWaveEffect, MagicVfxPrefabs.Load("AegisPulseRing"));
                         changed |= Upgrade(ref look.blockBarrierEffect, MagicVfxPrefabs.Load("AegisBarrier"));
                         changed |= Upgrade(ref look.deflectEffect, MagicVfxPrefabs.Load("AegisDeflectFlash"));
+                        changed |= Upgrade(ref look.aerialBurstEffect, MagicVfxPrefabs.Load("AegisDashBurst"));
+                        changed |= FillAerialSustain(look, MagicVfxPrefabs.Load("AegisDashTrail"), AerialEffectPlacement.Chest);
+                        changed |= Upgrade(ref look.aerialImpactEffect, MagicVfxPrefabs.Load("AegisDashImpact"));
                         break;
                 }
 
@@ -982,6 +989,19 @@ namespace Threefold.EditorTools
                     report.AppendLine($"Gave the charged attack of '{definition.DisplayName}' its impact effect.");
                 }
             }
+        }
+
+        /// <summary>Fills the aerial held effect and its placement together, only when the slot is empty.</summary>
+        private static bool FillAerialSustain(DisciplinePresentation look, PooledObject effect, AerialEffectPlacement placement)
+        {
+            if (look.aerialSustainEffect != null || effect == null)
+            {
+                return false;
+            }
+
+            look.aerialSustainEffect = effect;
+            look.aerialSustainPlacement = placement;
+            return true;
         }
 
         /// <summary>
@@ -1059,6 +1079,16 @@ namespace Threefold.EditorTools
                 Undo.RecordObject(body, DialogTitle);
                 body.Bind(combat, director, sockets, guard, style);
                 MarkChanged(body);
+            }
+
+            AerialAbilities aerial = mage.GetComponent<AerialAbilities>();
+            if (aerial != null && !visuals.TryGetComponent(out AerialAbilityEffects aerialEffects))
+            {
+                aerialEffects = Undo.AddComponent<AerialAbilityEffects>(visuals);
+                aerialEffects.Bind(aerial, sockets, style);
+                MarkChanged(aerialEffects);
+                report.AppendLine("Added the aerial ability effects: Arcane's burst and rising ribbon, Flame's jets, " +
+                                  "Aegis's shockwave, trail and wall flash.");
             }
 
             if (!visuals.TryGetComponent(out WorldMagicFeedback world))

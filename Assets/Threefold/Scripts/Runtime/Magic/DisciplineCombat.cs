@@ -143,6 +143,7 @@ namespace Threefold.Magic
         private PlayerGuard guard;
         private AimProvider aimProvider;
         private PlayerAbilityInput legacyInput;
+        private AerialAbilities aerial;
         private Health subscribedHealth;
         private float damageTaken;
 
@@ -236,6 +237,7 @@ namespace Threefold.Magic
             guard = GetComponent<PlayerGuard>();
             aimProvider = GetComponent<AimProvider>();
             legacyInput = GetComponent<PlayerAbilityInput>();
+            aerial = GetComponent<AerialAbilities>();
         }
 
         private void OnEnable()
@@ -290,7 +292,10 @@ namespace Threefold.Magic
             {
                 Gesture = inputSource.AttackGesture,
                 BlockHeld = inputSource.BlockHeld,
-                HandsBusy = traversal != null && (traversal.IsHanging || traversal.IsMoving),
+                // An aerial ability that uses the hands (an ascension's first moments, a glide, a dash) is like
+                // climbing: a swing that has not landed is abandoned and no attack starts (Docs/AerialAbilities.md).
+                HandsBusy = (traversal != null && (traversal.IsHanging || traversal.IsMoving)) ||
+                            (aerial != null && aerial.isActiveAndEnabled && aerial.HandsBusy),
                 Alive = health == null || health.IsAlive,
                 DisciplineSlot = disciplines.CurrentSlot,
                 DamageTaken = damageTaken,
