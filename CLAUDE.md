@@ -142,6 +142,12 @@ separates approved decisions from proposals; do not present a proposal as decide
   input. The magic's per-frame rules must allocate nothing: `MobilePerformanceTests` measures it in the .NET
   runner of `compile_check.sh` (Unity's Mono does not count allocations; there the tests are inconclusive). The
   development overlay is in every level through the character rig and off in release builds.
+- The main menu (`Docs/MainMenu.md`) is a live scene, never a flattened picture, built only by
+  `MainMenuSetup` from `MainMenuStage` (character, camera, land) and `MainMenuLayout` (interface): change
+  the numbers there and keep `MainMenuTests` passing. Its rules are plain C# (`MainMenuModel`);
+  `MainMenuScreen` only carries them out. It offers one predefined protagonist: no character creation,
+  class selection or switching. The name Eryn, his described appearance and the menu's look are proposals
+  until the owner approves them; the character shown is the intermediate Mage, never call it Eryn's final art.
 - A class deriving from `MonoBehaviour` or `ScriptableObject` (directly or not) must be alone in a
   file of its own name, or Unity saves its assets without a script. `check_unity_repo.py` checks it.
 - Project rendering settings (`Assets/Settings`, `ProjectSettings`) are not changed by tooling
