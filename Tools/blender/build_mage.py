@@ -15,6 +15,8 @@ What it does, all from code so it can be repeated and changed:
    on the left wrist.
 4. Keeps only the animations the game uses and gives them plain names. The climbing clip comes
    from the second library file, and a hanging pose that neither library has is posed in code.
+   The three disciplines' martial-art clips are derived from library clips by martial_styles.py
+   (Docs/MartialStyles.md).
 5. Exports one FBX containing mesh, skeleton and animations, ready for Unity's Humanoid import.
 6. Optionally renders preview images, so the result can be reviewed without opening Unity.
 
@@ -30,6 +32,10 @@ import sys
 import bmesh
 import bpy
 from mathutils import Matrix, Vector
+
+sys.dont_write_bytecode = True  # no __pycache__ folder in the repository
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import martial_styles  # noqa: E402  (Tools/blender/martial_styles.py, next to this file)
 
 # ----------------------------------------------------------------------------------- settings
 
@@ -440,6 +446,8 @@ def import_second_library(path):
         short = action.name.split("|")[-1].split(".")[0]
         if short in ANIMATIONS_2:
             actions[ANIMATIONS_2[short]] = action
+        elif short in martial_styles.SOURCE_ANIMATIONS_2:
+            actions[short] = action
         else:
             bpy.data.actions.remove(action)
     return actions
@@ -455,13 +463,17 @@ def keep_animations(armature, extra):
             action.name = ANIMATIONS[short]
             action.use_fake_user = True
             kept[action.name] = action
+        elif short in martial_styles.SOURCE_ANIMATIONS:
+            action.name = short
+            kept[short] = action
         else:
             bpy.data.actions.remove(action)
     for name, action in extra.items():
         action.name = name
         action.use_fake_user = True
         kept[name] = action
-    missing = (set(ANIMATIONS.values()) | set(ANIMATIONS_2.values())) - set(kept)
+    sources = set(martial_styles.SOURCE_ANIMATIONS) | set(martial_styles.SOURCE_ANIMATIONS_2)
+    missing = (set(ANIMATIONS.values()) | set(ANIMATIONS_2.values()) | sources) - set(kept)
     if missing:
         raise RuntimeError(f"Animations missing from the source file: {sorted(missing)}")
     if armature.animation_data is None:
@@ -614,6 +626,11 @@ def main():
     armature.data.pose_position = "POSE"
     bpy.context.view_layer.update()
     actions["Hang"] = create_hang_pose(armature, actions["Idle"])
+
+    # The martial-art clips of the three disciplines, then the library clips used only to make them go.
+    actions.update(martial_styles.build(armature, actions))
+    for name in martial_styles.SOURCE_ANIMATIONS + martial_styles.SOURCE_ANIMATIONS_2:
+        bpy.data.actions.remove(actions.pop(name))
     armature.animation_data.action = actions["Idle"]
 
     triangles = sum(len(p.vertices) - 2 for p in body.data.polygons)

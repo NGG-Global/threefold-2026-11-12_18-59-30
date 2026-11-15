@@ -199,6 +199,20 @@ namespace Threefold.CombatAnimation
         [Min(0f)]
         public float fullBodyMaxSpeed = 0.6f;
 
+        [Tooltip("A full-body attack or release that is playing moves to the upper body, so the legs can walk, once the " +
+                 "speed exceeds the full-body speed by this much, or the character leaves the ground.")]
+        [Min(0f)]
+        public float handOverMargin = 0.4f;
+
+        [Tooltip("Seconds over which the legs return to walking when a full-body animation moves to the upper body.")]
+        [Min(0f)]
+        public float handOverBlendSeconds = 0.15f;
+
+        [Tooltip("Speed in metres per second at which the stance's legs and hips have faded out completely. Standing " +
+                 "still, the whole stance shows (a low or wide stance needs its legs); walking, only its upper body.")]
+        [Min(0.1f)]
+        public float fullStanceFadeSpeed = 0.6f;
+
         [Tooltip("Upper-body animations also move the spine. Untick if the legs twist or slide during upper-body " +
                  "attacks while running, then run the setup again.")]
         public bool upperBodyIncludesTorso = true;

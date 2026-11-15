@@ -154,6 +154,11 @@ namespace Threefold.Magic
                 DisciplineDefaults.FillCombinations(discipline, guardEffect);
             }
 
+            if (dataVersion < 3)
+            {
+                DisciplineDefaults.FillMartialStyles(discipline, melee);
+            }
+
             dataVersion = DisciplineDefaults.DataVersion;
             return true;
         }

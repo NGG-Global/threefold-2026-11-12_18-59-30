@@ -58,8 +58,11 @@ namespace Threefold.CombatAnimation
     /// Upper body, first that applies: nothing while defeated or while the hands are busy (climbing); the
     /// block (its impact, then its hold) while blocking; a release; an attack; a stagger; a charge cancel; the
     /// charge (its start, then its hold). Full body: defeat; a full-body release or attack. Stance: the
-    /// selected discipline's stance while in combat, faded out by speed. An action pushed aside by a more
-    /// important one does not come back; a hold does.
+    /// selected discipline's stance while in combat, faded out by speed; on the whole body while standing
+    /// (the full stance layer, faded out sooner), on the upper body up to walking pace. An action pushed
+    /// aside by a more important one does not come back; a hold does. A full-body attack or release moves
+    /// to the upper body, at the same moment of the clip, as soon as the character moves faster than the
+    /// full-body speed allows or leaves the ground, so the legs never slide or hang in a lunge.
     /// </summary>
     public sealed class CombatAnimationModel
     {
@@ -79,11 +82,15 @@ namespace Threefold.CombatAnimation
             public float Speed;
             public float StartNormalized;
 
+            /// <summary>Moved from the whole body to the upper body while playing; blends in over the hand-over time.</summary>
+            public bool HandedOver;
+
             public void Clear()
             {
                 Active = false;
                 Hidden = false;
                 Aerial = false;
+                HandedOver = false;
                 ActionId = 0;
                 Resolved = ResolvedSlot.None;
             }
@@ -101,7 +108,7 @@ namespace Threefold.CombatAnimation
 
         private readonly CombatLayerState[] states = new CombatLayerState[CombatAnimatorNames.LayerCount];
         private readonly int[] shownInstance = new int[CombatAnimatorNames.LayerCount];
-        private readonly float[] speeds = { 1f, 1f, 1f };
+        private readonly float[] speeds = { 1f, 1f, 1f, 1f };
         private readonly float[] weights = new float[CombatAnimatorNames.LayerCount];
         private readonly float[] pendingBlendOut = new float[CombatAnimatorNames.LayerCount];
 
@@ -124,6 +131,7 @@ namespace Threefold.CombatAnimation
         private float meleeRecoverySeconds;
 
         private float stanceTarget;
+        private float fullStanceTarget;
         private int nextInstance = 1;
         private float lastTick = float.NegativeInfinity;
         private float lastCombatTime = float.NegativeInfinity;
@@ -443,6 +451,9 @@ namespace Threefold.CombatAnimation
             Expire(reaction, now);
             Expire(blockImpact, now);
 
+            HandOverToUpperBody(attack, now);
+            HandOverToUpperBody(release, now);
+
             tracker.Tick(now, cues);
 
             UpdateUpperBody(now);
@@ -482,8 +493,10 @@ namespace Threefold.CombatAnimation
             {
                 chosen = attack;
             }
-            else if (reaction.Active && !reaction.Hidden)
+            else if (reaction.Active && !reaction.Hidden && !Visible(attack, CombatLayer.FullBody) &&
+                     !Visible(release, CombatLayer.FullBody))
             {
+                // A stagger never hides a swing the rules are still carrying out, on the upper body or the whole body.
                 chosen = reaction;
             }
             else if (cancel.Active && !cancel.Hidden)
@@ -522,7 +535,8 @@ namespace Threefold.CombatAnimation
 
             if (chosen != null)
             {
-                Show(CombatLayer.UpperBody, chosen.Resolved, chosen.Instance, chosen.StartNormalized, chosen.Speed);
+                Show(CombatLayer.UpperBody, chosen.Resolved, chosen.Instance, chosen.StartNormalized, chosen.Speed,
+                    chosen.HandedOver ? Tuning.handOverBlendSeconds : -1f);
             }
             else if (chargeStart.IsValid)
             {
@@ -578,9 +592,48 @@ namespace Threefold.CombatAnimation
             CombatSlotId stance = CombatSlotId.For(discipline, CombatSlotKind.Stance);
             bool assigned = CombatSlotResolver.ResolveSimple(library, stance).IsValid;
             ShowHeld(CombatLayer.Stance, assigned ? stance : CombatSlotId.None);
+            ShowHeld(CombatLayer.StanceFull, assigned ? stance : CombatSlotId.None);
 
             float fade = 1f - Mathf.Clamp01(body.HorizontalSpeed / Mathf.Max(0.1f, tuning.stanceFadeSpeed));
+            float fullFade = 1f - Mathf.Clamp01(body.HorizontalSpeed / Mathf.Max(0.1f, tuning.fullStanceFadeSpeed));
             stanceTarget = allowed && assigned ? fade : 0f;
+            fullStanceTarget = allowed && assigned ? fullFade : 0f;
+        }
+
+        /// <summary>
+        /// A full-body attack or release (not an aerial one) moves to the upper body, continuing from where the clip is,
+        /// once the character moves faster than the full-body speed plus a margin, or leaves the ground. It never moves
+        /// back: the legs walk until the action ends.
+        /// </summary>
+        private void HandOverToUpperBody(Playback playback, float now)
+        {
+            if (!playback.Active || playback.Hidden || playback.Aerial || playback.Resolved.Layer != CombatLayer.FullBody ||
+                playback.Resolved.Slot == null)
+            {
+                return;
+            }
+
+            CombatAnimationTuning tuning = Tuning;
+            bool moving = !body.Grounded || body.HorizontalSpeed > tuning.fullBodyMaxSpeed + tuning.handOverMargin;
+            if (!moving)
+            {
+                return;
+            }
+
+            CombatAnimationSlot slot = playback.Resolved.Slot;
+            int full = (int)CombatLayer.FullBody;
+            if (states[full].Slot == playback.Resolved.Id && shownInstance[full] == playback.Instance)
+            {
+                pendingBlendOut[full] = tuning.handOverBlendSeconds;
+            }
+
+            float position = playback.StartNormalized + (now - playback.Start) * playback.Speed / slot.Seconds;
+            playback.Resolved = new ResolvedSlot(playback.Resolved.Id, slot, CombatLayer.UpperBody, false);
+            playback.Instance = nextInstance++;
+            playback.StartNormalized = Mathf.Clamp01(position);
+            playback.Start = now;
+            playback.Hidden = false;
+            playback.HandedOver = true;
         }
 
         private void UpdateWeights(float deltaTime)
@@ -590,12 +643,12 @@ namespace Threefold.CombatAnimation
             {
                 float target;
                 float seconds;
-                if (i == (int)CombatLayer.Stance)
+                if (i == (int)CombatLayer.Stance || i == (int)CombatLayer.StanceFull)
                 {
-                    target = stanceTarget;
+                    target = i == (int)CombatLayer.Stance ? stanceTarget : fullStanceTarget;
 
-                    // Climbing or defeat takes the arms at once; otherwise the stance eases in and out.
-                    seconds = handsBusy || defeated ? tuning.interruptBlendSeconds : tuning.stanceBlendSeconds;
+                    // Climbing, defeat or a jump takes the body at once; otherwise the stance eases in and out.
+                    seconds = handsBusy || defeated || !body.Grounded ? tuning.interruptBlendSeconds : tuning.stanceBlendSeconds;
                 }
                 else
                 {
@@ -625,6 +678,7 @@ namespace Threefold.CombatAnimation
             playback.End = end;
             playback.Speed = speed;
             playback.StartNormalized = startNormalized;
+            playback.HandedOver = false;
         }
 
         private void PlayReaction(Playback playback, CombatSlotId id, float now)
@@ -708,8 +762,12 @@ namespace Threefold.CombatAnimation
             }
         }
 
-        /// <summary>Asks a layer to show a slot. A new slot or a new instance of one is a new request.</summary>
-        private void Show(CombatLayer layer, ResolvedSlot resolved, int instance, float startNormalized, float speed)
+        /// <summary>
+        /// Asks a layer to show a slot. A new slot or a new instance of one is a new request. A blend of 0 or more
+        /// replaces the slot's own blend-in time.
+        /// </summary>
+        private void Show(CombatLayer layer, ResolvedSlot resolved, int instance, float startNormalized, float speed,
+            float blendOverride = -1f)
         {
             int index = (int)layer;
             CombatLayerState current = states[index];
@@ -728,7 +786,7 @@ namespace Threefold.CombatAnimation
             }
             else
             {
-                blend = resolved.Slot.blendInSeconds;
+                blend = blendOverride >= 0f ? blendOverride : resolved.Slot.blendInSeconds;
             }
 
             pendingBlendOut[index] = 0f;

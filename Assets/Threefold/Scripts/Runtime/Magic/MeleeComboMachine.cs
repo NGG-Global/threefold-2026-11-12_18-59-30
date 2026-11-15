@@ -45,20 +45,28 @@ namespace Threefold.Magic
 
     /// <summary>
     /// The timing of a melee combo: tap, start-up, hit, recovery, and the window in which another
-    /// tap continues the combo. One swing is in progress at a time; a tap made slightly early is
-    /// remembered. The profile is passed in on every tick, so the discipline can change between
-    /// swings, while a swing that has started always finishes with the values it started with.
-    /// Plain C# with the time passed in, tested outside Unity.
+    /// tap continues the combo. One swing is in progress at a time. A tap made slightly early is
+    /// remembered (the input buffer), and so is any tap made after the current swing has hit, so a
+    /// heavy swing never swallows the next tap. A second tap right after the one that started a swing
+    /// is taken as accidental and ignored (the repeat guard). The profile is passed in on every tick, so
+    /// the discipline can change between swings, while a swing that has started always finishes with
+    /// the values it started with. Plain C# with the time passed in, tested outside Unity.
     /// </summary>
     public sealed class MeleeComboMachine
     {
         private MeleeStepProfile current;
         private float phaseStart;
+        private float swingStart;
+        private float hitTime = float.NegativeInfinity;
+        private float lastTime;
         private float comboDeadline = float.NegativeInfinity;
         private float requestTime = float.NegativeInfinity;
+        private float startingRequest = float.NegativeInfinity;
+        private float repeatGuard;
         private int nextIndex;
         private bool comboOpen;
         private bool chainBroken;
+        private bool recoveredThisTick;
 
         public MeleePhase Phase { get; private set; } = MeleePhase.Idle;
 
@@ -73,12 +81,26 @@ namespace Threefold.Magic
         /// <summary>True while a tap is waiting for the current swing to finish.</summary>
         public bool HasPendingRequest => !float.IsNegativeInfinity(requestTime);
 
-        /// <summary>Movement speed the swing in progress allows, relative to normal.</summary>
-        public float MoveSpeedMultiplier => Phase == MeleePhase.Idle || current == null ? 1f : current.moveSpeedMultiplier;
+        /// <summary>
+        /// Movement speed the swing in progress allows at the time of the last tick, relative to normal: the
+        /// swing's own speed, and the lower committed speed around its hit (see <see cref="MeleeStepProfile.MoveSpeedAt"/>).
+        /// </summary>
+        public float MoveSpeedMultiplier => Phase == MeleePhase.Idle || current == null ? 1f : current.MoveSpeedAt(lastTime - swingStart);
 
-        /// <summary>The player tapped attack.</summary>
+        /// <summary>Seconds since the swing in progress started, at the last tick, or 0 when idle.</summary>
+        public float SwingSeconds => Phase == MeleePhase.Idle ? 0f : System.Math.Max(0f, lastTime - swingStart);
+
+        /// <summary>
+        /// The player tapped attack. A tap within the repeat guard of the tap that started the swing in progress
+        /// is ignored as accidental.
+        /// </summary>
         public void Request(float time)
         {
+            if (Phase != MeleePhase.Idle && repeatGuard > 0f && time - startingRequest < repeatGuard)
+            {
+                return;
+            }
+
             requestTime = time;
         }
 
@@ -126,6 +148,9 @@ namespace Threefold.Magic
         /// <summary>Advances to the given time and reports what happened, in order.</summary>
         public void Tick(float time, MeleeComboProfile profile, List<MeleeEvent> events)
         {
+            lastTime = time;
+            recoveredThisTick = false;
+
             // A long frame can cover a hit and the start of the next swing; the loop handles each in turn.
             for (int guard = 0; guard < 8; guard++)
             {
@@ -137,6 +162,7 @@ namespace Threefold.Magic
                     }
 
                     phaseStart += current.startupSeconds;
+                    hitTime = phaseStart;
                     Phase = MeleePhase.Recovery;
                     events.Add(new MeleeEvent(MeleeEventKind.Hit, StepIndex, current));
                     continue;
@@ -151,6 +177,7 @@ namespace Threefold.Magic
 
                     phaseStart += current.recoverySeconds;
                     Phase = MeleePhase.Idle;
+                    recoveredThisTick = true;
                     comboOpen = true;
                     comboDeadline = phaseStart + current.comboWindowSeconds;
                     nextIndex = chainBroken ? 0 : StepIndex + 1;
@@ -192,6 +219,7 @@ namespace Threefold.Magic
 
                 StepIndex = index;
                 current = profile.GetStep(index);
+                startingRequest = requestTime;
                 requestTime = float.NegativeInfinity;
                 comboOpen = false;
 
@@ -202,6 +230,8 @@ namespace Threefold.Magic
 
                 Phase = MeleePhase.Startup;
                 phaseStart = start;
+                swingStart = start;
+                repeatGuard = profile.repeatGuardSeconds;
                 events.Add(new MeleeEvent(MeleeEventKind.StepStarted, index, current));
             }
         }
@@ -211,6 +241,13 @@ namespace Threefold.Magic
             if (float.IsNegativeInfinity(requestTime))
             {
                 return false;
+            }
+
+            // A tap made after the last swing hit waited through its recovery: it is performed when the
+            // recovery ends, however long that took.
+            if (recoveredThisTick && requestTime >= hitTime)
+            {
+                return true;
             }
 
             float buffer = profile != null ? profile.inputBufferSeconds : 0f;

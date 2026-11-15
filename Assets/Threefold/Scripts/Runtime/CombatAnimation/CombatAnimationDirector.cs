@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Threefold.Characters;
 using Threefold.Combat;
+using Threefold.DevTools;
 using Threefold.Magic;
 using UnityEngine;
 
@@ -23,7 +25,7 @@ namespace Threefold.CombatAnimation
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(110)] // After the combat rules and the animation driver have run this frame.
-    public sealed class CombatAnimationDirector : MonoBehaviour
+    public sealed class CombatAnimationDirector : MonoBehaviour, IDevReport
     {
         [SerializeField] private CombatAnimationSet animationSet;
 
@@ -47,17 +49,10 @@ namespace Threefold.CombatAnimation
         [Tooltip("Optional. Found on this object if empty.")]
         [SerializeField] private PlayerDisciplines disciplines;
 
-        private static readonly int EmptyHash = Animator.StringToHash(CombatAnimatorNames.EmptyState);
-
-        private readonly int[] layerIndex = new int[CombatAnimatorNames.LayerCount];
-        private readonly int[] speedParameter = new int[CombatAnimatorNames.LayerCount];
-        private readonly int[] appliedVersion = { -1, -1, -1 };
-        private readonly Dictionary<CombatSlotId, int> stateHashes = new Dictionary<CombatSlotId, int>(64);
-        private readonly Dictionary<CombatSlotId, int> twinHashes = new Dictionary<CombatSlotId, int>(64);
+        private readonly CombatAnimatorBinding binding = new CombatAnimatorBinding();
         private readonly List<CombatCue> dispatch = new List<CombatCue>(16);
 
         private CombatAnimationModel model;
-        private Animator animator;
         private Animator lastTried;
         private int castLayerIndex = -1;
         private bool subscribed;
@@ -69,7 +64,7 @@ namespace Threefold.CombatAnimation
         public event Action<CombatCue> Cue;
 
         /// <summary>True while it plays on an Animator whose controller has the combat layers.</summary>
-        public bool IsActive => animator != null;
+        public bool IsActive => binding.IsBound;
 
         public CombatAnimationSet AnimationSet => animationSet;
 
@@ -160,7 +155,7 @@ namespace Threefold.CombatAnimation
             // Active only while the disciplines fight: with discipline combat off, the earlier slot attacks
             // cast instead, and their casting gesture must stay visible.
             bool wanted = combat != null && combat.isActiveAndEnabled && driver != null && driver.Animator != null;
-            if (IsActive && (!wanted || driver.Animator != animator))
+            if (IsActive && (!wanted || driver.Animator != binding.Animator))
             {
                 Deactivate();
                 lastTried = null;
@@ -185,10 +180,7 @@ namespace Threefold.CombatAnimation
 
             DispatchCues();
 
-            if (IsActive && animator.isActiveAndEnabled)
-            {
-                Apply();
-            }
+            binding.Apply(model);
         }
 
         // ------------------------------------------------------------- Animator
@@ -207,44 +199,22 @@ namespace Threefold.CombatAnimation
                 return;
             }
 
-            for (int i = 0; i < CombatAnimatorNames.LayerCount; i++)
+            if (!binding.Bind(candidate, animationSet.Library, out string problem))
             {
-                var layer = (CombatLayer)i;
-                layerIndex[i] = candidate.GetLayerIndex(CombatAnimatorNames.LayerName(layer));
-                if (layerIndex[i] < 0)
-                {
-                    Debug.LogWarning("[Threefold] The Mage's Animator Controller has no combat animation layers, so the " +
-                                     "combat animations are off. Run Threefold > Animation > Apply Combat Animation Set.", this);
-                    return;
-                }
-
-                string speed = CombatAnimatorNames.SpeedParameter(layer);
-                speedParameter[i] = speed != null && HasFloat(candidate, speed) ? Animator.StringToHash(speed) : 0;
-                appliedVersion[i] = -1;
+                Debug.LogWarning($"[Threefold] The Mage's combat animations are off: {problem}", this);
+                return;
             }
 
-            stateHashes.Clear();
-            twinHashes.Clear();
-            animationSet.Library.ForEachSlot((id, slot) =>
-            {
-                if (slot != null && slot.IsAssigned)
-                {
-                    stateHashes[id] = Animator.StringToHash(id.StateName);
-                    twinHashes[id] = Animator.StringToHash(id.TwinStateName);
-                }
-            });
-
-            animator = candidate;
             if (driver != null)
             {
                 driver.ClaimCombatAnimations(this);
             }
 
             // The casting gesture's layer stays silent while the combat layers play; it returns when they stop.
-            castLayerIndex = animator.GetLayerIndex(CharacterAnimationDriver.CastLayer);
+            castLayerIndex = candidate.GetLayerIndex(CharacterAnimationDriver.CastLayer);
             if (castLayerIndex >= 0)
             {
-                animator.SetLayerWeight(castLayerIndex, 0f);
+                candidate.SetLayerWeight(castLayerIndex, 0f);
             }
         }
 
@@ -255,91 +225,57 @@ namespace Threefold.CombatAnimation
                 driver.ReleaseCombatAnimations(this);
             }
 
-            if (animator != null)
+            Animator animator = binding.Animator;
+            binding.Release();
+            if (animator != null && castLayerIndex >= 0 && castLayerIndex < animator.layerCount)
             {
-                for (int i = 0; i < CombatAnimatorNames.LayerCount; i++)
-                {
-                    if (layerIndex[i] >= 0 && layerIndex[i] < animator.layerCount)
-                    {
-                        animator.SetLayerWeight(layerIndex[i], 0f);
-                    }
-                }
-
-                if (castLayerIndex >= 0 && castLayerIndex < animator.layerCount)
-                {
-                    animator.SetLayerWeight(castLayerIndex, 1f);
-                }
+                animator.SetLayerWeight(castLayerIndex, 1f);
             }
 
             castLayerIndex = -1;
-            animator = null;
         }
 
-        private void Apply()
+        // ------------------------------------------------------------- diagnostics
+
+        public string ReportTitle => "Combat animation";
+
+        /// <summary>
+        /// What each combat layer shows, its speed and weight, and the swing the rules are carrying out, for the development
+        /// diagnostics (shown with the Mage's discipline). Asked only while the diagnostics are visible.
+        /// </summary>
+        public void AppendReport(StringBuilder text)
         {
-            for (int i = 0; i < CombatAnimatorNames.LayerCount; i++)
+            if (model == null)
             {
-                var layer = (CombatLayer)i;
-                int index = layerIndex[i];
-                CombatLayerState state = model.GetLayerState(layer);
+                text.AppendLine("  off: no combat animation set");
+                return;
+            }
 
-                if (state.Version != appliedVersion[i])
+            text.Append("  ").Append(IsActive ? "playing" : "not playing (the controller has no combat layers)").AppendLine();
+            AppendLayer(text, "upper body", CombatLayer.UpperBody);
+            AppendLayer(text, "whole body", CombatLayer.FullBody);
+            AppendLayer(text, "stance", CombatLayer.Stance);
+            AppendLayer(text, "stance, legs", CombatLayer.StanceFull);
+            if (combat != null)
+            {
+                DisciplineCombatModel rules = combat.Model;
+                text.Append("  swing ").Append(rules.Combo.Phase.ToString());
+                if (rules.Combo.IsSwinging)
                 {
-                    appliedVersion[i] = state.Version;
-                    int hash = StateHash(state, index, out float seconds);
-                    animator.CrossFadeInFixedTime(hash, state.BlendSeconds, index, state.StartNormalized * seconds);
+                    text.Append(", step ").Append(rules.Combo.StepIndex + 1).Append(", ")
+                        .Append(rules.Combo.SwingSeconds.ToString("0.00")).Append(" s in");
                 }
 
-                if (speedParameter[i] != 0)
-                {
-                    animator.SetFloat(speedParameter[i], model.GetLayerSpeed(layer));
-                }
-
-                animator.SetLayerWeight(index, model.GetLayerWeight(layer));
+                text.Append(", movement x").Append(rules.MoveSpeedMultiplier.ToString("0.00")).AppendLine();
             }
         }
 
-        /// <summary>The state to cross-fade to: the slot's (or its twin), or Empty if the controller lacks it.</summary>
-        private int StateHash(in CombatLayerState state, int index, out float seconds)
+        private void AppendLayer(StringBuilder text, string label, CombatLayer layer)
         {
-            seconds = 0f;
-            if (state.Slot.IsNone)
-            {
-                return EmptyHash;
-            }
-
-            CombatAnimationSlot slot = animationSet.Library.GetSlot(state.Slot);
-            if (slot == null)
-            {
-                return EmptyHash;
-            }
-
-            seconds = slot.Seconds;
-            if (state.Twin && twinHashes.TryGetValue(state.Slot, out int twin) && animator.HasState(index, twin))
-            {
-                return twin;
-            }
-
-            if (stateHashes.TryGetValue(state.Slot, out int main) && animator.HasState(index, main))
-            {
-                return main;
-            }
-
-            return EmptyHash;
-        }
-
-        private static bool HasFloat(Animator target, string name)
-        {
-            int id = Animator.StringToHash(name);
-            foreach (AnimatorControllerParameter parameter in target.parameters)
-            {
-                if (parameter.nameHash == id && parameter.type == AnimatorControllerParameterType.Float)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            CombatLayerState state = model.GetLayerState(layer);
+            text.Append("  ").Append(label).Append(": ").Append(state.Slot.IsNone ? "-" : state.Slot.StateName)
+                .Append(" x").Append(model.GetLayerSpeed(layer).ToString("0.0"))
+                .Append(" weight ").Append(model.GetLayerWeight(layer).ToString("0.00")).AppendLine();
         }
 
         private void DispatchCues()

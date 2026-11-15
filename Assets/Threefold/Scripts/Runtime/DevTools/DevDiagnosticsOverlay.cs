@@ -56,6 +56,7 @@ namespace Threefold.DevTools
         private readonly FrameTimingStats frames = new FrameTimingStats(240);
         private readonly StringBuilder text = new StringBuilder(2048);
         private readonly List<MagicalObject> magicalObjects = new List<MagicalObject>();
+        private readonly List<MonoBehaviour> characterReports = new List<MonoBehaviour>(16);
         private readonly RaycastHit[] hits = new RaycastHit[8];
         private readonly FrameTiming[] timings = new FrameTiming[1];
         private readonly List<string> warnings = new List<string>(8);
@@ -222,6 +223,7 @@ namespace Threefold.DevTools
             AppendWarnings(timing, style, cpuMs, gpuMs);
 
             text.Append("DISCIPLINE  ").Append(disciplines != null ? disciplines.Current.ToString() : "(no disciplines)").AppendLine();
+            AppendCharacterReports();
 
             AppendTarget();
             AppendTemporary();
@@ -240,6 +242,28 @@ namespace Threefold.DevTools
             }
 
             shown = text.ToString();
+        }
+
+        /// <summary>Reports of the Mage's own components (its combat animations), shown under its discipline.</summary>
+        private void AppendCharacterReports()
+        {
+            if (disciplines == null)
+            {
+                return;
+            }
+
+            disciplines.GetComponents(characterReports);
+            foreach (MonoBehaviour behaviour in characterReports)
+            {
+                if (behaviour is IDevReport report && behaviour.isActiveAndEnabled &&
+                    (reports == null || System.Array.IndexOf(reports, behaviour) < 0))
+                {
+                    text.Append(report.ReportTitle.ToUpperInvariant()).AppendLine();
+                    report.AppendReport(text);
+                }
+            }
+
+            characterReports.Clear();
         }
 
         private void AppendMemory()

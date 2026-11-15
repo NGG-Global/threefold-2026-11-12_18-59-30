@@ -22,6 +22,8 @@ namespace Threefold.EditorTools
     ///   crystal, barricade, stone barrier, platform, unstable structure and reinforced door.
     ///   Along the right edge runs the combination court (LM-06): a rune-locked slide, kindling before
     ///   a barricade, a crumbling walkway up to a ledge, and a Cinder Wisp on the ledge.
+    ///   Behind the start stand three figures looping the Arcane, Flame and Aegis combos side by side,
+    ///   for comparing the martial styles (Docs/MartialStyles.md).
     ///
     /// Dummies cannot be pushed and have no poise, so stagger and push are tried on the real enemies
     /// in the Combat Arena, where the same disciplines are available; the court's Cinder Wisp is the
@@ -156,6 +158,9 @@ namespace Threefold.EditorTools
             report.AppendLine("Built the Discipline Range: floor, cover wall and markers.");
 
             GameObject mage = MagePrototypeSetup.EnsureCharacterRig(scene, SpawnPosition, Quaternion.identity, Targets, report);
+
+            // Behind the start: the three martial styles side by side, looping their combos (Docs/MartialStyles.md).
+            MartialStylesShowcaseSetup.Ensure(scene, mage, MartialStylesShowcaseSetup.RangeOrigin, report);
 
             // The objects that respond to magic stand in a lane along the left edge of the floor.
             MagicalObjectSetup.ExampleAssets examples = MagicalObjectSetup.EnsureAssets(report);

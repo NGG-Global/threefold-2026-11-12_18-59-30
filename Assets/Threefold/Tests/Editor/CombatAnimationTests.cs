@@ -305,9 +305,9 @@ namespace Threefold.Tests
         public void AStepBeyondTheAttackSlotsUsesTheLast()
         {
             CombatAnimationLibrary library = CombatAnimationDefaults.CreateMage();
-            ResolvedSlot resolved = CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 2, false, 0f);
+            ResolvedSlot resolved = CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 3, false, 0f);
 
-            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 1), resolved.Id);
+            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 2), resolved.Id);
         }
 
         [Test]
@@ -316,9 +316,9 @@ namespace Threefold.Tests
             CombatAnimationLibrary library = CombatAnimationDefaults.CreateMage();
 
             Assert.AreEqual(CombatLayer.FullBody,
-                CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 1, false, 0f).Layer, "standing");
+                CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 2, false, 0f).Layer, "standing");
             Assert.AreEqual(CombatLayer.UpperBody,
-                CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 1, false, 3f).Layer, "running");
+                CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 2, false, 3f).Layer, "running");
             Assert.AreEqual(CombatLayer.UpperBody,
                 CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Arcane, 0, false, 0f).Layer, "an upper-body slot");
         }
@@ -333,8 +333,8 @@ namespace Threefold.Tests
             Assert.IsTrue(aerial.Aerial);
 
             library.shared.aerialAttack = new CombatAnimationSlot();
-            ResolvedSlot fallback = CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 1, true, 0f);
-            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 1), fallback.Id);
+            ResolvedSlot fallback = CombatSlotResolver.ResolveAttack(library, MagicDiscipline.Aegis, 2, true, 0f);
+            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 2), fallback.Id);
             Assert.AreEqual(CombatLayer.UpperBody, fallback.Layer, "a grounded full-body slot in the air");
             Assert.IsFalse(fallback.Aerial);
         }
@@ -423,7 +423,7 @@ namespace Threefold.Tests
         {
             CombatAnimationLibrary library = CombatAnimationDefaults.CreateMage();
             library.GetDiscipline(MagicDiscipline.Arcane).attacks[0].clip = "Not_In_The_Model";
-            library.GetDiscipline(MagicDiscipline.Flame).chargeHold.clip = "Punch_Jab";
+            library.GetDiscipline(MagicDiscipline.Flame).chargeHold.clip = "Arcane_RisingPalm";
             CombatAnimationSlot slow = library.GetDiscipline(MagicDiscipline.Aegis).attacks[0];
             slow.contact = 0.01f;
             slow.hitWindowOpen = 0.01f;
@@ -433,7 +433,7 @@ namespace Threefold.Tests
             string all = string.Join("\n", issues);
 
             StringAssert.Contains("Missing animation: Arcane_Attack1 wants 'Not_In_The_Model'", all);
-            StringAssert.Contains("Flame_ChargeHold: 'Punch_Jab' does not loop", all);
+            StringAssert.Contains("Flame_ChargeHold: 'Arcane_RisingPalm' does not loop", all);
             StringAssert.Contains("Aegis step 1 (Force Palm)", all);
             StringAssert.Contains("early", all);
         }
@@ -518,15 +518,19 @@ namespace Threefold.Tests
             Swing(h, MagicDiscipline.Arcane, 1);
             h.Run(Frame);
 
+            MeleeStepProfile step = Step(MagicDiscipline.Arcane, 1);
+            CombatAnimationSlot slot = CombatAnimationDefaults.CreateMage().GetDiscipline(MagicDiscipline.Arcane).attacks[1];
             Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Arcane, CombatSlotKind.Attack, 1), h.Upper);
             Assert.IsTrue(h.Full.IsNone);
-            Assert.AreEqual(3f, h.Model.GetLayerSpeed(CombatLayer.UpperBody), 1e-4f, "the Arcane Cut is compressed to the limit");
-            Assert.Greater(h.Model.GetLayerState(CombatLayer.UpperBody).StartNormalized, 0f, "its start is skipped");
+            Assert.Greater(slot.contact * slot.clipSeconds / step.startupSeconds, 3f, "the Circling Palm's wind-up is longer than 3x allows");
+            Assert.AreEqual(3f, h.Model.GetLayerSpeed(CombatLayer.UpperBody), 1e-4f, "so it is compressed to the limit");
+            Assert.Greater(h.Model.GetLayerState(CombatLayer.UpperBody).StartNormalized, 0f, "and its start is skipped");
 
-            h.Run(0.07f);
+            h.Run(step.startupSeconds);
             h.Event((m, t) => m.SwingLanded(t));
             h.Run(Frame);
-            Assert.AreEqual(3f, h.Model.GetLayerSpeed(CombatLayer.UpperBody), 1e-4f, "0.63 s of recovery in 0.2 s, at the limit");
+            float recovery = UnityEngine.Mathf.Clamp((slot.recoveryEnd - slot.contact) * slot.clipSeconds / step.recoverySeconds, 0.5f, 3f);
+            Assert.AreEqual(recovery, h.Model.GetLayerSpeed(CombatLayer.UpperBody), 1e-4f, "its recovery fitted to the rules' recovery");
 
             h.Run(1f);
             Assert.IsTrue(h.Upper.IsNone, "it blends out after its recovery");
@@ -556,7 +560,7 @@ namespace Threefold.Tests
         public void AnInterruptedSwingIsCancelledAndNothingOfItFollows()
         {
             var h = new Harness();
-            Swing(h, MagicDiscipline.Aegis, 1);
+            Swing(h, MagicDiscipline.Aegis, 2);
             h.Run(0.1f);
             h.Event((m, t) => m.SwingInterrupted(t));
             int count = h.Cues.Count;
@@ -576,17 +580,17 @@ namespace Threefold.Tests
         public void ACommittedStrikeUsesTheWholeBodyWhenStandingAndTheUpperBodyWhenMoving()
         {
             var h = new Harness();
-            Swing(h, MagicDiscipline.Aegis, 1);
+            Swing(h, MagicDiscipline.Aegis, 2);
             h.Run(Frame);
-            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 1), h.Full);
+            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 2), h.Full);
 
             h.Run(2f);
             h.Body = new CombatBodyState(true, 2.2f);
             h.Run(Frame); // The body state is read each frame, as the director does.
-            Swing(h, MagicDiscipline.Aegis, 1);
+            Swing(h, MagicDiscipline.Aegis, 2);
             h.Run(Frame);
             Assert.IsTrue(h.Full.IsNone);
-            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 1), h.Upper);
+            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Aegis, CombatSlotKind.Attack, 2), h.Upper);
         }
 
         [Test]
@@ -698,13 +702,22 @@ namespace Threefold.Tests
         [Test]
         public void AStaggerDoesNotHideASwingTheRulesAreStillCarryingOut()
         {
-            var h = new Harness();
+            // Moving: the Flare plays on the upper body, and the stagger does not replace it.
+            var h = new Harness { Body = new CombatBodyState(true, 3f) };
             Swing(h, MagicDiscipline.Flame, 2);
             h.Run(Frame);
             h.Event((m, t) => m.Damaged(6f, t));
             h.Run(Frame);
-
             Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Flame, CombatSlotKind.Attack, 2), h.Upper);
+
+            // Standing: the Flare plays on the whole body, and the stagger does not cover its arms either.
+            var standing = new Harness();
+            Swing(standing, MagicDiscipline.Flame, 2);
+            standing.Run(Frame);
+            standing.Event((m, t) => m.Damaged(6f, t));
+            standing.Run(Frame);
+            Assert.AreEqual(CombatSlotId.For(MagicDiscipline.Flame, CombatSlotKind.Attack, 2), standing.Full);
+            Assert.IsTrue(standing.Upper.IsNone, "nothing over the whole-body strike");
         }
 
         [Test]

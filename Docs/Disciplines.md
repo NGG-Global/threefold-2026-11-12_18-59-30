@@ -15,11 +15,11 @@ device. Every number below is a first estimate that has never been played.
 | | Arcane | Flame | Aegis |
 | --- | --- | --- | --- |
 | Identity | Precision, energy, direction | Heat, aggression, transformation | Force, stability, protection |
-| Melee | 3 fast strikes at one target | 3 wide swings at up to 3 or 4 targets, each adds heat | 2 slow, heavy strikes with high stagger |
-| Time per swing (start-up + recovery) | 0.27 s, 0.27 s, 0.40 s | 0.38 s, 0.38 s, 0.52 s | 0.52 s, 0.72 s |
-| Damage per swing | 9, 10, 15 | 11, 11, 16 | 14, 20 |
-| Stagger per swing | 6, 6, 12 | 8, 8, 12 | 30, 45 |
-| Movement during a swing | Full speed | 90% to 85% | 70% to 55% |
+| Melee | 3 fast strikes at one target: Rising Palm, Circling Palm, Arcane Lance | 3 wide strikes at up to 3 or 4 targets, each adds heat: Ember Fist, Ember Hook, Flare | 3 slow, heavy strikes with high stagger: Force Palm, Bulwark Forearm, Bulwark Slam |
+| Time per swing (start-up + recovery) | 0.27 s, 0.27 s, 0.40 s (0.10 + 0.17, 0.10 + 0.17, 0.12 + 0.28) | 0.38 s, 0.38 s, 0.52 s | 0.52 s, 0.58 s, 0.72 s |
+| Damage per swing | 9, 10, 15 | 11, 11, 16 | 14, 12, 20 |
+| Stagger per swing | 6, 6, 12 | 8, 8, 12 | 30, 32, 45 |
+| Movement during a swing | Full speed | 90% to 85%; around the hit 60%, 35%, 15% | 70% to 55%; around the hit 20%, 25%, 0% |
 | Charged attack | **Arcane Arrow** | **Flame Wave** | **Force Pulse** |
 | What it is | One projectile, aimed with the camera | A wave along the ground | A short, wide impulse |
 | Mana, cooldown | 18, 0.4 s | 26, 1.0 s | 22, 1.5 s |
@@ -31,8 +31,9 @@ device. Every number below is a first estimate that has never been played.
 ### Shared rules
 
 - **Tap and hold.** A tap swings; a hold charges. They are never confused (LM-01).
-- **Combos.** Each tap performs the next swing. A tap made up to 0.3 s early is remembered and
-  performed as soon as the current swing has recovered. After the combo window (0.35 to 0.6 s
+- **Combos.** Each tap performs the next swing. A tap made up to 0.3 s early, or at any time after
+  the current swing has hit, is remembered and performed as soon as the current swing has recovered.
+  A second tap within 0.08 s of the one that started a swing is taken as a double touch and ignored. After the combo window (0.35 to 0.6 s
   after a swing) the next tap starts from the first swing again. One swing is in progress at a
   time, however fast the taps.
 - **Targeting.** A swing goes where the player steers, or where the Mage faces when standing
@@ -60,8 +61,9 @@ device. Every number below is a first estimate that has never been played.
   started with: a swing lands as that discipline, and a charge being held is released as the
   discipline it began with, at that discipline's cost. The switch applies from the next attack,
   and the next swing starts the new discipline's combo from its first step.
-- **Movement.** Charging and swinging never root the Mage. Heavier attacks slow it by the shares
-  in the table, and sprinting is off while swinging, charging or blocking.
+- **Movement.** Charging never roots the Mage. Heavier strikes slow it by the shares in the table,
+  and more for a moment around their hit (the commitment; the Bulwark Slam roots it), and sprinting is
+  off while swinging, charging or blocking. Full movement returns when the recovery ends.
 - **Camera help.** While a swing is aimed at a target and the player is not turning the camera,
   the view drifts towards the target at up to 35 degrees per second. It never snaps, stops the
   moment the camera is touched, and can be switched off (set the rate to 0 on `DisciplineCombat`).
@@ -92,8 +94,8 @@ push resistance leaves (Guardian 0.6, Wisp 0), using the same knockback as a sta
 Rigidbody is involved, and nothing leaves the walkable area. Training dummies stand on a post and
 are not pushed.
 
-Since LM-03 the Aegis swings carry a little force as well (0.6 and 1.0), so they shove an enemy
-slightly: a Wisp 0.6 m and 1 m, a Guardian 0.24 m and 0.4 m. A strike that also staggers moves
+Since LM-03 the Aegis swings carry a little force as well (0.6, 0.7 and 1.0), so they shove an enemy
+slightly: a Wisp 0.6 m to 1 m, a Guardian 0.24 m to 0.4 m. A strike that also staggers moves
 the enemy by the larger of the two, the stagger's knockback. Objects in the world with a kinetic,
 structural or stability property answer force too.
 
@@ -107,7 +109,7 @@ their properties. `Docs/WorldMagic.md` describes the model and the example objec
 | Arcane melee | Nothing |
 | Arcane Arrow | Arcane charge, 40 to 100 |
 | Flame melee, Flame Wave | Heat: 18, 18, 30 per swing; 45 to 80 for the wave |
-| Aegis melee, Force Pulse | Force: 0.6 and 1.0 per swing; 2.5 to 5 for the pulse |
+| Aegis melee, Force Pulse | Force: 0.6, 0.7 and 1.0 per swing; 2.5 to 5 for the pulse |
 | Aegis guard | A brace for unstable objects within 3.5 m, while BLOCK is held |
 
 The Arcane Arrow still lights the Arcane crystals of the Sealed Gateway: a puzzle crystal reads
@@ -137,7 +139,8 @@ aside, where the crosshair points or back at its sender (`Docs/Combinations.md`)
 
 ## Presentation
 
-Since the combat animation sprint, the Mage has placeholder combat animations for every
+Since Sprint 2 each discipline has its own martial style: stance, three strikes, rhythm and
+movement (`Docs/MartialStyles.md`). Since the combat animation sprint, the Mage has placeholder combat animations for every
 discipline: stances, the strikes of each combo, charge start, hold, release and cancel, block,
 stagger, aerial attacks and defeat, fitted to the timing below without changing it
 (`Docs/CombatAnimationArchitecture.md`). None has been seen playing yet. Magical VFX are
