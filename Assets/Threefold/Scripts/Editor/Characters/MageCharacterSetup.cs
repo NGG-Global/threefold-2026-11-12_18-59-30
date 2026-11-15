@@ -172,6 +172,17 @@ namespace Threefold.EditorTools
                     AssetDatabase.CreateAsset(material, path);
                     report.AppendLine($"Generated material 'Mage_{entry.Key}'.");
                 }
+                else if (entry.Key == PaintKey && material.mainTexture == null)
+                {
+                    // Generated before the painted texture had been imported: it would stay white for good.
+                    var paint = AssetDatabase.LoadAssetAtPath<Texture2D>(CharacterModelPostprocessor.MagePaintTexturePath);
+                    if (paint != null)
+                    {
+                        material.mainTexture = paint;
+                        EditorUtility.SetDirty(material);
+                        report.AppendLine("Gave the material 'Mage_Paint' its painted texture, which it lacked.");
+                    }
+                }
 
                 materials[entry.Key] = material;
             }
@@ -745,6 +756,15 @@ namespace Threefold.EditorTools
                                       $"{problem}. Nothing was changed.");
                     return false;
                 }
+            }
+
+            // Already this look: only record that it was chosen. A rebuild would give the model new identities
+            // and leave every scene's references to it empty for no gain.
+            if (CurrentLook() == look)
+            {
+                SetVersion(PrefabPath, MageLookRules.Stamp(look, true));
+                report.AppendLine($"The Mage already has the {look} look; it is now kept as a choice by hand.");
+                return true;
             }
 
             EnsureFolder(Folder);

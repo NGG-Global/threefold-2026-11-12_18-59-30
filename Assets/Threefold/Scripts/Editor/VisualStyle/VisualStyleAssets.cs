@@ -304,6 +304,13 @@ namespace Threefold.EditorTools
 
                 if (styled != null)
                 {
+                    // A styled copy made while the original still lacked its painting takes it now.
+                    if (original.mainTexture != null && styled.HasProperty("_BaseMap") && styled.GetTexture("_BaseMap") == null)
+                    {
+                        styled.SetTexture("_BaseMap", original.mainTexture);
+                        EditorUtility.SetDirty(styled);
+                    }
+
                     Replacements[original] = styled;
                 }
             }

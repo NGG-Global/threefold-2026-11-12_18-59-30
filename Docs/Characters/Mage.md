@@ -92,7 +92,7 @@ No animation clip moves them; `CharacterPersonality` does at runtime, and withou
 | `sec_hair_01`, `sec_hair_02` | Head | The hair tail |
 | `sec_cloak_l_01`, `_02` and `sec_cloak_r_01`, `_02` | Top spine bone | The two cloak tails |
 | `sec_sash_01` | Hips | The hanging end of the sash |
-| `face_eyes` | Head | The two eye marks: squashed along the vertical, they close |
+| `face_blink` | Head | The two eye marks: squashed along the vertical, they close |
 | `face_brows` | Head | The two brow marks: a few millimetres up or down |
 
 ### How the two looks coexist in Unity
@@ -199,7 +199,7 @@ A designed character replaces the Wayfarer look, not `Mage.fbx`:
 - **On the library's skeleton** (same 65 bone names): put its mesh in
   `Assets/Threefold/Art/Characters/Mage/` and point `CharacterModelPostprocessor.MageWayfarerModelPath`
   at it. The same three conditions apply, the same clips play, and nothing else changes. Bones named
-  `sec_...` swing, and `face_eyes` and `face_brows` are driven, if the model has them.
+  `sec_...` swing, and `face_blink` and `face_brows` are driven, if the model has them.
 - **On another Humanoid skeleton**: Unity retargets the clips, which is the purpose of Humanoid, but
   the third condition (same bone names) then has to be replaced by a check that suits that rig, and
   every clip has to be looked at again: contact poses were measured on this skeleton

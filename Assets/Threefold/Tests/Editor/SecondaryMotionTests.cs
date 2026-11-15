@@ -45,7 +45,7 @@ namespace Threefold.Tests
         [TestCase("Sec_hair_01", true)]
         [TestCase("second_bone", false)]
         [TestCase("Head", false)]
-        [TestCase("face_eyes", false)]
+        [TestCase("face_blink", false)]
         [TestCase("", false)]
         [TestCase(null, false)]
         public void OnlyBonesWithThePrefixAreSecondary(string name, bool secondary)

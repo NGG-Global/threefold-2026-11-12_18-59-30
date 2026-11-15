@@ -38,7 +38,7 @@ namespace Threefold.Characters
         private const float ClosedEyeScale = 0.1f;
 
         /// <summary>The bone that carries the drawn eyes; squashed along the head's height to blink. Optional.</summary>
-        public const string EyesBone = "face_eyes";
+        public const string EyesBone = "face_blink";
 
         /// <summary>The bone that carries the drawn brows; moved up and down the head's height. Optional.</summary>
         public const string BrowsBone = "face_brows";
@@ -98,7 +98,7 @@ namespace Threefold.Characters
         private PersonalityPoseModel poseModel;
         private SecondaryMotionModel secondaryModel;
         private Animator boundAnimator;
-        private Renderer visibility;
+        private Renderer[] visibility;
         private PlayerGuard guard;
         private TraversalController traversal;
         private IAerialMoveSource aerial;
@@ -153,7 +153,8 @@ namespace Threefold.Characters
         public void Bind(Animator visualAnimator, PlayerDisciplines playerDisciplines, ThirdPersonMotor characterMotor,
             DisciplineCombat disciplineCombat, Health characterHealth)
         {
-            bool wasEnabled = isActiveAndEnabled;
+            // Only while playing: in the Editor nothing would ever undo the subscriptions again.
+            bool wasEnabled = Application.isPlaying && isActiveAndEnabled;
             if (wasEnabled)
             {
                 OnDisable();
@@ -237,7 +238,7 @@ namespace Threefold.Characters
             }
 
             // Nothing to show: no work, and the hair and cloak start at rest when the character is seen again.
-            bool visible = visibility == null || visibility.isVisible;
+            bool visible = AnyRendererVisible();
             if (!visible || !animator.isActiveAndEnabled)
             {
                 wasVisible = false;
@@ -258,6 +259,25 @@ namespace Threefold.Characters
             ApplyPose(bearingEnabled ? pose : default);
             ApplyFace(bearingEnabled ? pose : default);
             ApplySecondary(dt);
+        }
+
+        /// <summary>True if any part of the model is on screen, or if the model has no renderer to ask.</summary>
+        private bool AnyRendererVisible()
+        {
+            if (visibility == null || visibility.Length == 0)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < visibility.Length; i++)
+            {
+                if (visibility[i] != null && visibility[i].isVisible)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // ------------------------------------------------------------- gameplay state (read only)
@@ -321,7 +341,7 @@ namespace Threefold.Characters
         {
             RestoreBones();
             boundAnimator = animator;
-            visibility = animator.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            visibility = animator.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             wasVisible = false;
 
             for (int i = 0; i < PoseBones; i++)

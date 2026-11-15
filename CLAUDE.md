@@ -77,7 +77,7 @@ separates approved decisions from proposals; do not present a proposal as decide
   (`PersonalityPoseModel`, `SecondaryMotionModel`) and `CharacterPersonality` only carries it out, after the
   Animator. Differences between disciplines are data (`PersonalityProfile`; starting values in
   `PersonalityDefaults`). It reads gameplay and never writes it, never touches legs, hips or the root, and its
-  arm share is zero during any action. Bones named `sec_...` swing on its springs; `face_eyes` and `face_brows`
+  arm share is zero during any action. Bones named `sec_...` swing on its springs; `face_blink` and `face_brows`
   are the only facial animation the model supports. Generated parts are weighted to at most two bones (the
   Mobile quality level's limit). No cloth simulation.
 - Magical combat effects (`Docs/MagicVfx.md`) follow the rules and the animation cues and never lead them:

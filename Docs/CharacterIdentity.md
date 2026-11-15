@@ -118,7 +118,7 @@ whatever the data says.
 The brief says not to assume the character supports facial animation or clothing physics. It did not.
 What exists now is what the Wayfarer model was given bones for, and no more.
 
-**Face** (only on a model with `face_eyes` and `face_brows`):
+**Face** (only on a model with `face_blink` and `face_brows`):
 
 - **Blinking.** The eye marks are squashed to a tenth along the head's vertical, at each discipline's
   rhythm, from a seeded generator, so runs are repeatable. A hit of half strength or more forces a blink.

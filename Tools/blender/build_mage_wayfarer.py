@@ -18,7 +18,7 @@ Docs/Characters/Mage.md describes the result and Docs/CharacterIdentity.md the r
   whole character is one painted material plus one glowing one, instead of nine flat colours.
 - The skeleton gains a few bones that no animation clip moves: two per cloak tail, two for the hair
   tail, one for the sash end ("sec_" bones, swung at runtime by a light spring) and two for the face
-  ("face_eyes" for blinking, "face_brows"). The 65 library bones are unchanged.
+  ("face_blink" for blinking, "face_brows"). The 65 library bones are unchanged.
 
 Nothing here is checked in Unity. The setup in Unity falls back to Mage.fbx's own mesh if this file
 does not import as the same Humanoid (MageCharacterSetup).
@@ -68,7 +68,7 @@ MATERIAL_CRYSTAL = "MAGE_Crystal"
 
 # Bones added to the library skeleton. No clip moves them.
 SECONDARY_PREFIX = "sec_"
-FACE_EYES = "face_eyes"
+FACE_EYES = "face_blink"
 FACE_BROWS = "face_brows"
 
 SEED = 20261115
@@ -316,9 +316,38 @@ class Part:
             self.face([ring[i], ring[j], top], key)
             self.face([ring[j], ring[i], bottom], key)
 
-    def to_object(self, armature, materials, solidify=0.0):
+    def face_outwards(self, origin=None):
+        """
+        Turns every connected piece so that it faces away from a point: the given origin, or the piece's own
+        middle. Unity's materials do not draw the back of a face, and a flat or open piece has no inside for
+        Blender to work its direction out from, so it is set here rather than guessed.
+        """
+        self.bm.normal_update()
+        remaining = set(self.bm.faces)
+        while remaining:
+            island, stack = [], [remaining.pop()]
+            while stack:
+                face = stack.pop()
+                island.append(face)
+                for edge in face.edges:
+                    for other in edge.link_faces:
+                        if other in remaining:
+                            remaining.remove(other)
+                            stack.append(other)
+            bmesh.ops.recalc_face_normals(self.bm, faces=island)   # consistent within the piece
+            self.bm.normal_update()
+            middle = origin if origin is not None else sum((f.calc_center_median() for f in island), Vector()) / len(island)
+            facing = sum(f.normal.dot(f.calc_center_median() - middle) * f.calc_area() for f in island)
+            if facing < 0.0:
+                bmesh.ops.reverse_faces(self.bm, faces=island)
+        self.bm.normal_update()
+
+    def to_object(self, armature, materials, solidify=0.0, origin=None):
         mesh = bpy.data.meshes.new(self.name)
-        bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
+        if solidify > 0:
+            bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)   # a closed shell after solidify
+        else:
+            self.face_outwards(origin)
         self.bm.to_mesh(mesh)
         self.bm.free()
         obj = bpy.data.objects.new(self.name, mesh)
@@ -606,7 +635,7 @@ def build_outfit(body, armature, materials):
     face.index()
     for (a0, a1), (b0, b1) in zip(stroke, stroke[1:]):
         face.face([a0, b0, b1, a1], "Ink")
-    parts.append(face.to_object(armature, materials))
+    parts.append(face.to_object(armature, materials, origin=head_centre))
     eye_centre, _ = on_surface(0.0, eye_z, 0.0)
     new_bones += [(FACE_EYES, "Head", eye_centre, eye_centre + up * 0.03),
                   (FACE_BROWS, "Head", eye_centre + up * 0.021, eye_centre + up * 0.051)]
