@@ -135,6 +135,15 @@ namespace Threefold.Characters
         private bool sprintSuppressed;
         private bool missingCameraWarned;
         private bool missingInputWarned;
+        private AerialMotion aerial;
+        private bool hasAerial;
+        private int jumpPressConsumedFrame = -1;
+        private int groundJumpCount;
+        private int launchCount;
+        private CollisionFlags lastMoveFlags;
+        private Vector3 lastSideNormal;
+        private Vector3 lastSidePoint;
+        private bool sideHitThisMove;
 
         /// <summary>Raised on the frame a jump starts.</summary>
         public event Action Jumped;
@@ -172,6 +181,67 @@ namespace Threefold.Characters
 
         /// <summary>Downward acceleration while rising, in metres per second squared.</summary>
         public float Gravity => gravity;
+
+        public float JumpHeight => jumpHeight;
+        public float FallGravityMultiplier => fallGravityMultiplier;
+        public float ApexGravityMultiplier => apexGravityMultiplier;
+        public float ApexSpeedThreshold => apexSpeedThreshold;
+        public float TerminalFallSpeed => terminalFallSpeed;
+        public float Acceleration => acceleration;
+        public float AirControl => airControl;
+
+        /// <summary>A jump pressed this long before landing is performed on landing, in seconds.</summary>
+        public float JumpBufferTime => jumpBufferTime;
+
+        /// <summary>
+        /// Whether the character stands on walkable ground right now, worked out the way the next motor update will
+        /// work it out, without changing anything. For components that run before the motor in the frame, which
+        /// would otherwise see the ground state of the last frame.
+        /// </summary>
+        public bool GroundedNow
+        {
+            get
+            {
+                if (externalControl || controller == null || !controller.enabled)
+                {
+                    return false;
+                }
+
+                return verticalSpeed <= 0.01f && (controller.isGrounded || ProbeGround());
+            }
+        }
+
+        /// <summary>
+        /// Whether, falling as it is now, the character will reach walkable ground within <paramref name="seconds"/>.
+        /// False while rising. Used to leave a press just before landing to the jump buffer.
+        /// </summary>
+        public bool LandsWithin(float seconds)
+        {
+            if (externalControl || controller == null || !controller.enabled || verticalSpeed >= 0f || seconds <= 0f)
+            {
+                return false;
+            }
+
+            return ProbeGround(groundProbeDistance - verticalSpeed * seconds);
+        }
+
+        /// <summary>Jumps made from the ground (or within coyote time) so far. Aerial abilities count them.</summary>
+        public int GroundJumpCount => groundJumpCount;
+
+        /// <summary>Jumps started by another component (a jump off a ledge) so far.</summary>
+        public int LaunchCount => launchCount;
+
+        /// <summary>What the controller's last move collided with.</summary>
+        public CollisionFlags LastMoveFlags => lastMoveFlags;
+
+        /// <summary>True if the last move ran into a wall (a surface steeper than walkable, not a ceiling).</summary>
+        public bool HitWallLastMove => sideHitThisMove;
+
+        /// <summary>The normal of the wall the last move ran into. Meaningful only when <see cref="HitWallLastMove"/>.</summary>
+        public Vector3 LastWallNormal => lastSideNormal;
+
+        /// <summary>Where the last move touched the wall. Meaningful only when <see cref="HitWallLastMove"/>.</summary>
+        public Vector3 LastWallPoint => lastSidePoint;
 
         /// <summary>
         /// True while another component, such as traversal, moves the character. The motor then
@@ -243,6 +313,7 @@ namespace Threefold.Characters
             if (deltaTime <= 0f || externalControl)
             {
                 blockedDirection = Vector3.zero;
+                hasAerial = false;
                 return;
             }
 
@@ -261,7 +332,15 @@ namespace Threefold.Characters
             UpdateRotation(moveDirection, hasMoveInput, deltaTime);
             UpdateVerticalSpeed(readInput, deltaTime);
 
-            Vector3 displacement = (horizontalVelocity + Vector3.up * verticalSpeed) * deltaTime;
+            Vector3 horizontalDisplacement = horizontalVelocity;
+            if (hasAerial && aerial.HasDashVelocity)
+            {
+                // A dash moves at its own speed this frame; what is kept afterwards is the stored velocity.
+                horizontalDisplacement = aerial.DashVelocity;
+            }
+
+            hasAerial = false;
+            Vector3 displacement = (horizontalDisplacement + Vector3.up * verticalSpeed) * deltaTime;
 
             // A shove from the world adds to the player's own movement for a moment; it is not momentum.
             if (shoveRemaining > 0f)
@@ -271,12 +350,65 @@ namespace Threefold.Characters
                 shoveRemaining -= step;
             }
 
+            sideHitThisMove = false;
             CollisionFlags flags = controller.Move(displacement);
+            lastMoveFlags = flags;
 
             if ((flags & CollisionFlags.Above) != 0 && verticalSpeed > 0f)
             {
                 verticalSpeed = 0f;
             }
+        }
+
+        /// <summary>Records the wall the move runs into, for an air dash that must stop at walls.</summary>
+        private void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            // Walls only: ground and ceilings are reported too, and do not stop a dash.
+            if (Mathf.Abs(hit.normal.y) > 0.5f)
+            {
+                return;
+            }
+
+            Vector3 heading = horizontalVelocity.sqrMagnitude > 0.0001f ? horizontalVelocity.normalized : transform.forward;
+            if (!sideHitThisMove || Vector3.Dot(hit.normal, heading) < Vector3.Dot(lastSideNormal, heading))
+            {
+                lastSideNormal = hit.normal;
+                lastSidePoint = hit.point;
+            }
+
+            sideHitThisMove = true;
+        }
+
+        /// <summary>
+        /// What an aerial ability does to the movement for the next motor update only: a vertical speed it sets (an
+        /// impulse, a glide's capped fall, a dash's level flight), a horizontal velocity it stores, a dash's own
+        /// speed for the frame, or a different speed and steering in the air. Call it before the motor updates.
+        /// Collisions, ground detection and everything else are unchanged.
+        /// </summary>
+        public void ApplyAerialMotion(in AerialMotion motion)
+        {
+            if (externalControl)
+            {
+                return;
+            }
+
+            aerial = motion;
+            hasAerial = true;
+
+            if (motion.ConsumeJumpPress)
+            {
+                ConsumeJumpPress();
+            }
+        }
+
+        /// <summary>
+        /// The jump press of this frame was used by something else (an aerial ability): the motor neither jumps nor
+        /// remembers it for a jump on landing.
+        /// </summary>
+        public void ConsumeJumpPress()
+        {
+            jumpPressConsumedFrame = Time.frameCount;
+            timeSinceJumpPressed = TimerExpired;
         }
 
         /// <summary>
@@ -386,6 +518,7 @@ namespace Threefold.Characters
         public void Launch(Vector3 velocity)
         {
             EndExternalControl(velocity, false);
+            launchCount++;
             Jumped?.Invoke();
         }
 
@@ -463,13 +596,18 @@ namespace Threefold.Characters
         /// </summary>
         private bool ProbeGround()
         {
+            return ProbeGround(groundProbeDistance);
+        }
+
+        private bool ProbeGround(float probeDistance)
+        {
             Vector3 scale = transform.lossyScale;
             float radius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
             float halfHeight = Mathf.Max(controller.height * Mathf.Abs(scale.y) * 0.5f, radius);
 
             Vector3 centre = transform.TransformPoint(controller.center);
             Vector3 origin = centre + Vector3.down * (halfHeight - radius) + Vector3.up * ProbeLift;
-            float distance = ProbeLift + controller.skinWidth + groundProbeDistance;
+            float distance = ProbeLift + controller.skinWidth + probeDistance;
 
             if (!Physics.SphereCast(origin, radius * 0.95f, Vector3.down, out RaycastHit hit, distance,
                     groundLayers, QueryTriggerInteraction.Ignore))
@@ -555,6 +693,27 @@ namespace Threefold.Characters
                 rate *= airControl;
             }
 
+            if (hasAerial)
+            {
+                if (aerial.ScalesHorizontalVelocity)
+                {
+                    horizontalVelocity *= aerial.HorizontalScale;
+                }
+
+                if (aerial.HasStoredHorizontal)
+                {
+                    // A dash sets the velocity outright: nothing adds to it, so speed cannot stack.
+                    horizontalVelocity = new Vector3(aerial.StoredHorizontal.x, 0f, aerial.StoredHorizontal.z);
+                    return;
+                }
+
+                if (aerial.OverridesAirMovement && !isGrounded)
+                {
+                    targetVelocity = moveDirection * aerial.AirTopSpeed;
+                    rate = aerial.AirAcceleration;
+                }
+            }
+
             horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, targetVelocity, rate * deltaTime);
         }
 
@@ -590,7 +749,7 @@ namespace Threefold.Characters
 
         private void UpdateVerticalSpeed(bool readInput, float deltaTime)
         {
-            if (readInput && inputSource.JumpPressedThisFrame)
+            if (readInput && inputSource.JumpPressedThisFrame && jumpPressConsumedFrame != Time.frameCount)
             {
                 timeSinceJumpPressed = 0f;
             }
@@ -609,6 +768,7 @@ namespace Threefold.Characters
                 timeSinceGrounded = TimerExpired;
                 isGrounded = false;
                 risingFromJump = true;
+                groundJumpCount++;
                 Jumped?.Invoke();
                 return;
             }
@@ -620,6 +780,14 @@ namespace Threefold.Characters
                 return;
             }
 
+            if (hasAerial && aerial.SetsVerticalSpeed)
+            {
+                // An aerial ability decides the vertical speed this frame; a released jump no longer cuts it.
+                verticalSpeed = Mathf.Max(aerial.VerticalSpeed, -terminalFallSpeed);
+                risingFromJump = false;
+                return;
+            }
+
             // Releasing jump early shortens the jump once, which gives fine control over height.
             if (risingFromJump && verticalSpeed > 0f && !(readInput && inputSource.JumpHeld))
             {
@@ -627,23 +795,8 @@ namespace Threefold.Characters
                 risingFromJump = false;
             }
 
-            float appliedGravity = gravity;
-            if (verticalSpeed < 0f)
-            {
-                appliedGravity *= fallGravityMultiplier;
-            }
-            else if (risingFromJump && verticalSpeed < apexSpeedThreshold && readInput && inputSource.JumpHeld)
-            {
-                appliedGravity *= apexGravityMultiplier;
-            }
-
-            // Near the top of a held jump, falling also starts gently.
-            if (verticalSpeed < 0f && verticalSpeed > -apexSpeedThreshold && readInput && inputSource.JumpHeld)
-            {
-                appliedGravity = gravity * apexGravityMultiplier;
-            }
-
-            verticalSpeed = Mathf.Max(verticalSpeed - appliedGravity * deltaTime, -terminalFallSpeed);
+            verticalSpeed = JumpPhysics.AirborneStep(verticalSpeed, risingFromJump, readInput && inputSource.JumpHeld, gravity,
+                fallGravityMultiplier, apexGravityMultiplier, apexSpeedThreshold, terminalFallSpeed, deltaTime);
         }
     }
 }

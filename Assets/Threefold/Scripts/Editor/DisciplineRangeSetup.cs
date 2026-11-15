@@ -24,6 +24,8 @@ namespace Threefold.EditorTools
     ///   a barricade, a crumbling walkway up to a ledge, and a Cinder Wisp on the ledge.
     ///   Behind the start stand three figures looping the Arcane, Flame and Aegis combos side by side,
     ///   for comparing the martial styles (Docs/MartialStyles.md).
+    ///   Beyond the arrow lane lies the aerial course (AerialCourseLayout): a pillar only Arcane Ascension
+    ///   reaches, a tower and gap only Flame's glide crosses, a gap for the Aegis dash and a wall to dash into.
     ///
     /// Dummies cannot be pushed and have no poise, so stagger and push are tried on the real enemies
     /// in the Combat Arena, where the same disciplines are available; the court's Cinder Wisp is the
@@ -152,6 +154,9 @@ namespace Threefold.EditorTools
                 new Vector3(-4.5f, 0f, 2.8f), assets.DarkStoneMaterial);
             FantasyPlaygroundSetup.PlaceBlock(assets, architecture, "MarkerLane", new Vector3(0.5f, 0.35f, 0.5f),
                 new Vector3(-4.5f, 0f, 14f), assets.DarkStoneMaterial);
+
+            // Beyond the arrow lane: the aerial course, one station per aerial ability (Docs/AerialAbilities.md).
+            AerialCourseSetup.Build(assets, architecture, report);
 
             FantasyPlaygroundSetup.BuildBackground(assets, background);
             FantasyPlaygroundSetup.BuildLighting(assets, lighting, report);

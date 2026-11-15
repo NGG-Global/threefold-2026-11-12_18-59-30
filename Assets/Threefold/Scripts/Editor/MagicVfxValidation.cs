@@ -218,6 +218,9 @@ namespace Threefold.EditorTools
                 Add(roles, look.projectileTrailEffect, MagicVfxRole.Attached);
                 Add(roles, look.areaWaveEffect, MagicVfxRole.Area);
                 Add(roles, look.blockBarrierEffect, MagicVfxRole.Barrier);
+                Add(roles, look.aerialBurstEffect, MagicVfxRole.Burst);
+                Add(roles, look.aerialSustainEffect, MagicVfxRole.Attached);
+                Add(roles, look.aerialImpactEffect, MagicVfxRole.Burst);
 
                 if (definition.ChargedAbility is ChargedProjectileDefinition shot)
                 {
@@ -264,7 +267,8 @@ namespace Threefold.EditorTools
                 return MagicVfxRole.Area;
             }
 
-            if (name.Contains("Trail") || name.Contains("Gather") || name.Contains("Charge") || name.Contains("Ribbon"))
+            if (name.Contains("Trail") || name.Contains("Gather") || name.Contains("Charge") || name.Contains("Ribbon") ||
+                name.Contains("Jet"))
             {
                 return MagicVfxRole.Attached;
             }

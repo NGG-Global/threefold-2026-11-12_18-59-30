@@ -32,6 +32,9 @@ namespace Threefold.Characters
         public const string ClimbParameter = "Climb";
         public const string VaultParameter = "Vault";
 
+        /// <summary>Int: the aerial move (0 none, 1 ascension, 2 glide, 3 dash), set every frame from gameplay.</summary>
+        public const string AerialMoveParameter = "AerialMove";
+
         /// <summary>The Animator layer that plays the casting gesture on the upper body.</summary>
         public const string CastLayer = "Cast";
 
@@ -45,6 +48,7 @@ namespace Threefold.Characters
         private static readonly int ShimmyId = Animator.StringToHash(ShimmyParameter);
         private static readonly int ClimbId = Animator.StringToHash(ClimbParameter);
         private static readonly int VaultId = Animator.StringToHash(VaultParameter);
+        private static readonly int AerialMoveId = Animator.StringToHash(AerialMoveParameter);
 
         [SerializeField] private ThirdPersonMotor motor;
 
@@ -73,6 +77,8 @@ namespace Threefold.Characters
         private bool hasShimmy;
         private bool hasClimb;
         private bool hasVault;
+        private bool hasAerialMove;
+        private IAerialMoveSource aerialSource;
         private bool subscribed;
         private Object combatAnimationOwner;
 
@@ -137,6 +143,7 @@ namespace Threefold.Characters
                 traversal = GetComponent<TraversalController>();
             }
 
+            aerialSource = GetComponent<IAerialMoveSource>();
             Subscribe();
         }
 
@@ -165,6 +172,12 @@ namespace Threefold.Characters
             if (hasVerticalSpeed)
             {
                 animator.SetFloat(VerticalSpeedId, motor.VerticalSpeed);
+            }
+
+            // A state, not a trigger: when the ability ends the value returns to 0 and the pose ends with it.
+            if (hasAerialMove)
+            {
+                animator.SetInteger(AerialMoveId, aerialSource != null ? aerialSource.AerialMove : 0);
             }
 
             if (traversal != null)
@@ -349,7 +362,7 @@ namespace Threefold.Characters
             {
                 parametersKnown = true;
                 hasSpeed = hasGrounded = hasVerticalSpeed = hasJump = hasCast = false;
-                hasLandImpact = hasHanging = hasShimmy = hasClimb = hasVault = false;
+                hasLandImpact = hasHanging = hasShimmy = hasClimb = hasVault = hasAerialMove = false;
 
                 foreach (AnimatorControllerParameter parameter in animator.parameters)
                 {
@@ -364,6 +377,7 @@ namespace Threefold.Characters
                     hasShimmy |= id == ShimmyId && parameter.type == AnimatorControllerParameterType.Float;
                     hasClimb |= id == ClimbId && parameter.type == AnimatorControllerParameterType.Trigger;
                     hasVault |= id == VaultId && parameter.type == AnimatorControllerParameterType.Trigger;
+                    hasAerialMove |= id == AerialMoveId && parameter.type == AnimatorControllerParameterType.Int;
                 }
             }
 
