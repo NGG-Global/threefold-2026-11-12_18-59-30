@@ -23,6 +23,15 @@ namespace Threefold.Tests
         [TestCase("JumpStart", false)]
         [TestCase("JumpLand", false)]
         [TestCase("SpellShoot", false)]
+        [TestCase("Spell_Simple_Idle_Loop", true)]
+        [TestCase("Idle_Shield_Loop", true)]
+        [TestCase("Push_Loop", true)]
+        [TestCase("Sword_Idle", true)]
+        [TestCase("Punch_Jab", false)]
+        [TestCase("Sword_Attack", false)]
+        [TestCase("Death01", false)]
+        [TestCase("Loop", false)]
+        [TestCase("", false)]
         public void OnlyContinuousMovementLoops(string clip, bool loops)
         {
             Assert.AreEqual(loops, CharacterModelPostprocessor.IsLooping(clip));

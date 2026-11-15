@@ -50,6 +50,16 @@ separates approved decisions from proposals; do not present a proposal as decide
   plain C#, and `DisciplineCombat` only carries out their commands. The starting numbers of the
   disciplines are in `DisciplineDefaults`; generated discipline assets are the truth afterwards.
   Input-side decisions likewise stay in plain C# (`AttackGestureRecognizer`, `PointerRouter`).
+- Combat animations (`Docs/CombatAnimationArchitecture.md`) follow the combat rules and never lead
+  them: no animation deals damage, delays a hit or extends an action. What plays and when is decided
+  in plain C# (`CombatAnimationModel`, `CombatTimeWarp`, `CombatCueTracker`, `CombatSlotResolver`);
+  `CombatAnimationDirector` only carries it out. Gameplay never names a clip: slots in the
+  `CombatAnimationSet` do, and states are named by `CombatSlotId`. Timing comes from normalised
+  moments in the slots, fitted to the rules' clock; do not add Animation Events to imported clips.
+  Contact and release come only from the rules, once per action; every action ends with exactly one
+  `Recovered` or `Cancelled` cue. The starting slots are in `CombatAnimationDefaults`; the generated
+  set is the truth afterwards. `Mage.fbx` changes only through `Tools/blender/build_mage.py`, checked
+  with `compare_mage.py`.
 - How the world responds to magic (`Docs/WorldMagic.md`) follows from properties and effects, not
   from a script per object or a table of spell-on-object cases. The rules (`MagicalPropertySet`,
   the properties in `WorldProperties`, `CreatureEffectModel`, `MagicalObjectRules`) are plain C#;

@@ -1,0 +1,37 @@
+using UnityEngine;
+
+namespace Threefold.CombatAnimation
+{
+    /// <summary>
+    /// A character's combat animations as one asset: for each discipline its stance, attack slots in combo
+    /// order, charge start, hold, release and cancel, and aerial variants; shared block, stagger, aerial and
+    /// defeat slots; and how they are played. Gameplay never reads it; the Animator Controller is generated
+    /// from it, and <see cref="CombatAnimationDirector"/> plays it.
+    ///
+    /// The setup command creates it from <see cref="CombatAnimationDefaults"/>. Changing a clip, mirror,
+    /// scope or hold here and running the setup again rebuilds the Animator Controller; changing a moment,
+    /// a blend or the tuning needs no rebuild.
+    /// </summary>
+    [CreateAssetMenu(menuName = "Threefold/Combat Animation Set", fileName = "CombatAnimations")]
+    public sealed class CombatAnimationSet : ScriptableObject
+    {
+        [SerializeField] private CombatAnimationLibrary library = new CombatAnimationLibrary();
+
+        // Which version of the generated slots this asset holds; see CombatAnimationDefaults.DataVersion.
+        [SerializeField, HideInInspector] private int dataVersion;
+
+        public CombatAnimationLibrary Library => library;
+
+        public int DataVersion => dataVersion;
+
+        /// <summary>Replaces every slot and setting. Called by the setup tooling on a new asset, and by tests.</summary>
+        public void Configure(CombatAnimationLibrary values, int version)
+        {
+            library = values ?? new CombatAnimationLibrary();
+            dataVersion = version;
+        }
+
+        /// <summary>See <see cref="CombatAnimationLibrary.ControllerSignature"/>.</summary>
+        public string ControllerSignature => library != null ? library.ControllerSignature() : string.Empty;
+    }
+}

@@ -50,6 +50,21 @@ ANIMATIONS_2 = {
     "ClimbUp_1m": "ClimbUp",
 }
 
+# Combat animations (Docs/CombatAnimationArchitecture.md). They keep the library's own names, so
+# their source stays obvious; Assets/Threefold/Scripts/Runtime/CombatAnimation/CombatAnimationDefaults.cs
+# assigns them to the disciplines' slots. Tools/blender/analyse_combat_clips.py measured their timing.
+COMBAT_ANIMATIONS = (
+    "Punch_Jab", "Punch_Cross", "Sword_Attack", "Sword_Idle",
+    "Spell_Simple_Enter", "Spell_Simple_Idle_Loop", "Spell_Simple_Exit",
+    "Hit_Chest", "Hit_Head", "Push_Loop", "Death01",
+)
+COMBAT_ANIMATIONS_2 = (
+    "Melee_Hook", "Sword_Regular_B", "Sword_Block", "Idle_Shield_Loop", "Idle_Shield_Break",
+    "Shield_OneShot", "NinjaJump_Start", "OverhandThrow",
+)
+ANIMATIONS.update({name: name for name in COMBAT_ANIMATIONS})
+ANIMATIONS_2.update({name: name for name in COMBAT_ANIMATIONS_2})
+
 # Animations made in this script.
 GENERATED_ANIMATIONS = ("Hang",)
 

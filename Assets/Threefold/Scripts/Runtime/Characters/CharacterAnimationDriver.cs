@@ -12,6 +12,10 @@ namespace Threefold.Characters
     /// Speed (float, metres per second), Grounded (bool), VerticalSpeed (float), Jump (trigger),
     /// Cast (trigger), LandImpact (float, metres per second), Hanging (bool), Shimmy (float, -1 to 1),
     /// Climb (trigger, climbing up or onto something) and Vault (trigger).
+    ///
+    /// The combat animations (attacks, charges, block, reactions) are played by a combat animation
+    /// director on layers of their own (Docs/CombatAnimationArchitecture.md). While one has claimed this
+    /// driver, the casting gesture of a charged attack is left to it, so the two never play at once.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(100)] // After the motor has moved the character this frame.
@@ -27,6 +31,9 @@ namespace Threefold.Characters
         public const string ShimmyParameter = "Shimmy";
         public const string ClimbParameter = "Climb";
         public const string VaultParameter = "Vault";
+
+        /// <summary>The Animator layer that plays the casting gesture on the upper body.</summary>
+        public const string CastLayer = "Cast";
 
         private static readonly int SpeedId = Animator.StringToHash(SpeedParameter);
         private static readonly int GroundedId = Animator.StringToHash(GroundedParameter);
@@ -67,8 +74,30 @@ namespace Threefold.Characters
         private bool hasClimb;
         private bool hasVault;
         private bool subscribed;
+        private Object combatAnimationOwner;
 
         public Animator Animator => animator;
+
+        /// <summary>
+        /// True while a combat animation director plays the attacks on this Animator. The casting gesture is
+        /// then not played for charged attacks, and the attack triggers named in discipline data are not set.
+        /// </summary>
+        public bool CombatAnimationsActive => combatAnimationOwner != null;
+
+        /// <summary>Called by the combat animation director when it starts playing on this Animator.</summary>
+        public void ClaimCombatAnimations(Object owner)
+        {
+            combatAnimationOwner = owner;
+        }
+
+        /// <summary>Called by the combat animation director when it stops. Only its owner can release the claim.</summary>
+        public void ReleaseCombatAnimations(Object owner)
+        {
+            if (combatAnimationOwner == owner)
+            {
+                combatAnimationOwner = null;
+            }
+        }
 
         /// <summary>Connects the driver. Called by the setup tooling.</summary>
         public void Bind(ThirdPersonMotor characterMotor, Animator visualAnimator, AbilityCaster abilityCaster)
@@ -293,6 +322,12 @@ namespace Threefold.Characters
 
         private void HandleCastSucceeded(AbilityDefinition ability, AbilityContext context)
         {
+            // The combat animation director plays the discipline's own release instead.
+            if (CombatAnimationsActive && ability is ChargedAbilityDefinition)
+            {
+                return;
+            }
+
             if (IsAnimatorReady() && hasCast)
             {
                 animator.SetTrigger(CastId);

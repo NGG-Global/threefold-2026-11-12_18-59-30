@@ -9,8 +9,10 @@ namespace Threefold.EditorTools
     /// on every import, so a model only has to be added to the folder: no Inspector work is needed.
     ///
     /// Models are imported as Humanoid, so animations can be shared between characters. Clips are
-    /// renamed to the part after the last '|' (Blender writes "Armature|Idle"), loops are marked,
-    /// and root motion is baked into the pose, because the CharacterController moves the character.
+    /// renamed to the part after the last '|' (Blender writes "Armature|Idle"), loops are marked
+    /// (the movement loops by name, and every clip whose name ends in "_Loop", as the animation
+    /// library names its loops), and root motion is baked into the pose, because the
+    /// CharacterController moves the character.
     ///
     /// After import, smoothed normals are stored in every mesh's tangents, for the contour line of
     /// the visual style (see <see cref="OutlineNormals"/>). Character materials use no normal maps,
@@ -24,12 +26,18 @@ namespace Threefold.EditorTools
         private static readonly HashSet<string> LoopingClips = new HashSet<string>
         {
             "Idle", "Walk", "Jog", "Sprint", "JumpLoop", "Hang",
+
+            // A combat stance whose library name does not say it loops.
+            "Sword_Idle",
         };
 
+        private const string LoopSuffix = "_Loop";
+
         // Changing this number makes Unity re-import the characters with the new settings.
+        // 4: the combat clips (Docs/CombatAnimationArchitecture.md).
         public override uint GetVersion()
         {
-            return 3;
+            return 4;
         }
 
         /// <summary>
@@ -60,7 +68,8 @@ namespace Threefold.EditorTools
 
         internal static bool IsLooping(string clipName)
         {
-            return LoopingClips.Contains(clipName);
+            return !string.IsNullOrEmpty(clipName) &&
+                   (LoopingClips.Contains(clipName) || clipName.EndsWith(LoopSuffix, System.StringComparison.Ordinal));
         }
 
         private void OnPreprocessModel()
