@@ -276,9 +276,9 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
-        /// The Mage keeps the colours of its existing materials. It gains the soft light response
-        /// and the contour line. Its model has no painted texture yet, so its surfaces are flat
-        /// colour; that is asset work for later.
+        /// The Mage keeps the colours of its existing materials, and its painted atlas where a material has
+        /// one (the Wayfarer look; the library look is flat colour). It gains the soft light response and
+        /// the contour line.
         /// </summary>
         private void BuildCharacterMaterials()
         {
@@ -319,6 +319,12 @@ namespace Threefold.EditorTools
             var material = new Material(Shader) { enableInstancing = true };
             Color colour = original.HasProperty("_BaseColor") ? original.GetColor("_BaseColor") : original.color;
             SetColor(material, "_BaseColor", colour);
+
+            // A painted character material (the Mage's Wayfarer atlas) keeps its painting.
+            if (original.mainTexture != null && material.HasProperty("_BaseMap"))
+            {
+                material.SetTexture("_BaseMap", original.mainTexture);
+            }
 
             if (!UsesIllustratedShader)
             {

@@ -67,6 +67,19 @@ separates approved decisions from proposals; do not present a proposal as decide
   from that tool's measurements of the exported model. Movement restriction of a strike is data
   (`MeleeStepProfile` commitment), never code per discipline. A placeholder that stands in for a
   missing motion (the Flame kick) is listed under "What needs new animation"; do not call it final.
+- The Mage's looks and bearing (`Docs/Characters/Mage.md`, `Docs/CharacterIdentity.md`): `Mage.fbx` is the only
+  source of clips and is not changed for a look. The Wayfarer look is a separate mesh on the same skeleton
+  (`MageWayfarer.fbx`, built only by `Tools/blender/build_mage_wayfarer.py`, checked with
+  `check_mage_wayfarer.py`); `MageCharacterSetup` uses it only if its Humanoid mapping equals `Mage.fbx`'s
+  (`MageLookRules`) and otherwise keeps the mesh of `Mage.fbx`. Both are intermediate characters on a library
+  mannequin: never call either production art, and keep "implemented" apart from "proposed" in the documents.
+  Personality is a layer on top of the clips, never an edited clip: what it adds is decided in plain C#
+  (`PersonalityPoseModel`, `SecondaryMotionModel`) and `CharacterPersonality` only carries it out, after the
+  Animator. Differences between disciplines are data (`PersonalityProfile`; starting values in
+  `PersonalityDefaults`). It reads gameplay and never writes it, never touches legs, hips or the root, and its
+  arm share is zero during any action. Bones named `sec_...` swing on its springs; `face_eyes` and `face_brows`
+  are the only facial animation the model supports. Generated parts are weighted to at most two bones (the
+  Mobile quality level's limit). No cloth simulation.
 - Magical combat effects (`Docs/MagicVfx.md`) follow the rules and the animation cues and never lead them:
   no effect deals damage or calls a rule. What starts, grows and stops when is decided in plain C#
   (`BodyEffectSequencer`, `MagicVfxGeometry`, `MagicVfxQuality`, `MagicVfxBudget`, `WorldReactionVfx`);
