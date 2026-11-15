@@ -95,6 +95,29 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
+        /// The first bone of the Mage model's Humanoid mapping that a variant's skeleton does not contain, or null
+        /// if it contains them all. Only then can the variant be given the Mage model's mapping bone for bone.
+        /// </summary>
+        internal static string FirstMissingBone(IReadOnlyList<KeyValuePair<string, string>> library,
+            ICollection<string> variantSkeleton)
+        {
+            if (library == null || variantSkeleton == null)
+            {
+                return null;
+            }
+
+            foreach (KeyValuePair<string, string> pair in library)
+            {
+                if (!variantSkeleton.Contains(pair.Value))
+                {
+                    return pair.Value;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Compares how two models were mapped to the Humanoid: pairs of (human bone, bone in the model). Returns
         /// null if the second maps every human bone to the bone of the same name as the first and maps nothing
         /// more, which is what lets it play the first model's clips unchanged; otherwise the first difference.

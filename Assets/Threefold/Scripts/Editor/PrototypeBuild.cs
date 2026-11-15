@@ -23,6 +23,8 @@ namespace Threefold.EditorTools
         private const string LogDirectory = "build/logs";
         private const string ProductName = "Threefold";
         private const string CompanyName = "NGG Global";
+        private const string StampFolder = "Assets/Threefold/Generated/Resources";
+        private const string StampPath = StampFolder + "/" + Threefold.DevTools.BuildStamp.ResourceName + ".txt";
 
         private static readonly object LogLock = new object();
         private static StreamWriter logWriter;
@@ -52,6 +54,7 @@ namespace Threefold.EditorTools
                 }
 
                 ApplyPlayerSettings();
+                WriteBuildStamp();
                 EditorUserBuildSettings.buildAppBundle = false;
 
                 string outputPath = GetArgument("-customBuildPath") ?? DefaultOutputPath;
@@ -208,6 +211,64 @@ namespace Threefold.EditorTools
         /// project settings file, because the repository still carries the project template's
         /// values until the laptop's settings are committed.
         /// </summary>
+        /// <summary>
+        /// Writes which build this is into the game, for the development diagnostics: the commit and the run
+        /// number that GitHub Actions gives the build (GITHUB_SHA, GITHUB_RUN_NUMBER), or, for a build started
+        /// by hand, the commit read from the Git folder and no run number. A build never fails over this: if
+        /// the file cannot be written, a file left by an earlier build is removed, so the game says "not
+        /// stamped" instead of naming the wrong build.
+        /// </summary>
+        private static void WriteBuildStamp()
+        {
+            try
+            {
+                string commit = Environment.GetEnvironmentVariable("GITHUB_SHA");
+                if (string.IsNullOrWhiteSpace(commit))
+                {
+                    commit = Threefold.DevTools.BuildStamp.CommitFromGitFiles(ReadGitFile);
+                }
+
+                Threefold.DevTools.BuildStamp stamp = Threefold.DevTools.BuildStamp.Create(
+                    commit,
+                    Environment.GetEnvironmentVariable("GITHUB_RUN_NUMBER"),
+                    Environment.GetEnvironmentVariable("GITHUB_RUN_ATTEMPT"),
+                    Environment.GetEnvironmentVariable("GITHUB_REF_NAME"),
+                    DateTime.UtcNow);
+
+                Directory.CreateDirectory(StampFolder);
+                File.WriteAllText(StampPath, stamp.Serialize());
+                AssetDatabase.ImportAsset(StampPath, ImportAssetOptions.ForceUpdate);
+                AssetDatabase.Refresh();
+                Debug.Log($"[Threefold] Build stamp: {stamp.Describe()}.");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[Threefold] The build stamp could not be written ({exception.Message}); the diagnostics will say 'not stamped'.");
+                try
+                {
+                    AssetDatabase.DeleteAsset(StampPath);
+                }
+                catch (Exception)
+                {
+                    // Nothing more can be done; the build goes on.
+                }
+            }
+        }
+
+        // A file of the project's Git folder, or null. The project folder is Unity's working directory.
+        private static string ReadGitFile(string relativePath)
+        {
+            try
+            {
+                string path = Path.Combine(".git", relativePath);
+                return File.Exists(path) ? File.ReadAllText(path) : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         private static void ApplyPlayerSettings()
         {
             if (PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android) != ApplicationIdentifier)

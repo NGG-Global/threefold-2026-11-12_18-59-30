@@ -218,8 +218,8 @@ Movement, camera, combat and input do not change in either case.
 | The new C# compiles against Unity 6000.6.0f1 | `Tools/ci/compile_check.sh` passed |
 | The rules that choose the look, the import rules and the naming rules | Tests passed outside Unity (`CharacterSetupTests`) |
 | Unity imports `Mage.fbx` as a valid Humanoid | The first version of the file was, on the laptop runner (Android build run 13). The file with all 41 clips has the same skeleton and mesh (`compare_mage.py`); its import is recorded in `Docs/LivingMagicTesting.md` where a build ran |
-| **Unity imports `MageWayfarer.fbx` as the same Humanoid** | **Not verified.** If it does not, the setup keeps the Library look and reports the reason |
-| **The visual prefab is rebuilt in place and scenes follow** | **Not verified.** Written against Unity's prefab API and compiled only |
+| Unity imports `MageWayfarer.fbx` as the same Humanoid | By itself it does not: Unity's automatic mapping takes `face_blink` for an eye. The setup gives the model the mapping of `Mage.fbx` and imports it again; then it is a valid Humanoid with the same mapping (Android build run 20, `MageWayfarerLookTests`). The painted atlas had also been imported as a cubemap, which is fixed in the import rules. See `Docs/LivingMagicTesting.md` |
+| The visual prefab is rebuilt in place and scenes follow | On the laptop runner (run 20): the prefab was rebuilt with the Wayfarer look, and the Mage of the assembled Fantasy Playground carries the Wayfarer mesh and the painted atlas. Checked by test, **not seen** |
 | **How the Wayfarer look appears in the game: shader, contour line on hair and cloak, texture filtering, on Android** | **Not verified** |
 | **Blinking, brows and the swing of cloak, hair and sash in the game** | **Not verified.** The rules behind them are tested outside Unity (`Docs/CharacterIdentity.md`) |
 

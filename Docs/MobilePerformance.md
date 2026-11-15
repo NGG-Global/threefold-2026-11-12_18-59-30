@@ -122,6 +122,10 @@ the laptop, commit `ProjectSettings/ProjectSettings.asset`.
 Development builds only (it switches itself off otherwise). F3, back-quote, gamepad Select or a
 three-finger tap. It shows:
 
+- which build this is: the version, the commit, the number of the build run, the branch and the build
+  time (`BuildStamp`). The build writes them into the game; a build started by hand has no run number and
+  says so, a build without the information says "not stamped", and the Editor says "Editor session".
+  Written and tested outside and inside Unity (`BuildStampTests`); **not yet seen in a build**;
 - frames per second, average, slowest 5% and worst frame time, the preset and the target, and
   whether the target was lowered;
 - main-thread CPU and GPU time of the last frame where Unity reports them;

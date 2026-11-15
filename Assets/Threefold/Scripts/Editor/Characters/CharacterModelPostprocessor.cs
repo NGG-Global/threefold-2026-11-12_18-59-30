@@ -47,9 +47,10 @@ namespace Threefold.EditorTools
 
         // Changing this number makes Unity re-import the characters with the new settings.
         // 4: the combat clips (Docs/CombatAnimationArchitecture.md).
+        // 5: painted character textures are imported as ordinary 2D textures (see OnPreprocessTexture).
         public override uint GetVersion()
         {
-            return 4;
+            return 5;
         }
 
         /// <summary>
@@ -114,6 +115,12 @@ namespace Threefold.EditorTools
         /// <summary>
         /// Painted character atlases: colour, opaque, mip-mapped (distant characters must not shimmer), clamped so
         /// the atlas edge never wraps round, trilinear, and no larger than the atlas was painted for.
+        ///
+        /// The shape is set as well, because it cannot be left to the file's .meta: the painted atlas is
+        /// committed with a .meta that holds only its identifier, Unity 6000.6 reads such a file as importer
+        /// settings of its oldest version, and upgrading those gives the texture the shape of a cubemap
+        /// (Android build run 18: "generateCubemap: 6, textureShape: 2", main asset a Cubemap). A cubemap is
+        /// not a Texture2D, so the Wayfarer look found no painting and was not used.
         /// </summary>
         private void OnPreprocessTexture()
         {
@@ -123,6 +130,7 @@ namespace Threefold.EditorTools
             }
 
             importer.textureType = TextureImporterType.Default;
+            importer.textureShape = TextureImporterShape.Texture2D;
             importer.sRGBTexture = true;
             importer.alphaSource = TextureImporterAlphaSource.None;
             importer.mipmapEnabled = true;
