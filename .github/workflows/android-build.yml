@@ -15,6 +15,9 @@ name: Android build
 # The self-hosted route has built APKs (Docs/CloudBuild.md lists the runs); the GitHub-hosted
 # route has no licence secrets and has never run.
 #
+# On the self-hosted runner, review pictures of the Reference Courtyard can be rendered as well (input
+# "review_renders"; see Docs/VisualReferencePrototype.md).
+#
 # On the self-hosted runner the EditMode tests can run first (input "editmode_tests"). A test
 # failure does not stop the APK from being built, but it marks the run as failed, and the results
 # are uploaded either way.
@@ -37,6 +40,10 @@ on:
         description: Build the APK (self-hosted only; untick to run only the tests, about 15 minutes)
         type: boolean
         default: true
+      review_renders:
+        description: Render the Reference Courtyard's review pictures (self-hosted only; Editor renders, not the game on a device)
+        type: boolean
+        default: false
 
 # One Android build at a time for the whole repository. Starting a new one cancels the old one.
 concurrency:
@@ -174,6 +181,26 @@ jobs:
           UNITY_EDITOR: ${{ vars.UNITY_EDITOR_PATH }}
         run: call Tools\build\run-editmode-tests.cmd
 
+      # Pictures of the Reference Courtyard from fixed viewpoints, drawn by Unity with a graphics device.
+      # They never stop the APK from being built: a runner that cannot draw only loses the pictures.
+      - name: Render review pictures
+        id: renders
+        if: inputs.review_renders
+        continue-on-error: true
+        shell: cmd
+        env:
+          UNITY_EDITOR: ${{ vars.UNITY_EDITOR_PATH }}
+        run: call Tools\build\render-review.cmd
+
+      - name: Upload review pictures
+        if: always() && inputs.review_renders
+        uses: actions/upload-artifact@v4
+        with:
+          name: threefold-review-renders-${{ github.run_number }}
+          path: build/renders
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build development APK
         if: inputs.build_apk
         shell: cmd
@@ -190,8 +217,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # Only when a build was asked for: the runner keeps its folders, and a run without a build would
+      # otherwise upload the logs of an earlier build under its own number.
       - name: Upload build logs
-        if: always()
+        if: always() && inputs.build_apk
         uses: actions/upload-artifact@v4
         with:
           name: threefold-android-logs-${{ github.run_number }}
