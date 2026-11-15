@@ -14,7 +14,8 @@ using UnityEngine.SceneManagement;
 namespace Threefold.DevTools
 {
     /// <summary>
-    /// Development-only diagnostics for testing a level: frame timing against the graphics preset's
+    /// Development-only diagnostics for testing a level: which build this is (<see cref="BuildStamp"/>),
+    /// frame timing against the graphics preset's
     /// target, CPU and GPU time where Unity reports them, approximate memory and garbage collections,
     /// enemies and projectiles, performance warnings (<see cref="PerformanceWarnings"/>), the current
     /// discipline, the magical object in the middle of the view with its properties and state, every
@@ -73,6 +74,7 @@ namespace Threefold.DevTools
         private int temporaryCount;
 
         private bool visible;
+        private string buildLine = string.Empty;
         private string shown = string.Empty;
         private float nextRefresh;
         private float nextRescan;
@@ -116,6 +118,10 @@ namespace Threefold.DevTools
             }
 
             visible = visibleAtStart;
+
+            // Which build this is, read once: the build writes the file (PrototypeBuild); without it the line says so.
+            var stamp = Resources.Load<TextAsset>(BuildStamp.ResourceName);
+            buildLine = BuildStamp.DescribeForDiagnostics(Application.isEditor, stamp != null ? stamp.text : null);
         }
 
         private void Update()
@@ -187,6 +193,8 @@ namespace Threefold.DevTools
         {
             text.Length = 0;
             CultureInfo invariant = CultureInfo.InvariantCulture;
+
+            text.Append("BUILD  ").Append(Application.version).Append(", ").Append(buildLine).AppendLine();
 
             FrameTimingSummary timing = frames.Summarize();
             text.Append("FRAME  ").Append(timing.AverageFps.ToString("0", invariant)).Append(" fps, ")

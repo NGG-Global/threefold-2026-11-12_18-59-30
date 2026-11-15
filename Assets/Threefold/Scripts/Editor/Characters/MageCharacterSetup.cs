@@ -715,7 +715,7 @@ namespace Threefold.EditorTools
         /// Why the Wayfarer model cannot be used, or null if it can: it must exist, be a valid Humanoid, and map
         /// every human bone to the same bone as Mage.fbx, whose clips it plays.
         /// </summary>
-        private static string WayfarerProblem(Avatar libraryAvatar, out GameObject model, out Avatar avatar)
+        internal static string WayfarerProblem(Avatar libraryAvatar, out GameObject model, out Avatar avatar)
         {
             model = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterModelPostprocessor.MageWayfarerModelPath);
             avatar = model != null ? LoadSubAsset<Avatar>(CharacterModelPostprocessor.MageWayfarerModelPath) : null;
