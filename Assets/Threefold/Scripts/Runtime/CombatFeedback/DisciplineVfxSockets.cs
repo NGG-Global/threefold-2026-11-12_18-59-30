@@ -16,6 +16,8 @@ namespace Threefold.CombatFeedback
 
         [SerializeField] private Animator animator;
 
+        private bool searchedForAnimator;
+
         [Tooltip("Used when no left-hand bone is found.")]
         [SerializeField] private Transform leftHand;
 
@@ -139,6 +141,14 @@ namespace Threefold.CombatFeedback
             if (index == 1 && rightHand != null)
             {
                 return rightHand;
+            }
+
+            // A visual model replaced after this was connected (a change of the Mage's look) leaves the
+            // reference empty until the level's setup runs again; the model is a child, so it is found once.
+            if (animator == null && !searchedForAnimator)
+            {
+                searchedForAnimator = true;
+                animator = GetComponentInChildren<Animator>(true);
             }
 
             if (animator != null && animator.isHuman)

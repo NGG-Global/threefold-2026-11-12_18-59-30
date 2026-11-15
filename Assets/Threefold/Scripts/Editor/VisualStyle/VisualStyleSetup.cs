@@ -231,6 +231,28 @@ namespace Threefold.EditorTools
                 : "The visual style is applied with the stock shader, because the style's own shader is not usable (see above).");
         }
 
+        /// <summary>
+        /// After the Mage's model has changed in a scene that carries the style: gives its renderers the painted
+        /// materials with the contour line again. Does nothing in a scene without the style. Returns how many
+        /// renderers changed.
+        /// </summary>
+        internal static int RestyleCharacters(Scene scene, StringBuilder report)
+        {
+            if (!IsApplied(scene))
+            {
+                return 0;
+            }
+
+            VisualStyleAssets assets = VisualStyleAssets.Ensure(report);
+            int swapped = SwapMaterials(scene, assets.Replacements);
+            if (swapped > 0)
+            {
+                report.AppendLine($"Gave {swapped} renderer(s) their painted materials with the contour line.");
+            }
+
+            return swapped;
+        }
+
         /// <summary>Puts the grey-box materials and lighting back and deletes what the style added to the scene.</summary>
         internal static void Remove(Scene scene, StringBuilder report)
         {

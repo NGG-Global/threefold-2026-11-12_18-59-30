@@ -24,6 +24,12 @@ namespace Threefold.EditorTools
     /// defaults, delete Assets/Threefold/Generated/Characters/Mage and the Mage's "MageVisual" child.
     ///
     /// If the model file is missing, nothing changes and the capsule stays.
+    ///
+    /// The mesh the Mage wears is its look (<see cref="MageLook"/>, Docs/Characters/Mage.md). Mage.fbx always
+    /// supplies the animation clips. MageWayfarer.fbx, on the same skeleton, supplies the mesh when Unity has
+    /// imported it as the same Humanoid; if it is missing or differs, the mesh inside Mage.fbx is used, as
+    /// before, and the report says why. A visual prefab generated with another look is rebuilt in place once,
+    /// so scenes that hold it follow.
     /// </summary>
     internal static class MageCharacterSetup
     {
@@ -63,7 +69,13 @@ namespace Threefold.EditorTools
             { "Cloak", new Color(0.53f, 0.27f, 0.18f) },
             { "Metal", new Color(0.62f, 0.50f, 0.29f) },
             { "Crystal", new Color(0.55f, 0.78f, 1.00f) },
+
+            // The Wayfarer look: one painted atlas, so its colour is white and the texture gives the colours.
+            { PaintKey, Color.white },
         };
+
+        /// <summary>The material of the Wayfarer look that carries the painted atlas.</summary>
+        internal const string PaintKey = "Paint";
 
         // Placeholder parts created by the grey-box setup, hidden once the model is in place.
         private static readonly string[] PlaceholderNames = { "Visual", "FacingIndicator" };
@@ -108,16 +120,20 @@ namespace Threefold.EditorTools
             Dictionary<string, Material> materials = EnsureMaterials(report);
             CombatAnimationSet combatAnimations = EnsureCombatAnimationSet(report);
             AnimatorController controller = EnsureController(report, combatAnimations);
+            GameObject prefab = EnsurePrefab(model, avatar, controller, materials, report);
 
             GameObject visual;
             if (existing != null)
             {
                 visual = existing.gameObject;
-                report.AppendLine($"Kept the existing '{VisualName}'.");
+                bool follows = prefab != null && PrefabUtility.GetCorrespondingObjectFromSource(visual) == prefab;
+                report.AppendLine(follows
+                    ? $"Kept the existing '{VisualName}'."
+                    : $"Kept the existing '{VisualName}' as it is: it is not an instance of the generated prefab, so a change " +
+                      "of look does not reach it. Delete it and run the setup again to use the generated one.");
             }
             else
             {
-                GameObject prefab = EnsurePrefab(model, avatar, controller, materials, report);
                 if (prefab == null)
                 {
                     return;
@@ -134,6 +150,7 @@ namespace Threefold.EditorTools
 
             HidePlaceholder(mage, report);
             ConnectDriver(mage, visual, report);
+            MagePersonalitySetup.Ensure(mage, visual, report);
         }
 
         // ------------------------------------------------------------------ assets
@@ -155,6 +172,17 @@ namespace Threefold.EditorTools
                     AssetDatabase.CreateAsset(material, path);
                     report.AppendLine($"Generated material 'Mage_{entry.Key}'.");
                 }
+                else if (entry.Key == PaintKey && material.mainTexture == null)
+                {
+                    // Generated before the painted texture had been imported: it would stay white for good.
+                    var paint = AssetDatabase.LoadAssetAtPath<Texture2D>(CharacterModelPostprocessor.MagePaintTexturePath);
+                    if (paint != null)
+                    {
+                        material.mainTexture = paint;
+                        EditorUtility.SetDirty(material);
+                        report.AppendLine("Gave the material 'Mage_Paint' its painted texture, which it lacked.");
+                    }
+                }
 
                 materials[entry.Key] = material;
             }
@@ -174,6 +202,20 @@ namespace Threefold.EditorTools
 
             var material = new Material(shader) { color = color, enableInstancing = true };
             SetFloat(material, "_Smoothness", 0.12f);
+
+            if (key == PaintKey)
+            {
+                var paint = AssetDatabase.LoadAssetAtPath<Texture2D>(CharacterModelPostprocessor.MagePaintTexturePath);
+                if (paint != null)
+                {
+                    material.mainTexture = paint;
+                }
+                else
+                {
+                    Debug.LogWarning($"[Threefold] The Mage's painted texture '{CharacterModelPostprocessor.MagePaintTexturePath}' " +
+                                     "was not found; the Wayfarer look would be plain white.");
+                }
+            }
 
             if (key == "Metal")
             {
@@ -642,52 +684,188 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
-        /// The model inside an empty root. The root is what the Mage holds; the inner object may be
-        /// turned or scaled to correct the model, without affecting the Mage.
+        /// Why the Wayfarer model cannot be used, or null if it can: it must exist, be a valid Humanoid, and map
+        /// every human bone to the same bone as Mage.fbx, whose clips it plays.
         /// </summary>
-        private static GameObject EnsurePrefab(GameObject model, Avatar avatar, AnimatorController controller,
+        private static string WayfarerProblem(Avatar libraryAvatar, out GameObject model, out Avatar avatar)
+        {
+            model = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterModelPostprocessor.MageWayfarerModelPath);
+            avatar = model != null ? LoadSubAsset<Avatar>(CharacterModelPostprocessor.MageWayfarerModelPath) : null;
+            if (model == null)
+            {
+                return "the file is missing";
+            }
+
+            if (avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                return "Unity did not import it as a valid Humanoid";
+            }
+
+            if (AssetDatabase.LoadAssetAtPath<Texture2D>(CharacterModelPostprocessor.MagePaintTexturePath) == null)
+            {
+                return $"its painted texture '{CharacterModelPostprocessor.MagePaintTexturePath}' is missing";
+            }
+
+            return MageLookRules.CompareHumanMappings(HumanMapping(libraryAvatar), HumanMapping(avatar));
+        }
+
+        private static List<KeyValuePair<string, string>> HumanMapping(Avatar avatar)
+        {
+            var pairs = new List<KeyValuePair<string, string>>();
+            foreach (HumanBone bone in avatar.humanDescription.human)
+            {
+                pairs.Add(new KeyValuePair<string, string>(bone.humanName, bone.boneName));
+            }
+
+            return pairs;
+        }
+
+        /// <summary>The look the generated visual prefab holds now, or null before the setup has run.</summary>
+        internal static MageLook? CurrentLook()
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
+            {
+                return null;
+            }
+
+            MageLookRules.ReadStamp(GetVersion(PrefabPath), out MageLook look, out bool _);
+            return look;
+        }
+
+        /// <summary>
+        /// Gives the generated visual prefab a look chosen by hand, which later setup runs keep. Returns false,
+        /// with the reason in the report, if that look cannot be used. The caller restyles open scenes.
+        /// </summary>
+        internal static bool UseLook(MageLook look, StringBuilder report)
+        {
+            GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterModelPostprocessor.MageModelPath);
+            Avatar avatar = LoadSubAsset<Avatar>(CharacterModelPostprocessor.MageModelPath);
+            if (model == null || avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                report.AppendLine($"The model '{CharacterModelPostprocessor.MageModelPath}' is missing or has no valid Humanoid " +
+                                  "avatar, so nothing was changed.");
+                return false;
+            }
+
+            if (look == MageLook.Wayfarer)
+            {
+                string problem = WayfarerProblem(avatar, out model, out avatar);
+                if (problem != null)
+                {
+                    report.AppendLine($"The Wayfarer look ('{CharacterModelPostprocessor.MageWayfarerModelPath}') cannot be used: " +
+                                      $"{problem}. Nothing was changed.");
+                    return false;
+                }
+            }
+
+            // Already this look: only record that it was chosen. A rebuild would give the model new identities
+            // and leave every scene's references to it empty for no gain.
+            if (CurrentLook() == look)
+            {
+                SetVersion(PrefabPath, MageLookRules.Stamp(look, true));
+                report.AppendLine($"The Mage already has the {look} look; it is now kept as a choice by hand.");
+                return true;
+            }
+
+            EnsureFolder(Folder);
+            Dictionary<string, Material> materials = EnsureMaterials(report);
+            CombatAnimationSet combatAnimations = EnsureCombatAnimationSet(report);
+            AnimatorController controller = EnsureController(report, combatAnimations);
+            return BuildPrefab(look, true, model, avatar, controller, materials, report) != null;
+        }
+
+        /// <summary>
+        /// The generated visual prefab with the look the rules decide on (<see cref="MageLookRules.Decide"/>):
+        /// created if missing, rebuilt in place if it holds another look, otherwise kept as it is.
+        /// </summary>
+        private static GameObject EnsurePrefab(GameObject libraryModel, Avatar libraryAvatar, AnimatorController controller,
             Dictionary<string, Material> materials, StringBuilder report)
         {
             GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
-            if (existing != null)
+            string problem = WayfarerProblem(libraryAvatar, out GameObject wayfarerModel, out Avatar wayfarerAvatar);
+            MageLookRules.Decision decision = MageLookRules.Decide(existing != null, GetVersion(PrefabPath), problem == null);
+
+            if (problem != null && decision.Look == MageLook.Library && !decision.ChosenByHand)
+            {
+                report.AppendLine($"{(wayfarerModel != null ? "WARNING: " : string.Empty)}The Wayfarer look " +
+                                  $"('{CharacterModelPostprocessor.MageWayfarerModelPath}') is not used: {problem}. " +
+                                  "The Mage wears the mesh of Mage.fbx.");
+            }
+
+            if (!decision.Build)
             {
                 return existing;
             }
 
-            var root = new GameObject(VisualName);
-            var inner = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
-            inner.name = ModelChildName;
-            inner.transform.localPosition = Vector3.zero;
-            inner.transform.localRotation = Quaternion.identity;
+            bool wayfarer = decision.Look == MageLook.Wayfarer;
+            return BuildPrefab(decision.Look, decision.ChosenByHand, wayfarer ? wayfarerModel : libraryModel,
+                wayfarer ? wayfarerAvatar : libraryAvatar, controller, materials, report);
+        }
 
-            if (!inner.TryGetComponent(out Animator animator))
+        /// <summary>
+        /// The model inside an empty root. The root is what the Mage holds; the inner object may be
+        /// turned or scaled to correct the model, without affecting the Mage. An existing prefab is rebuilt in
+        /// place: only its "Model" child is replaced, so scenes keep their instance and the root keeps
+        /// whatever else was put on it.
+        /// </summary>
+        private static GameObject BuildPrefab(MageLook look, bool chosenByHand, GameObject model, Avatar avatar,
+            AnimatorController controller, Dictionary<string, Material> materials, StringBuilder report)
+        {
+            bool rebuilding = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null;
+            GameObject root = rebuilding ? PrefabUtility.LoadPrefabContents(PrefabPath) : new GameObject(VisualName);
+            GameObject prefab;
+            try
             {
-                animator = inner.AddComponent<Animator>();
-            }
-
-            animator.avatar = avatar;
-            animator.runtimeAnimatorController = controller;
-            animator.applyRootMotion = false;
-            animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
-
-            foreach (SkinnedMeshRenderer renderer in inner.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-            {
-                Material[] shared = renderer.sharedMaterials;
-                for (int i = 0; i < shared.Length; i++)
+                Transform previous = root.transform.Find(ModelChildName);
+                if (previous != null)
                 {
-                    if (shared[i] != null && materials.TryGetValue(MaterialKey(shared[i].name), out Material material))
-                    {
-                        shared[i] = material;
-                    }
+                    Object.DestroyImmediate(previous.gameObject);
                 }
 
-                renderer.sharedMaterials = shared;
+                var inner = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
+                inner.name = ModelChildName;
+                inner.transform.SetAsFirstSibling();
+                inner.transform.localPosition = Vector3.zero;
+                inner.transform.localRotation = Quaternion.identity;
+
+                if (!inner.TryGetComponent(out Animator animator))
+                {
+                    animator = inner.AddComponent<Animator>();
+                }
+
+                animator.avatar = avatar;
+                animator.runtimeAnimatorController = controller;
+                animator.applyRootMotion = false;
+                animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+
+                foreach (SkinnedMeshRenderer renderer in inner.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    Material[] shared = renderer.sharedMaterials;
+                    for (int i = 0; i < shared.Length; i++)
+                    {
+                        if (shared[i] != null && materials.TryGetValue(MaterialKey(shared[i].name), out Material material))
+                        {
+                            shared[i] = material;
+                        }
+                    }
+
+                    renderer.sharedMaterials = shared;
+                }
+
+                CorrectFacingAndSize(inner, animator, report);
+                prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             }
-
-            CorrectFacingAndSize(inner, animator, report);
-
-            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
-            Object.DestroyImmediate(root);
+            finally
+            {
+                if (rebuilding)
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                }
+                else
+                {
+                    Object.DestroyImmediate(root);
+                }
+            }
 
             if (prefab == null)
             {
@@ -695,7 +873,12 @@ namespace Threefold.EditorTools
                 return null;
             }
 
-            report.AppendLine("Generated the 'MageVisual' prefab.");
+            SetVersion(PrefabPath, MageLookRules.Stamp(look, chosenByHand));
+            string name = look == MageLook.Wayfarer ? "the Wayfarer look" : "the library look (the mesh of Mage.fbx)";
+            report.AppendLine(rebuilding
+                ? $"Rebuilt the 'MageVisual' prefab with {name}. Scenes that hold it follow; run each level's setup once, " +
+                  "so the Mage's animation driver and painted materials are connected to the new model."
+                : $"Generated the 'MageVisual' prefab with {name}.");
             return prefab;
         }
 

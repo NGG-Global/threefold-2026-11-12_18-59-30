@@ -23,6 +23,18 @@ namespace Threefold.EditorTools
         internal const string CharacterFolder = "Assets/Threefold/Art/Characters/";
         internal const string MageModelPath = CharacterFolder + "Mage/Mage.fbx";
 
+        /// <summary>
+        /// The Mage's Wayfarer look: a mesh on Mage.fbx's skeleton, with a few extra bones and no clips of its
+        /// own (Tools/blender/build_mage_wayfarer.py). MageCharacterSetup uses it when it imports as the same Humanoid.
+        /// </summary>
+        internal const string MageWayfarerModelPath = CharacterFolder + "Mage/MageWayfarer.fbx";
+
+        /// <summary>The painted atlas of the Wayfarer look, written by the same script.</summary>
+        internal const string MagePaintTexturePath = CharacterFolder + "Mage/MageWayfarer_Paint.png";
+
+        /// <summary>Painted character textures are atlases of this size at most; the tiles' margins are sized for it.</summary>
+        internal const int CharacterTextureSize = 1024;
+
         private static readonly HashSet<string> LoopingClips = new HashSet<string>
         {
             "Idle", "Walk", "Jog", "Sprint", "JumpLoop", "Hang",
@@ -90,6 +102,34 @@ namespace Threefold.EditorTools
             importer.isReadable = false;
             importer.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
             importer.materialLocation = ModelImporterMaterialLocation.InPrefab;
+        }
+
+        /// <summary>True for a painted texture of a character: an image under the character folder.</summary>
+        internal static bool IsCharacterTexture(string path)
+        {
+            return !string.IsNullOrEmpty(path) && path.StartsWith(CharacterFolder) &&
+                   path.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Painted character atlases: colour, opaque, mip-mapped (distant characters must not shimmer), clamped so
+        /// the atlas edge never wraps round, trilinear, and no larger than the atlas was painted for.
+        /// </summary>
+        private void OnPreprocessTexture()
+        {
+            if (!IsCharacterTexture(assetPath) || !(assetImporter is TextureImporter importer))
+            {
+                return;
+            }
+
+            importer.textureType = TextureImporterType.Default;
+            importer.sRGBTexture = true;
+            importer.alphaSource = TextureImporterAlphaSource.None;
+            importer.mipmapEnabled = true;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.filterMode = FilterMode.Trilinear;
+            importer.maxTextureSize = CharacterTextureSize;
+            importer.isReadable = false;
         }
 
         private void OnPostprocessModel(GameObject root)

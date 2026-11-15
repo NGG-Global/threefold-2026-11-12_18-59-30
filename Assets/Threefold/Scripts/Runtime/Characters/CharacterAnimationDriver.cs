@@ -138,6 +138,13 @@ namespace Threefold.Characters
                 caster = GetComponent<AbilityCaster>();
             }
 
+            // A visual model replaced after this was connected (a change of look) leaves the reference empty
+            // until the level's setup runs again. The model is always a child, so it can be found.
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>(true);
+            }
+
             if (traversal == null)
             {
                 traversal = GetComponent<TraversalController>();

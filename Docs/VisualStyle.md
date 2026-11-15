@@ -127,8 +127,9 @@ banner, two crates) against the front of the terrace, east of the stair, so all 
 be judged in the level. Removing the style removes them.
 
 **The Mage** keeps the colours of its existing materials and gains the soft light response and
-the contour line. Its model has no texture coordinates for painted detail, so its surfaces are
-flat colour. Painted character textures are asset work for later.
+the contour line. Since Sprint 5 its Wayfarer look carries one painted atlas, which its styled
+material keeps (`Docs/Characters/Mage.md`); the Library look has no texture coordinates and stays
+flat colour. The atlas is painted by a script, not by hand.
 
 **Not styled:** the mana crystal, runes, spell effects, puzzle glows and the enemies keep their
 existing materials. The enemies are built from simple shapes with hard edges, on which a contour
@@ -270,7 +271,7 @@ acceptance evidence" (section 9).
 | Feature | Cost, reasoned from the code | How to switch it for comparison |
 | --- | --- | --- |
 | The lit shader | One texture sample, plus one more with paint variation. No normal map, no reflection probe, no physically based lighting. Ambient light is computed per vertex. Expected to cost about as much as URP's Simple Lit and less than URP Lit, which the grey-box materials use | Remove the style |
-| Contour line | The Mage's mesh is drawn twice: about 15,600 extra triangles and nine extra draws (one per material). Its pixels are a single flat colour. Switched off (F7), the nine draws remain but the hull is folded into a point and fills no pixels. Since LM-08 it stays on at every level, as part of the illustrated look | F7 |
+| Contour line | The Mage's mesh is drawn twice: about 15,600 extra triangles and nine extra draws (one per material) with the Library look, about 17,000 and two with the Wayfarer look. Its pixels are a single flat colour. Switched off (F7), the nine draws remain but the hull is folded into a point and fills no pixels. Since LM-08 it stays on at every level, as part of the illustrated look | F7 |
 | Shadows | One shadow map sample per pixel with crisp edges; four with soft edges | F6 |
 | Render scale | The largest single lever: at 0.7, half the pixels of full resolution are drawn | F6 |
 | Anti-aliasing | Usually cheap on phone graphics chips at 2 samples, but it adds memory | F6 |
@@ -409,7 +410,8 @@ normally runs without a graphics device; the setup does not rely on one.
 - Masonry joints are in the texture, so they do not line up with the edges of a block.
 - A line of full width on a small, mid-distance figure reads heavier than on a near one. Only the
   Mage is outlined, about 5 m from the camera, so this does not arise yet.
-- Characters have no painted textures. Enemies, effects and puzzle glows are not styled.
+- The Mage's only painted texture is the script-painted atlas of its Wayfarer look. Enemies, effects
+  and puzzle glows are not styled.
 - The shader does not support lightmaps, normal maps, transparency, decals, light cookies,
   shadows from point and spot lights, ambient occlusion in the lit pass, or Deferred rendering.
   **Do not bake lighting with the style applied**: static scenery would probably lose its

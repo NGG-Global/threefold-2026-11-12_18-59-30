@@ -12,7 +12,17 @@ Git LFS; a cloud checkout holds only pointers until `git lfs pull` is run.
 | Universal Animation Library, Standard | `Tools/blender/sources/quaternius-ual1/UAL1_Standard.fbx` (outside `Assets/`, not imported) | Quaternius, https://quaternius.com/packs/universalanimationlibrary.html | CC0 1.0, `License.txt` beside it |
 | Universal Animation Library 2, Standard | `Tools/blender/sources/quaternius-ual2/UAL2_Standard.fbx` (outside `Assets/`) | Quaternius, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 1.0, `License.txt` beside it |
 
-Details of the model and how it is built: `Docs/Characters/Mage.md`.
+| Mage, Wayfarer look: mesh (16,960 triangles), the same 65 bones plus nine for hair, cloak, sash and face, two materials, no clips (0.70 MB) | `Assets/Threefold/Art/Characters/Mage/MageWayfarer.fbx` | Built by `Tools/blender/build_mage_wayfarer.py` from the first library's mannequin and skeleton; everything else is generated | CC0 (derived) |
+| Painted atlas of the Wayfarer look, 1024 x 1024, twelve tiles (0.51 MB) | `Assets/Threefold/Art/Characters/Mage/MageWayfarer_Paint.png` | Painted by the same script | Project-owned (generated) |
+
+`Mage.fbx` supplies every animation clip; `MageWayfarer.fbx` supplies the mesh the Mage wears when Unity
+imports it as the same Humanoid, and the mesh inside `Mage.fbx` is the fallback. Details of both, how
+they are built and what was inspected in Sprint 5: `Docs/Characters/Mage.md`. Identity, bearing and
+remaining art requirements: `Docs/CharacterIdentity.md`.
+
+No character asset from outside these two libraries is in the repository. Considered and not added,
+because their download needs a person and the owner's decision: Quaternius' Universal Base Characters
+and Modular Character Outfits - Fantasy (both CC0, built for this rig).
 
 ### Clips in the Mage model
 
@@ -104,7 +114,7 @@ has run (the laptop and its build runner) and are never authored here.
 
 | Folder | Made by | Contents |
 | --- | --- | --- |
-| `Generated/Characters/Mage/` | `MageCharacterSetup` | `MageAnimator.controller`, `MageVisual.prefab`, `MageUpperBody.mask`, `MageCombatUpperBody.mask`, `MageCombatAnimations.asset`, `Materials/` |
+| `Generated/Characters/Mage/` | `MageCharacterSetup` | `MageAnimator.controller`, `MageVisual.prefab` (holds the Wayfarer or the Library look), `MageUpperBody.mask`, `MageCombatUpperBody.mask`, `MageCombatAnimations.asset`, `Materials/` (the nine flat colours and `Mage_Paint`) |
 | `Generated/Disciplines/` | `DisciplineSetup` | The three discipline assets, their charged abilities and effects |
 | `Generated/VFX/` | `MagicVfxSetup` | Adapted discipline effects |
 | `Generated/Combat/`, `Environment/`, `VisualStyle/`, `Puzzles/`, `Navigation/` and others | The level setups | See the document of each system |
@@ -118,4 +128,6 @@ has run (the laptop and its build runner) and are never authored here.
 | `Tools/blender/martial_styles.py` | Derives the martial-style clips from library motion (run by `build_mage.py`) |
 | `Tools/blender/analyse_martial_styles.py` | Measures the martial-style clips in the exported model; renders the review sheets in `Docs/MartialStyles/images` |
 | `Tools/blender/compare_mage.py` | Compares two builds of the model: skeleton, mesh, materials, and every shared clip bone by bone |
+| `Tools/blender/build_mage_wayfarer.py` | Builds `MageWayfarer.fbx` and paints `MageWayfarer_Paint.png`; renders the previews in `Docs/Characters/images` |
+| `Tools/blender/check_mage_wayfarer.py` | Checks the Wayfarer model against `Mage.fbx`: the 65 bones, the extra bones, texture coordinates, triangle budget, materials |
 | `Tools/visualstyle/render_previews.sh` | Renders the visual style previews outside Unity |
