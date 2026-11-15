@@ -18,8 +18,6 @@ namespace Threefold.Tests
     {
         private const float Frame = 1f / 60f;
         private static readonly float[] FrameRates = { 15f, 30f, 60f, 120f };
-        private static object probe;
-
         private readonly List<AerialEvent> events = new List<AerialEvent>();
         private AerialAbilityModel model;
         private AerialMotion motion;
@@ -718,19 +716,13 @@ namespace Threefold.Tests
         [Test]
         public void SteadyFramesAllocateNothing()
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            probe = new object[8];
-            if (GC.GetAllocatedBytesForCurrentThread() == before)
-            {
-                Assert.Inconclusive("This runtime does not count allocations. The result comes from the .NET runner of " +
-                                    "Tools/ci/compile_check.sh.");
-            }
+            AllocationMeter.Require();
 
             var kinds = new[] { AerialAbilityKind.Ascension, AerialAbilityKind.Glide, AerialAbilityKind.Dash };
             events.Capacity = 64;
             for (int warm = 0; warm < 2; warm++)
             {
-                before = GC.GetAllocatedBytesForCurrentThread();
+                AllocationMeter.Begin();
                 for (int round = 0; round < 30; round++)
                 {
                     events.Clear();
@@ -748,8 +740,8 @@ namespace Threefold.Tests
                 }
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            Assert.AreEqual(0, allocated, "bytes allocated by 30 airborne sequences");
+            long allocated = AllocationMeter.End();
+            Assert.AreEqual(0, allocated, "allocated by 30 airborne sequences");
         }
     }
 }

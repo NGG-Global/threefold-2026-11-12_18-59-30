@@ -1151,7 +1151,7 @@ namespace Threefold.Tests
             nearest.Offer(door, 1f, 8);
             nearest.Clear();
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int frame = 0; frame < 500; frame++)
             {
                 nearest.Offer(door, frame, 8);
@@ -1175,7 +1175,7 @@ namespace Threefold.Tests
                 sink += FeedbackPresentation.Breath(frame * 0.016f, 0.5f, true);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated, "The per-frame rules must not allocate.");
             Assert.Greater(sink, 0f);
         }

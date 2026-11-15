@@ -176,7 +176,7 @@ cat > "$RUNNER/runner.csproj" <<'CSPROJ'
 CSPROJ
 ( cd "$RUNNER" && dotnet build -c Release -v q --nologo > build.log 2>&1 ) || { cat "$RUNNER/build.log"; exit 1; }
 dotnet "$RUNNER/bin/Release/net8.0/runner.dll" "$OUT/Threefold.Tests.Editor.dll" "$OUT" "$DATA/Managed/UnityEngine" "$NUNIT_DIR" "$DATA/NetStandard/compat/2.1.0/shims/netfx" > "$OUT/tests.log" 2>&1 || FAILED=1
-grep -E '^(FAIL|TOTAL)' "$OUT/tests.log" || true
+grep -E '^(FAIL|INCONCLUSIVE|IGNORED|TOTAL)' "$OUT/tests.log" || true
 
 if [ "$FAILED" != "0" ]; then echo; echo "TESTS FAILED (see $OUT/tests.log)"; exit 1; fi
 

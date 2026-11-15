@@ -51,9 +51,13 @@ Balanced. These values are proposals carried over from Sprint 11 and have not be
 
 Each area: what the project does now (read from the code and settings), and what remains open.
 "Checked by test" means an automated test covers it; everything else was read, not measured. The
-allocation tests count with `GC.GetAllocatedBytesForCurrentThread` and give their result in the
-.NET 8 runner of `compile_check.sh`. Unity's Mono runtime is reported to return 0 from that counter
-whatever is allocated, so in Unity's own test run these tests are inconclusive rather than passed.
+allocation tests count through `AllocationMeter`. In the .NET 8 runner of `compile_check.sh` it reads
+`GC.GetAllocatedBytesForCurrentThread`. Unity's Mono runtime returns 0 from that counter whatever is
+allocated (the tests were inconclusive in every Unity run up to 15 November 2026 for that reason), so in
+Unity the meter reads the profiler's `GC.Alloc` recorder instead, the counter behind Unity's own
+`Is.Not.AllocatingGCMemory` constraint. That path was written without Unity at hand and has not run yet:
+until a Unity run shows these tests passed, treat their Unity result as unknown. Where neither counter
+works a test stays inconclusive; it is never reported as passed.
 Neither runtime is IL2CPP: the tests show that the C# allocates nothing, which IL2CPP does not
 change, but they are not a measurement on the device.
 

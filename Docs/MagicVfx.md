@@ -114,7 +114,7 @@ built by `MagicVfxPackAdapter`.
 | Slot | Arcane | Flame | Aegis |
 | --- | --- | --- | --- |
 | Limb trail | `ArcaneLimbTrail` (procedural: trail renderer, motes) | `FlameLimbTrail` (procedural: trail, flames by distance) | `AegisLimbTrail` (procedural: trail) |
-| Swing effect | `ArcaneSweepRibbon` (procedural ribbon, scripted arc) | `FlameSlash_FreeSlash` (Free Slash `Slash Fire VFX`, adapted) | none (Aegis has no slash) |
+| Swing effect | `ArcaneSweepRibbon` (procedural ribbon, scripted arc) | `FlameSlash_FreeSlash` (Free Slash `Slash Fire VFX`, adapted) | `AegisSlash_Hovl` (Hovl `Charge slash blue`, adapted). Shown only where the body effects are off: the Aegis timing has no swing moment (`swingFrom` is None) |
 | Gather | - | - | `AegisGather` (procedural) |
 | Contact | `ArcaneContact` (procedural) | `FlameContact` (procedural) | `AegisRipple` (procedural) |
 | Heavy contact | - | - | `AegisHeavyRing` (procedural) |

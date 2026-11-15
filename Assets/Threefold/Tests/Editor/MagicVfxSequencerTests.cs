@@ -15,7 +15,15 @@ namespace Threefold.Tests
     public sealed class MagicVfxSequencerTests
     {
         private readonly List<BodyEffectCommand> output = new List<BodyEffectCommand>();
-        private static object probe;
+        /// <summary>
+        /// NUnit uses one object of this class for all its tests, so the list would still hold the commands
+        /// of the test before.
+        /// </summary>
+        [SetUp]
+        public void ClearOutput()
+        {
+            output.Clear();
+        }
 
         private static BodyActionInfo Melee(MagicDiscipline discipline, int id, float secondsToContact = 0.12f, bool heavy = false,
             CombatEffector effector = CombatEffector.RightHand)
@@ -438,13 +446,7 @@ namespace Threefold.Tests
         [Test]
         public void SteadyFramesAllocateNothing()
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            probe = new object[8];
-            if (GC.GetAllocatedBytesForCurrentThread() == before)
-            {
-                Assert.Inconclusive("This runtime does not count allocations. The result comes from the .NET runner of " +
-                                    "Tools/ci/compile_check.sh.");
-            }
+            AllocationMeter.Require();
 
             var sequencer = new BodyEffectSequencer();
             var commands = new List<BodyEffectCommand>(64);
@@ -454,7 +456,7 @@ namespace Threefold.Tests
             // Warm up once so the list has grown.
             Run(sequencer, commands, melee, charge, 0f);
 
-            before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int i = 0; i < 200; i++)
             {
                 melee.ActionId = 10 + i * 2;
@@ -462,8 +464,8 @@ namespace Threefold.Tests
                 Run(sequencer, commands, melee, charge, i);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            Assert.AreEqual(0, allocated, "bytes allocated by 200 strikes and charges");
+            long allocated = AllocationMeter.End();
+            Assert.AreEqual(0, allocated, "allocated by 200 strikes and charges");
         }
 
         private static void Run(BodyEffectSequencer sequencer, List<BodyEffectCommand> commands, BodyActionInfo melee,

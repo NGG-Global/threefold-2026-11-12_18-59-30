@@ -448,9 +448,12 @@ namespace Threefold.Tests.Editor
         [Test]
         public void RandomPlayNeverLeavesAnAttackPlayingOrTheMageSlowed([Values(11, 23, 37)] int seed)
         {
+            // Forty seconds of play, and longer if that brought few attacks: random play holds the guard or has
+            // the hands busy for much of the time, so over 60 seeds the first 40 seconds start between 9 and 43
+            // strikes. The run goes on until more than 20 have started, so every seed tests what it is meant to.
             var random = new System.Random(seed);
             var run = new StyleRun(MagicDiscipline.Arcane);
-            for (int second = 0; second < 40; second++)
+            for (int second = 0; second < 40 || (run.Started.Count <= 20 && second < 120); second++)
             {
                 run.RandomSecond(random);
             }

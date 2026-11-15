@@ -65,6 +65,17 @@ namespace Threefold.Tests
             Assert.IsNotNull(aegis.heavyContactEffect);
             Assert.IsNotNull(aegis.areaWaveEffect.GetComponent<ArcEmitterEffect>());
             Assert.IsNotNull(aegis.blockBarrierEffect);
+
+            // The first pack adaptations (Generated/VFX/Adapted) are outside the budget; none may stay in use.
+            foreach (DisciplineDefinition definition in definitions)
+            {
+                DisciplinePresentation look = definition.Presentation;
+                foreach (Pooling.PooledObject effect in new[] { look.meleeSwingEffect, look.meleeImpactEffect, look.chargeLoopEffect })
+                {
+                    StringAssert.DoesNotContain("/VFX/Adapted/", UnityEditor.AssetDatabase.GetAssetPath(effect),
+                        $"{definition.DisplayName}: {effect.name}");
+                }
+            }
         }
 
         [Test]
