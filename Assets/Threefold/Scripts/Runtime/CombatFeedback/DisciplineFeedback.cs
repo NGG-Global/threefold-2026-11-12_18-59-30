@@ -21,6 +21,11 @@ namespace Threefold.CombatFeedback
     /// It listens to <see cref="DisciplineCombat"/>, the caster, the guard and the combat events and
     /// changes nothing in the rules. Effects are pooled and short. Interrupted swings and cancelled
     /// charges stop their looping or in-flight presentation so nothing keeps playing after the action.
+    ///
+    /// When a <see cref="DisciplineBodyEffects"/> on the same object shows the same combat, the effects on the
+    /// body (the swing effect, the charge buildup and the release) are left to it, timed by the animation cues,
+    /// so none is shown twice. The ground arcs, the impacts on what was struck, the status effects, the guard
+    /// spark and the camera shake stay here.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DisciplineFeedback : MonoBehaviour
@@ -83,6 +88,8 @@ namespace Threefold.CombatFeedback
         private PlayerGuard subscribedGuard;
         private PooledObject activeSwing;
         private PooledObject activeCharge;
+        private DisciplineBodyEffects bodyEffects;
+        private bool styleSearched;
 
         /// <summary>Connects the component. Called by the setup tooling.</summary>
         public void Bind(DisciplineCombat disciplineCombat, ThirdPersonCamera rig, CharacterAnimationDriver driver,
@@ -168,6 +175,8 @@ namespace Threefold.CombatFeedback
 
         private void OnEnable()
         {
+            bodyEffects = GetComponent<DisciplineBodyEffects>();
+            styleSearched = false;
             subscribedCombat = combat;
             if (subscribedCombat != null)
             {
@@ -240,11 +249,18 @@ namespace Threefold.CombatFeedback
                 swing.Step.startupSeconds + 0.14f);
 
             StopSwingEffect();
-            if (look.meleeSwingEffect != null)
+            if (look.meleeSwingEffect != null && !BodyEffectsShown)
             {
                 Vector3 point = EffectPoint(swing.Origin, look.effectHeight);
                 Quaternion rotation = LookAlong(swing.Direction);
                 activeSwing = SpawnShared(look.meleeSwingEffect, point, rotation, MaxSwingEffects);
+
+                // A ribbon swept by script needs its arc; it is stopped like any swing effect when the hit lands.
+                if (activeSwing != null && activeSwing.TryGetComponent(out ArcEmitterEffect ribbon))
+                {
+                    ribbon.Play(point, swing.Direction, swing.Step.reach, swing.Step.arcDegrees,
+                        swing.Step.startupSeconds + 0.12f, discipline.Color, CurrentBurstShare());
+                }
             }
 
             // The combat animation director plays the swing itself when it is active.
@@ -273,7 +289,8 @@ namespace Threefold.CombatFeedback
                 {
                     if (struck[i] != null)
                     {
-                        SpawnShared(impact, struck[i].AimPoint, Quaternion.identity, MaxImpacts);
+                        // Along the swing, so a directional burst points the way the blow travelled.
+                        SpawnShared(impact, struck[i].AimPoint, LookAlong(swing.Direction), MaxImpacts);
                     }
                 }
             }
@@ -294,7 +311,7 @@ namespace Threefold.CombatFeedback
         private void HandleChargeBegan(DisciplineDefinition discipline)
         {
             StopChargeEffect();
-            if (discipline == null || discipline.Presentation.chargeLoopEffect == null)
+            if (discipline == null || discipline.Presentation.chargeLoopEffect == null || BodyEffectsShown)
             {
                 return;
             }
@@ -342,7 +359,7 @@ namespace Threefold.CombatFeedback
                 PlaySweep(look.sweepEffect, shape.Origin, shape.Forward, shape.Reach, shape.ArcDegrees, color, areaSeconds);
             }
 
-            if (look.releaseEffect != null)
+            if (look.releaseEffect != null && !BodyEffectsShown)
             {
                 Vector3 origin = look.chargeLoopEffect != null ? HandsPoint(look.effectHeight) : context.Origin;
                 SpawnShared(look.releaseEffect, origin, Quaternion.LookRotation(context.Direction), MaxImpacts);
@@ -477,10 +494,14 @@ namespace Threefold.CombatFeedback
             return instance;
         }
 
+        /// <summary>True while a body-effects component shows the swing, charge and release of this combat.</summary>
+        private bool BodyEffectsShown => bodyEffects != null && bodyEffects.isActiveAndEnabled && bodyEffects.Combat == combat;
+
         private float CurrentBurstShare()
         {
-            if (style == null)
+            if (style == null && !styleSearched)
             {
+                styleSearched = true;
                 style = FindAnyObjectByType<VisualStyleController>();
             }
 
@@ -589,8 +610,8 @@ namespace Threefold.CombatFeedback
 
             if (subscribedCombat != null)
             {
-                sockets = subscribedCombat.GetComponent<DisciplineVfxSockets>()
-                    ?? subscribedCombat.GetComponentInChildren<DisciplineVfxSockets>(true);
+                // Not '??': a missing component compares equal to null only through Unity's own operator.
+                sockets = subscribedCombat.GetComponentInChildren<DisciplineVfxSockets>(true);
             }
 
             return sockets;

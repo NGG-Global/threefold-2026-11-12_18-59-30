@@ -106,6 +106,13 @@ namespace Threefold.Combat
         private bool baseScaleKnown;
         private int effectEventId;
 
+        /// <summary>
+        /// Raised when any projectile is launched and is in flight (one that struck at point-blank range is not
+        /// announced). For presentation only (a ribbon that follows it); the projectile flies the same with or
+        /// without listeners, and a listener that fails cannot stop it.
+        /// </summary>
+        public static event System.Action<Projectile> Launched;
+
         /// <summary>The kind of magic this projectile carries.</summary>
         public SpellElement Element
         {
@@ -226,8 +233,34 @@ namespace Threefold.Combat
                         Impact(transform.position, -data.Direction, overlaps[i]);
                     }
 
+                    // Turned aside at point-blank range it still flies; struck, it is already back in its pool.
+                    if (flying)
+                    {
+                        AnnounceLaunch();
+                    }
+
                     return;
                 }
+            }
+
+            AnnounceLaunch();
+        }
+
+        /// <summary>Tells whoever shows projectiles. A listener that fails is reported and cannot stop the flight.</summary>
+        private void AnnounceLaunch()
+        {
+            if (Launched == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Launched(this);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogException(exception, this);
             }
         }
 
@@ -243,6 +276,7 @@ namespace Threefold.Combat
         {
             Deflectable.Clear();
             flyingCount = 0;
+            Launched = null;
         }
 
         private void SetFlying(bool value)

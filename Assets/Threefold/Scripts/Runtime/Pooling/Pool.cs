@@ -46,6 +46,12 @@ namespace Threefold.Pooling
                 if (instance != null)
                 {
                     instance.gameObject.SetActive(false);
+
+                    // The oldest may still be attached to a hand or a projectile from its previous use.
+                    if (root != null && instance.transform.parent != root)
+                    {
+                        instance.transform.SetParent(root, false);
+                    }
                 }
             }
 
@@ -56,6 +62,7 @@ namespace Threefold.Pooling
             }
 
             instance.transform.SetPositionAndRotation(position, rotation);
+            instance.MarkSpawned();
             instance.gameObject.SetActive(true);
             active.Add(instance);
             return instance;

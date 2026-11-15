@@ -2,6 +2,7 @@ using System.Text;
 using Threefold.Cameras;
 using Threefold.Characters;
 using Threefold.Combat;
+using Threefold.CombatAnimation;
 using Threefold.CombatFeedback;
 using Threefold.Magic;
 using Threefold.Pooling;
@@ -103,6 +104,11 @@ namespace Threefold.EditorTools
             EnsureSharedEffects(glow, report);
             TryAdaptPacks(glow, report);
             WireDisciplinePresentations(report);
+
+            // Sprint 3: effects timed by the animation cues, and Android-ready copies of pack effects.
+            MagicVfxPrefabs.EnsureAll(glow, report);
+            AdaptPackEffects(report);
+            WireCueTimedEffects(report);
             AssetDatabase.SaveAssets();
         }
 
@@ -860,6 +866,222 @@ namespace Threefold.EditorTools
                     path.Contains("Embers") || path.Contains("GuardSpark") || path.Contains("PushDust"));
         }
 
+
+        // ------------------------------------------------- cue-timed effects (Sprint 3)
+
+        // Pack effects adapted into Generated/VFX/Packs. Chosen from Docs/MagicVfx/PackInventory.md.
+        private const string FreeSlashImpactPath = "Assets/Free Slash VFX/Prefabs/Impact.prefab";
+        private const string FreeSlashFirePath = "Assets/Free Slash VFX/Prefabs/Slash Fire VFX.prefab";
+        private const string HovlSparksRedPath = "Assets/Hovl Studio/Magic effects pack/Prefabs/Sparks/Sparks explode red.prefab";
+        private const string HovlGroundAoePath = "Assets/Hovl Studio/Magic effects pack/Prefabs/AoE effects/Ground AOE explosion.prefab";
+
+        private static void AdaptPackEffects(StringBuilder report)
+        {
+            Color arcane = MagicVfxPrefabs.Soft(DisciplineCatalog.Get(MagicDiscipline.Arcane).Color);
+            Color flame = MagicVfxPrefabs.Soft(DisciplineCatalog.Get(MagicDiscipline.Flame).Color);
+            Color aegis = MagicVfxPrefabs.Soft(DisciplineCatalog.Get(MagicDiscipline.Aegis).Color);
+
+            MagicVfxPackAdapter.Adapt(FreeSlashImpactPath, "ArcaneImpact_FreeSlash", arcane, 0.6f, MagicVfxRole.Burst, 0.55f, report);
+            MagicVfxPackAdapter.Adapt(FreeSlashFirePath, "FlameSlash_FreeSlash", flame, 0.4f, MagicVfxRole.Burst, 0.7f, report);
+            MagicVfxPackAdapter.Adapt(HovlSparksRedPath, "FlameSparks_Hovl", flame, 0.4f, MagicVfxRole.Burst, 0.6f, report);
+            MagicVfxPackAdapter.Adapt(HovlGroundAoePath, "ForcePulseImpact_Hovl", aegis, 0.7f, MagicVfxRole.Burst, 0.45f, report);
+        }
+
+        /// <summary>
+        /// Fills the presentation slots of the cue-timed effects, and the slots an earlier run of this command filled
+        /// with its own previous defaults. A slot that holds anything else (an effect the owner chose) is kept.
+        /// </summary>
+        private static void WireCueTimedEffects(StringBuilder report)
+        {
+            for (int slot = 0; slot < DisciplineCatalog.Count; slot++)
+            {
+                var discipline = (MagicDiscipline)slot;
+                string key = DisciplineCatalog.Get(discipline).Name;
+                DisciplineDefinition definition =
+                    AssetDatabase.LoadAssetAtPath<DisciplineDefinition>($"{DisciplineSetup.Folder}/{key}.asset");
+                if (definition == null)
+                {
+                    continue;
+                }
+
+                DisciplinePresentation look = definition.Presentation;
+                bool changed = false;
+
+                if (look.bodyTiming == null || !look.bodyTiming.configured)
+                {
+                    look.bodyTiming = MagicVfxDefaults.For(discipline);
+                    changed = true;
+                }
+
+                switch (discipline)
+                {
+                    case MagicDiscipline.Arcane:
+                        changed |= Upgrade(ref look.meleeSwingEffect, MagicVfxPrefabs.Load("ArcaneSweepRibbon"));
+                        changed |= Upgrade(ref look.meleeImpactEffect, MagicVfxPackAdapter.Load("ArcaneImpact_FreeSlash"));
+                        changed |= Upgrade(ref look.chargeLoopEffect, MagicVfxPrefabs.Load("ArcaneChargeGather"));
+                        changed |= Upgrade(ref look.limbTrailEffect, MagicVfxPrefabs.Load("ArcaneLimbTrail"));
+                        changed |= Upgrade(ref look.contactEffect, MagicVfxPrefabs.Load("ArcaneContact"));
+                        changed |= Upgrade(ref look.projectileTrailEffect, MagicVfxPrefabs.Load("ArcaneArrowRibbon"));
+                        break;
+
+                    case MagicDiscipline.Flame:
+                        changed |= Upgrade(ref look.meleeSwingEffect, MagicVfxPackAdapter.Load("FlameSlash_FreeSlash"));
+                        changed |= Upgrade(ref look.meleeImpactEffect, MagicVfxPackAdapter.Load("FlameSparks_Hovl"));
+                        changed |= Upgrade(ref look.chargeLoopEffect, MagicVfxPrefabs.Load("FlameChargeHeat"));
+                        changed |= Upgrade(ref look.limbTrailEffect, MagicVfxPrefabs.Load("FlameLimbTrail"));
+                        changed |= Upgrade(ref look.contactEffect, MagicVfxPrefabs.Load("FlameContact"));
+                        changed |= Upgrade(ref look.lingerEffect, MagicVfxPrefabs.Load("FlameLinger"));
+                        changed |= Upgrade(ref look.areaWaveEffect, MagicVfxPrefabs.Load("FlameWaveFront"));
+                        break;
+
+                    case MagicDiscipline.Aegis:
+                        changed |= Upgrade(ref look.meleeImpactEffect, MagicVfxPrefabs.Load("AegisRipple"));
+                        changed |= Upgrade(ref look.chargeLoopEffect, MagicVfxPrefabs.Load("AegisChargeCompress"));
+                        changed |= Upgrade(ref look.limbTrailEffect, MagicVfxPrefabs.Load("AegisLimbTrail"));
+                        changed |= Upgrade(ref look.gatherEffect, MagicVfxPrefabs.Load("AegisGather"));
+                        changed |= Upgrade(ref look.contactEffect, MagicVfxPrefabs.Load("AegisRipple"));
+                        changed |= Upgrade(ref look.heavyContactEffect, MagicVfxPrefabs.Load("AegisHeavyRing"));
+                        changed |= Upgrade(ref look.areaWaveEffect, MagicVfxPrefabs.Load("AegisPulseRing"));
+                        changed |= Upgrade(ref look.blockBarrierEffect, MagicVfxPrefabs.Load("AegisBarrier"));
+                        changed |= Upgrade(ref look.deflectEffect, MagicVfxPrefabs.Load("AegisDeflectFlash"));
+                        break;
+                }
+
+                if (changed)
+                {
+                    EditorUtility.SetDirty(definition);
+                    report.AppendLine($"Connected the cue-timed effects of '{key}'.");
+                }
+
+                WireChargedImpact(definition, discipline, report);
+            }
+        }
+
+        private static void WireChargedImpact(DisciplineDefinition definition, MagicDiscipline discipline, StringBuilder report)
+        {
+            if (definition.ChargedAbility is ChargedProjectileDefinition shot && discipline == MagicDiscipline.Arcane)
+            {
+                PooledObject impact = shot.ImpactEffectPrefab;
+                if (Upgrade(ref impact, MagicVfxPackAdapter.Load("ArcaneImpact_FreeSlash")))
+                {
+                    shot.ConfigureProjectile(shot.ProjectilePrefab, impact, shot.Projectile);
+                    EditorUtility.SetDirty(shot);
+                    report.AppendLine("Gave the Arcane Arrow the adapted Free Slash impact.");
+                }
+            }
+            else if (definition.ChargedAbility is ChargedAreaDefinition area)
+            {
+                PooledObject impact = area.ImpactEffectPrefab;
+                PooledObject wanted = discipline == MagicDiscipline.Aegis
+                    ? MagicVfxPackAdapter.Load("ForcePulseImpact_Hovl")
+                    : MagicVfxPrefabs.Load("WorldHeatArrival");
+                if (Upgrade(ref impact, wanted))
+                {
+                    area.ConfigureArea(area.Area, impact);
+                    EditorUtility.SetDirty(area);
+                    report.AppendLine($"Gave the charged attack of '{definition.DisplayName}' its impact effect.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sets a slot when it is empty, or when it holds an effect an earlier version of the setup generated as a
+        /// default. Returns true if the slot changed.
+        /// </summary>
+        private static bool Upgrade(ref PooledObject field, PooledObject value)
+        {
+            if (value == null || field == value)
+            {
+                return false;
+            }
+
+            if (field == null || IsPreviousDefault(field))
+            {
+                field = value;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// True for effects generated by earlier versions of the setup commands: the SoftGlow placeholders under
+        /// Generated/Disciplines, the procedural bursts at the top of Generated/VFX, and the first pack adaptations
+        /// under Generated/VFX/Adapted. Never true for an effect the owner made or chose elsewhere.
+        /// </summary>
+        private static bool IsPreviousDefault(PooledObject effect)
+        {
+            if (IsSoftGlowPlaceholder(effect))
+            {
+                return true;
+            }
+
+            string path = AssetDatabase.GetAssetPath(effect);
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            if (path.StartsWith(Folder + "/Adapted/"))
+            {
+                return true;
+            }
+
+            string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
+            string file = System.IO.Path.GetFileNameWithoutExtension(path);
+            return folder == Folder && (file.EndsWith("MeleeSlash") || file.EndsWith("MeleeImpact") ||
+                                        file.EndsWith("ChargeLoop") || file.EndsWith("ReleaseBurst") ||
+                                        file == "DeflectSpark");
+        }
+
+        private static void EnsureCueTimedSceneWiring(GameObject visuals, GameObject mage, DisciplineVfxSockets sockets,
+            VisualStyleController style, StringBuilder report)
+        {
+            DisciplineCombat combat = mage.GetComponent<DisciplineCombat>();
+            if (combat == null)
+            {
+                return;
+            }
+
+            CombatAnimationDirector director = mage.GetComponent<CombatAnimationDirector>();
+            PlayerGuard guard = mage.GetComponent<PlayerGuard>();
+
+            if (!visuals.TryGetComponent(out DisciplineBodyEffects body))
+            {
+                body = Undo.AddComponent<DisciplineBodyEffects>(visuals);
+                body.Bind(combat, director, sockets, guard, style);
+                MarkChanged(body);
+                report.AppendLine("Added the body effects timed by the animation cues: limb trails, gathering force, " +
+                                  "contact, embers, charge buildup, release, the projectile ribbon, waves and the barrier.");
+            }
+            else if (body.Combat == null)
+            {
+                Undo.RecordObject(body, DialogTitle);
+                body.Bind(combat, director, sockets, guard, style);
+                MarkChanged(body);
+            }
+
+            if (!visuals.TryGetComponent(out WorldMagicFeedback world))
+            {
+                world = Undo.AddComponent<WorldMagicFeedback>(visuals);
+                world.Bind(MagicVfxPrefabs.Load("WorldChargeInflow"), MagicVfxPrefabs.Load("WorldHeatArrival"),
+                    MagicVfxPrefabs.Load("WorldForceArrival"), MagicVfxPrefabs.Load("WorldBraceArrival"),
+                    mage.GetComponent<PlayerDisciplines>(), style);
+                MarkChanged(world);
+                report.AppendLine("Added the world feedback: charge flowing into objects, heat, force and bracing arriving.");
+            }
+            else
+            {
+                Undo.RecordObject(world, DialogTitle);
+                if (world.FillEffects(MagicVfxPrefabs.Load("WorldChargeInflow"), MagicVfxPrefabs.Load("WorldHeatArrival"),
+                        MagicVfxPrefabs.Load("WorldForceArrival"), MagicVfxPrefabs.Load("WorldBraceArrival")))
+                {
+                    MarkChanged(world);
+                    report.AppendLine("Filled the world feedback's missing effects.");
+                }
+            }
+        }
+
         // --------------------------------------------------------------- scene
 
         private static void EnsureSceneWiring(Scene scene, GameObject mage, StringBuilder report)
@@ -925,6 +1147,7 @@ namespace Threefold.EditorTools
             }
 
             MarkChanged(feedback);
+            EnsureCueTimedSceneWiring(visuals, mage, sockets, style, report);
         }
     }
 }

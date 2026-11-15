@@ -1,5 +1,10 @@
 # Magical Disciplines VFX Audit & Integration Plan
 
+> **Update, Sprint 3.** The integration this audit planned is now in `Docs/MagicVfx.md`: effects timed by the
+> combat animation cues, pack effects adapted into project-owned copies under `Generated/VFX/Packs`, an Android
+> budget and validation command, and a generated inventory of the packs (`Docs/MagicVfx/PackInventory.md`)
+> that supersedes the counts below where they differ.
+
 **Status:** Assessment only — no gameplay, prefab, or third-party asset changes in this change.  
 **Date:** 2026-11-14  
 **Unity:** 6000.6.0f1 · URP 17.6.0 · Android (IL2CPP, min API 26)  
