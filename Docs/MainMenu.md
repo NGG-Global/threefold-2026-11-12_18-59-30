@@ -18,8 +18,10 @@ On the laptop: **Threefold > Setup > Main Menu**, then Play. The command creates
 Run **Threefold > Setup > Fantasy Playground** once as well if it has not been run: Continue and New Game
 load that scene.
 
-The Android build is unchanged in this step. It still starts in the Fantasy Playground; the menu becomes
-its first scene only after the owner has seen it in the Editor (see [Next steps](#next-steps)).
+The Android build still starts in the Fantasy Playground; the menu becomes its first scene only after the
+owner has seen it (see [Next steps](#next-steps)). Since the visual-review build, the development APK holds
+the menu as a review scene: open the diagnostics in any level, press **Scenes** and choose **Main Menu**.
+Continue and New Game lead from there to the Fantasy Playground. The menu itself has no diagnostics.
 
 ## Decisions and proposals
 

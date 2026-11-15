@@ -161,13 +161,21 @@ The run's summary page says which case applies.
 
 Both routes call `Threefold.EditorTools.PrototypeBuild.BuildAndroid`, which:
 
-1. Assembles the Broken Foundry, the Combat Arena and the Fantasy Playground from code, including
-   all generated assets.
+1. Assembles six scenes from code, including all generated assets: the Fantasy Playground, the Combat
+   Arena and the Broken Foundry (the game), and the Style Lab, the main menu and the Reference Courtyard
+   (review scenes, `PrototypeBuild.DevelopmentScenes`).
 2. Validates each scene and stops if anything is missing (for example a discipline without its
    charged attack, which is how run 4 failed).
 3. Sets the package ID `com.nggglobal.threefold`, the product and company names, and landscape-only rotation.
-4. Builds a development APK (not an app bundle) containing those scenes. The diagnostics overlay's
-   **Next scene** button moves between them.
+4. Builds a development APK (not an app bundle) containing those scenes. It starts in the Fantasy
+   Playground, as before. The review scenes are reached only through the diagnostics: three-finger tap,
+   **Scenes**, then the scene's name; or, with the diagnostics shown, a four-finger tap for the next scene.
+   The diagnostics' first line names the build: version, commit, run number, branch and time.
+
+With the input **review_renders** ticked, the run also draws the Reference Courtyard from fixed viewpoints
+and offers the pictures as `threefold-review-renders-<number>` (`Docs/VisualReferencePrototype.md`). They
+are Editor renders, not pictures of the game on a device. If the runner cannot draw, only the pictures are
+lost; the APK is still built.
 
 Because the scene is assembled during the build, nothing generated has to be committed first.
 
