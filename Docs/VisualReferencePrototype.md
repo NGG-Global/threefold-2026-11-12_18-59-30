@@ -58,7 +58,7 @@ Measured by test in Unity (run 22), not on a device:
 
 | Measure | Value | Limit set in the layout |
 | --- | --- | --- |
-| Triangles of the whole generated environment | see `Docs/LivingMagicTesting.md`, run 22 | 30,000 (a design limit, not a measured budget) |
+| Triangles of the whole generated environment | 12,962 (9,922 before the ridges and the fuller vines, run 21) | 30,000 (a design limit, not a measured budget) |
 | Transparent or alpha-tested materials in the environment | 0 | 0 |
 | Lights | 1 (the sun) | 1 |
 | Particle systems, reflection probes | 0 | 0 |

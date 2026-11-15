@@ -69,6 +69,8 @@ below).
 | 18 | `5fb4867` (the Wayfarer tests, no fix), tests only | 1,168 tests, 1,164 passed, **4 failed**: the four new `MageWayfarerLookTests`, as intended. Their messages gave the first cause |
 | 19 | `a20ad34` (texture fix), tests only | 1,168 tests, 1,165 passed, **3 failed**. The texture test passed; the other three gave the second cause |
 | 20 | `ca670a9` (both fixes), tests only | **Green.** 1,169 tests, **1,169 passed**, 0 failed, 0 inconclusive |
+| 21 | `4846dd0` (Reference Courtyard and visual-review build), tests and review renders | 1,206 tests, 1,205 passed, **1 failed**: a new test allowed the Mage no height above the ground, where the rig sets him 0.1 m up (a fault of the test). **First pictures drawn by Unity**: six review renders of the Reference Courtyard (Direct3D 11, Intel graphics, Editor quality level `PC`). The first picture showed one texture on every surface; the others were right |
+| 22 | `dba0ada` (ridges, vines, slabs, render warm-up, test corrected), tests, renders and APK | **Green.** EditMode: **1,206 tests, 1,206 passed**, 0 failed, 0 inconclusive. Six renders, all right. APK built with 0 errors (artifact `threefold-android-development-22`, 62 MB zip): **six scenes** (Fantasy Playground first, Combat Arena, Broken Foundry, Style Lab, Main Menu, Reference Courtyard); the build log reads "Build stamp: commit dba0ada, run 22"; no warning that the Wayfarer look is unused. Reference Courtyard environment: 12,962 triangles |
 
 Later runs are recorded below as they complete.
 
@@ -120,6 +122,21 @@ tests that need Unity and had never run before; none was in game code:
 | `BrokenFoundryAssemblyTests.AssemblingTheFoundryTwiceGivesTheSameScene` ("A tuned value is kept: expected 7, was 25") | The test tuned the hazard without saving, and the setup opens the scene from disk. The setup itself keeps an existing hazard | The test saves the scene after tuning, as a person would |
 | `BrokenFoundryAssemblyTests.FoundryIsCompleteConnectedAndValid` ("Checkpoint 1: the Mage fits there") | The first checkpoint's respawn point is the level's start, where the Mage stands; the test counted the Mage's own collider. The other five checkpoints passed | The test ignores the Mage's colliders and names anything else in the way |
 | `MagicalObjectSetupTests.EveryExampleIsGeneratedCompleteAndValid` ("ArcaneCrystal: a reaction to linked targets only, but none listed") | The validator (LM-04) applied a rule for placed objects to the crystal's prefab template, whose links are given where it is placed | The rule skips prefab assets; a placed crystal without links is still reported (`AnIdentifierWithNothingToSaveAndABrokenLinkAreReported` covers it) |
+
+### Unity: the visual-review build and the Reference Courtyard (runs 21 and 22)
+
+Checked by test in Unity (`ReferenceCourtyardAssemblyTests`): every scene of the development build is
+assembled, valid, saved and loads; each but the main menu has the diagnostics with the scene list; the
+courtyard holds what its layout says, has no transparent material, one light, no particle system, and
+12,962 triangles; the Mage in it wears the Wayfarer mesh, the painted atlas and the style's material; the
+game's camera has the values the composition tests assume.
+
+Seen in renders (Editor renders, `Docs/VisualReferencePrototype.md`): the composition, the painted stone,
+the haze, the Wayfarer look and its contour line, the Mage facing forward.
+
+**Not verified:** the APK has not been installed. The scene list's buttons and the four-finger tap have not
+been tried with touch. The build line has been read in the build log, not on a screen. Nothing has been
+measured on a device. In the renders the Mage stands in the model's rest pose.
 
 ### Not tested
 
