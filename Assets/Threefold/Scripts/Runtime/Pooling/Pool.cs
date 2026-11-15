@@ -68,6 +68,13 @@ namespace Threefold.Pooling
                 return;
             }
 
+            // Effects parented to hand sockets must return under the pool root, or the next spawn
+            // would still follow a bone from a previous attack.
+            if (root != null)
+            {
+                instance.transform.SetParent(root, false);
+            }
+
             instance.gameObject.SetActive(false);
             inactive.Push(instance);
         }

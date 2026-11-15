@@ -13,12 +13,25 @@ namespace Threefold.Magic
         [Tooltip("Effect spawned on each target a melee swing hits.")]
         public PooledObject meleeImpactEffect;
 
+        [Tooltip("Oriented slash or force burst played when a melee swing starts. World-space at swing height.")]
+        public PooledObject meleeSwingEffect;
+
         [Tooltip("Flat shape flashed on the ground for a swing and for an area attack. Shared by all disciplines; " +
                  "the discipline's colour tints it.")]
         public PooledObject sweepEffect;
 
+        [Tooltip("Looping charge buildup at the hands while a charged attack is held. Stopped on release or cancel.")]
+        public PooledObject chargeLoopEffect;
+
         [Tooltip("Effect spawned at the caster when the charged attack is released.")]
         public PooledObject releaseEffect;
+
+        [Tooltip("Optional. Spark or shield flash where a projectile is deflected. Falls back to the shared guard spark.")]
+        public PooledObject deflectEffect;
+
+        [Tooltip("Height above the character origin for melee swing and charge effects, in metres.")]
+        [Min(0f)]
+        public float effectHeight = 1.15f;
 
         [Tooltip("Animator trigger set when the charged attack is released. Ignored if the Animator has no such parameter.")]
         public string chargedAnimationTrigger = "Cast";
