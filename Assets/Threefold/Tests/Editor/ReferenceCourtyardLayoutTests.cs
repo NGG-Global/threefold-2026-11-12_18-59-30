@@ -128,15 +128,33 @@ namespace Threefold.Tests
         }
 
         [Test]
-        public void TheValleyAxisBehindTheArchIsOpen()
+        public void TheWoodedRidgesStayLowAndTheRangesCloseTheValley()
         {
-            foreach (L.Hill hill in L.Hills)
+            float castleFoot = L.Elevation(L.Castle);
+            int ahead = 0;
+            foreach (L.Ridge ridge in L.Ridges)
             {
-                if (hill.Position.z > L.Arch.z && hill.Wooded)
+                float distance = new Vector2(ridge.Position.x, ridge.Position.z).magnitude;
+                Assert.Greater(distance - ridge.Length * 0.5f, L.TerraceHalf, $"Ridge {ridge.Seed} would stand on the terrace.");
+                Assert.GreaterOrEqual(ridge.Peaks, 5, "A ridge is a range, not a single peak.");
+
+                if (ridge.Wooded)
                 {
-                    Assert.Greater(Mathf.Abs(L.Bearing(hill.Position)), 10f, $"The wooded hill at {hill.Position} closes the view through the arch.");
+                    Assert.Less(L.Elevation(ridge.Top), castleFoot + 3f, $"The wooded ridge {ridge.Seed} rises into the castle or the sky behind the arch.");
+                }
+                else
+                {
+                    Assert.Greater(distance, 250f, $"The bare range {ridge.Seed} is far off.");
+                    Assert.Less(distance, L.HazeEnd + 40f, $"The bare range {ridge.Seed} is lost in the haze.");
+                    if (ridge.Position.z > 250f)
+                    {
+                        ahead++;
+                        Assert.Less(L.Elevation(ridge.Top), L.TopOfViewElevation + 6f);
+                    }
                 }
             }
+
+            Assert.GreaterOrEqual(ahead, 2, "Ranges close the valley ahead.");
         }
 
         [Test]
@@ -147,6 +165,7 @@ namespace Threefold.Tests
             {
                 float distance = new Vector2(hill.Position.x, hill.Position.z).magnitude;
                 Assert.Greater(distance, L.TerraceHalf * 2f, $"The hill at {hill.Position} would stand on the terrace.");
+                Assert.Less(hill.Position.z, 0f, "Single mountains stand only behind the viewer; the view ahead is made of ridges.");
             }
         }
 

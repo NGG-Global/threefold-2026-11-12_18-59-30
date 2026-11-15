@@ -143,7 +143,7 @@ namespace Threefold.EditorTools
             Mesh flagstones = assets.EnsureMesh(ReferenceCourtyardMeshes.Name("Flagstones"), ReferenceCourtyardMeshes.BuildFlagstones);
             GameObject worn = FantasyPlaygroundSetup.CreateMeshObject(architecture, "Flagstones", flagstones, assets.StoneMaterial,
                 Vector3.zero, false);
-            worn.GetComponent<MeshRenderer>().sharedMaterials = new[] { assets.StoneMaterial, assets.DarkStoneMaterial };
+            worn.GetComponent<MeshRenderer>().sharedMaterials = new[] { assets.StoneMaterial, assets.PavingMaterial };
             worn.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
 
             FantasyPlaygroundSetup.Place(assets.Dais, architecture, L.Dais, 0f);
@@ -276,6 +276,16 @@ namespace Threefold.EditorTools
                 }
 
                 QuietDistance(instance);
+            }
+
+            foreach (L.Ridge ridge in L.Ridges)
+            {
+                Mesh mesh = assets.EnsureMesh(ReferenceCourtyardMeshes.Name("Ridge" + ridge.Seed),
+                    () => ReferenceCourtyardMeshes.BuildRidge(ridge.Length, ridge.Height, ridge.Peaks, ridge.Seed, ridge.Wooded));
+                GameObject range = FantasyPlaygroundSetup.CreateMeshObject(parent, (ridge.Wooded ? "WoodedRidge" : "Range") + ridge.Seed, mesh,
+                    ridge.Wooded ? assets.FoliageMaterial : assets.MountainMaterial, ridge.Position, false);
+                range.transform.rotation = Quaternion.Euler(0f, ridge.Yaw, 0f);
+                QuietDistance(range);
             }
 
             Mesh castle = assets.EnsureMesh(ReferenceCourtyardMeshes.Name("Castle"), ReferenceCourtyardMeshes.BuildCastle);

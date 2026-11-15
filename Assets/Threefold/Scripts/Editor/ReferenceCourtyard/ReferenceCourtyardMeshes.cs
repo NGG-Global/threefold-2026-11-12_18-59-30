@@ -16,7 +16,7 @@ namespace Threefold.EditorTools
     internal static class ReferenceCourtyardMeshes
     {
         /// <summary>Part of every mesh's name. Raise it when a builder here changes, so the new shape is generated.</summary>
-        internal const string Version = "v1";
+        internal const string Version = "v2";
 
         private const int Main = 0;
         private const int Accent = 1;
@@ -123,8 +123,10 @@ namespace Threefold.EditorTools
         // ------------------------------------------------------------ paving
 
         /// <summary>
-        /// What makes the flat paving read as old: single slabs standing a little proud of it, in two tones of
-        /// stone, and a kerb round the courtyard with gaps. The dais in the middle is left clear.
+        /// What makes the flat paving read as old: single slabs standing a centimetre or two proud of it, in a
+        /// second tone, and a kerb round the courtyard with gaps. The dais in the middle is left clear.
+        /// (The first version stood up to five centimetres proud in a much darker stone, and in the renders
+        /// of run 21 the slabs read as loose plates lying on the floor.)
         /// </summary>
         internal static Mesh BuildFlagstones()
         {
@@ -132,7 +134,7 @@ namespace Threefold.EditorTools
             var b = new ProceduralMeshBuilder();
 
             int placed = 0;
-            for (int attempt = 0; attempt < 400 && placed < 54; attempt++)
+            for (int attempt = 0; attempt < 400 && placed < 36; attempt++)
             {
                 float x = EnvironmentAssets.Range(random, -L.HalfWidth + 1.4f, L.HalfWidth - 1.4f);
                 float z = EnvironmentAssets.Range(random, -L.HalfDepth + 1.4f, L.HalfDepth - 1.4f);
@@ -142,10 +144,10 @@ namespace Threefold.EditorTools
                     continue;
                 }
 
-                var size = new Vector3(EnvironmentAssets.Range(random, 0.9f, 1.9f), EnvironmentAssets.Range(random, 0.025f, 0.05f),
+                var size = new Vector3(EnvironmentAssets.Range(random, 0.9f, 1.9f), EnvironmentAssets.Range(random, 0.008f, 0.02f),
                     EnvironmentAssets.Range(random, 0.8f, 1.6f));
                 float yaw = EnvironmentAssets.Range(random, -6f, 6f) + (random.Next(2) == 0 ? 0f : 90f);
-                b.AddBox(new Vector3(x, size.y * 0.5f, z), size, Quaternion.Euler(0f, yaw, 0f), random.Next(3) == 0 ? Accent : Main);
+                b.AddBox(new Vector3(x, size.y * 0.5f, z), size, Quaternion.Euler(0f, yaw, 0f), random.Next(4) == 0 ? Accent : Main);
                 placed++;
             }
 
@@ -185,7 +187,9 @@ namespace Threefold.EditorTools
         /// the lower edge, over a few stems. Nothing is transparent, so it costs no overdraw beyond its own
         /// small leaves. In the mesh's own space X runs along the wall, Y is up, and Z points off the wall; the
         /// origin is the middle of the upper edge. All leaves share the wall's direction as their normal, so the
-        /// vine is lit as one mass and does not flicker leaf by leaf.
+        /// vine is lit as one mass and does not flicker leaf by leaf. (The first version had half as many
+        /// leaves, standing further off the wall on thicker stems; in the renders of run 21 it read as loose
+        /// leaves on wires.)
         /// </summary>
         internal static Mesh BuildVine(float width, float drop, int seed)
         {
@@ -205,25 +209,25 @@ namespace Threefold.EditorTools
             for (int i = 0; i < stems; i++)
             {
                 float x = -width * 0.5f + (i + EnvironmentAssets.Range(random, 0.2f, 0.8f)) * width / stems;
-                float reach = Reach(x) * 0.95f;
+                float reach = Reach(x) * 0.8f;
                 float sway = EnvironmentAssets.Range(random, -0.18f, 0.18f);
-                var topLeft = new Vector3(x - 0.02f, 0.05f, 0.03f);
-                var topRight = new Vector3(x + 0.02f, 0.05f, 0.03f);
-                var bottomRight = new Vector3(x + sway + 0.015f, -reach, 0.03f);
-                var bottomLeft = new Vector3(x + sway - 0.015f, -reach, 0.03f);
+                var topLeft = new Vector3(x - 0.012f, 0.05f, 0.02f);
+                var topRight = new Vector3(x + 0.012f, 0.05f, 0.02f);
+                var bottomRight = new Vector3(x + sway + 0.008f, -reach, 0.02f);
+                var bottomLeft = new Vector3(x + sway - 0.008f, -reach, 0.02f);
                 b.AddQuad(topLeft, topRight, bottomRight, bottomLeft, Vector3.forward, Accent);
             }
 
-            int leaves = Mathf.RoundToInt(width * drop * 15f);
+            int leaves = Mathf.RoundToInt(width * drop * 30f);
             for (int i = 0; i < leaves; i++)
             {
                 float x = EnvironmentAssets.Range(random, -width * 0.5f, width * 0.5f);
 
                 // More leaves near the top than at the tips.
-                float along = Mathf.Pow(EnvironmentAssets.Range(random, 0f, 1f), 1.5f);
+                float along = Mathf.Pow(EnvironmentAssets.Range(random, 0f, 1f), 1.25f);
                 float y = 0.12f - along * Reach(x);
-                float z = EnvironmentAssets.Range(random, 0.05f, 0.16f);
-                float size = EnvironmentAssets.Range(random, 0.11f, 0.2f) * (1f - 0.25f * along);
+                float z = EnvironmentAssets.Range(random, 0.03f, 0.1f);
+                float size = EnvironmentAssets.Range(random, 0.13f, 0.24f) * (1f - 0.25f * along);
                 float roll = EnvironmentAssets.Range(random, 0f, Mathf.PI * 2f);
 
                 var centre = new Vector3(x, y, z);
@@ -257,6 +261,54 @@ namespace Threefold.EditorTools
             b.AddPrism(new Vector3(0f, 0.16f, 0f), 0.2f, 0.26f, 0.34f, 6, Accent);
             b.AddPrism(new Vector3(0f, 0.5f, 0f), 0.26f, 0f, 0.42f, 6, Accent);
             return b.Build(Name("Light"));
+        }
+
+        // ------------------------------------------------------------ ridges
+
+        /// <summary>
+        /// A range of hills or mountains as one mesh: peaks of uneven height and width along a line, each with
+        /// a lower shoulder, overlapping so that no gap shows the valley floor between them. Seen from far
+        /// off through haze it is an outline; the single pyramids of the environment's mountain module, used
+        /// for the view ahead at first, read as pyramids (renders of run 21). The ridge runs along X, its
+        /// foot on the origin's level. Wooded ridges are rounder: their peaks are cut off low and capped.
+        /// </summary>
+        internal static Mesh BuildRidge(float length, float height, int peaks, int seed, bool wooded)
+        {
+            var random = new Random(seed);
+            var b = new ProceduralMeshBuilder();
+            peaks = Mathf.Max(3, peaks);
+            float spacing = length / peaks;
+
+            for (int i = 0; i < peaks; i++)
+            {
+                float x = -length * 0.5f + (i + 0.5f) * spacing + EnvironmentAssets.Range(random, -0.2f, 0.2f) * spacing;
+                float z = EnvironmentAssets.Range(random, -0.25f, 0.25f) * spacing;
+
+                // Highest towards the middle of the range, never the same twice.
+                float towardsMiddle = 1f - Mathf.Abs((i + 0.5f) / peaks - 0.5f) * 1.1f;
+                float peak = height * Mathf.Clamp01(towardsMiddle) * EnvironmentAssets.Range(random, 0.62f, 1f);
+                peak = Mathf.Max(peak, height * 0.28f);
+                float radius = spacing * EnvironmentAssets.Range(random, 1.05f, 1.6f) + peak * (wooded ? 0.9f : 0.35f);
+                Quaternion turn = Quaternion.Euler(0f, EnvironmentAssets.Range(random, 0f, 60f), 0f);
+                var foot = new Vector3(x, 0f, z);
+
+                if (wooded)
+                {
+                    b.AddPrism(foot, radius, radius * 0.42f, peak * 0.72f, 8, turn, Main);
+                    b.AddPrism(foot + Vector3.up * (peak * 0.72f), radius * 0.42f, 0f, peak * 0.28f, 8, turn, Main);
+                }
+                else
+                {
+                    b.AddPrism(foot, radius, 0f, peak, 6, turn, Main);
+
+                    // A shoulder beside the peak breaks the cone's straight side.
+                    float side = random.Next(2) == 0 ? -1f : 1f;
+                    b.AddPrism(foot + new Vector3(side * radius * 0.45f, 0f, -radius * 0.2f), radius * 0.7f, 0f,
+                        peak * EnvironmentAssets.Range(random, 0.5f, 0.75f), 5, turn, Main);
+                }
+            }
+
+            return b.Build(Name("Ridge" + seed));
         }
 
         // ------------------------------------------------------------ the castle

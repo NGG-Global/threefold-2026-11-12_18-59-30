@@ -82,6 +82,17 @@ namespace Threefold.Tests
             Assert.IsNotNull(root.Find("Background/Castle"), "The castle.");
             Assert.IsNotNull(root.Find("Background/ValleyFloor"), "The valley.");
 
+            int ridges = 0;
+            foreach (Transform child in root.Find("Background"))
+            {
+                if (child.name.StartsWith("WoodedRidge") || child.name.StartsWith("Range"))
+                {
+                    ridges++;
+                }
+            }
+
+            Assert.AreEqual(L.Ridges.Length, ridges, "The ridges of the valley.");
+
             int vines = 0;
             foreach (Transform child in root.Find("Nature"))
             {
@@ -173,7 +184,10 @@ namespace Threefold.Tests
             }
 
             Assert.IsNotNull(mage, "The courtyard has the Mage.");
-            Assert.Less(Vector3.Distance(L.Spawn, mage.transform.position), 0.01f, "He stands where the composition expects him.");
+            // The rig sets a new Mage a little above the ground, to settle on it when the game starts.
+            Vector3 offset = mage.transform.position - L.Spawn;
+            Assert.Less(new Vector2(offset.x, offset.z).magnitude, 0.01f, "He stands where the composition expects him.");
+            Assert.Less(Mathf.Abs(offset.y), 0.25f);
 
             SkinnedMeshRenderer[] renderers = mage.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             Assert.Greater(renderers.Length, 0);

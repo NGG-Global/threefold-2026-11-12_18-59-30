@@ -14,8 +14,9 @@ namespace Threefold.EditorTools
     ///
     /// What the pictures are, and are not: they are rendered by Unity's own renderer with the game's shaders,
     /// materials and lighting, through the scene's own camera. They are rendered in the Editor, which uses the
-    /// Editor's quality level and render-pipeline asset, not the phone's; nothing is animated, so the Mage
-    /// stands in the model's rest pose and effects that need the game to run are absent; and no touch control
+    /// Editor's quality level and render-pipeline asset, not the phone's; nothing is animated (the Mage is
+    /// given his idle stance once, if Unity allows it outside Play mode) and effects that need the game to
+    /// run are absent; and no touch control
     /// or HUD is drawn. They show composition, materials and light. They do not show how the game looks or
     /// performs on a device.
     /// </summary>
@@ -39,6 +40,36 @@ namespace Threefold.EditorTools
             }
 
             EditorApplication.Exit(code);
+        }
+
+        /// <summary>
+        /// Lets every Animator of the scene take the first pose of its controller (the idle stance), so that the
+        /// Mage does not stand in the model's rest pose with his arms out. Nothing moves after that: the
+        /// pictures show a pose, not animation. If Unity refuses outside Play mode, the rest pose stays.
+        /// </summary>
+        private static void PoseCharacters(Scene scene)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                foreach (Animator animator in root.GetComponentsInChildren<Animator>(true))
+                {
+                    try
+                    {
+                        if (animator.runtimeAnimatorController == null || !animator.gameObject.activeInHierarchy)
+                        {
+                            continue;
+                        }
+
+                        animator.Rebind();
+                        animator.Update(0f);
+                        animator.Update(0.4f);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning($"[Threefold] '{animator.name}' could not be posed for the review renders: {exception.Message}");
+                    }
+                }
+            }
         }
 
         private static bool Capture()
@@ -67,6 +98,16 @@ namespace Threefold.EditorTools
             {
                 view.targetTexture = target;
                 view.fieldOfView = L.CameraVerticalFov;
+
+                PoseCharacters(scene);
+
+                // The first picture Unity draws after starting showed one texture on every surface (run 21:
+                // the whole courtyard in the foliage's leaves), and the pictures after it were right. Why is
+                // not established. Two pictures are therefore drawn and thrown away before the first is kept.
+                L.Viewpoint first = L.Viewpoints[0];
+                view.transform.SetPositionAndRotation(first.Position, Quaternion.LookRotation(first.Target - first.Position, Vector3.up));
+                view.Render();
+                view.Render();
 
                 foreach (L.Viewpoint viewpoint in L.Viewpoints)
                 {

@@ -125,29 +125,70 @@ namespace Threefold.EditorTools
             }
         }
 
-        /// <summary>The valley: wooded hills in the middle distance, blue mountains behind them, a ring behind the viewer.</summary>
+        /// <summary>
+        /// Behind and beside the viewer, so that turning round never shows an empty horizon: single mountains
+        /// of the environment's own kind. The view ahead is made of ridges instead (<see cref="Ridges"/>).
+        /// </summary>
         internal static readonly Hill[] Hills =
         {
-            // Wooded hills on both sides of the valley, leaving the axis of the arch open.
-            new Hill(-95f, -ValleyDrop, 150f, 0.55f, 20f, true),
-            new Hill(-40f, -ValleyDrop, 205f, 0.45f, 140f, true),
-            new Hill(62f, -ValleyDrop, 170f, 0.4f, 250f, true),
-            new Hill(175f, -ValleyDrop, 150f, 0.6f, 80f, true),
-            new Hill(-170f, -ValleyDrop, 95f, 0.6f, 300f, true),
-
-            // Mountains closing the valley.
-            new Hill(-150f, -ValleyDrop, 300f, 1.25f, 0f, false),
-            new Hill(-20f, -ValleyDrop, 335f, 1.0f, 70f, false),
-            new Hill(120f, -ValleyDrop, 320f, 1.3f, 200f, false),
-            new Hill(270f, -ValleyDrop, 240f, 1.2f, 130f, false),
-            new Hill(-285f, -ValleyDrop, 170f, 1.2f, 40f, false),
-
-            // Behind and beside the viewer, so that turning round never shows an empty horizon.
             new Hill(-300f, -ValleyDrop, -60f, 1.1f, 10f, false),
             new Hill(-190f, -ValleyDrop, -260f, 1.3f, 95f, false),
             new Hill(40f, -ValleyDrop, -310f, 1.2f, 180f, false),
             new Hill(250f, -ValleyDrop, -210f, 1.25f, 260f, false),
-            new Hill(315f, -ValleyDrop, 20f, 1.1f, 330f, false),
+            new Hill(330f, -ValleyDrop, -40f, 1.1f, 330f, false),
+        };
+
+        internal readonly struct Ridge
+        {
+            /// <summary>The middle of the ridge's foot, on the valley floor.</summary>
+            internal readonly Vector3 Position;
+
+            /// <summary>The ridge runs along its own X axis; yaw turns it about Y.</summary>
+            internal readonly float Yaw;
+
+            internal readonly float Length;
+
+            /// <summary>The height of its highest peak above the valley floor.</summary>
+            internal readonly float Height;
+
+            internal readonly int Peaks;
+            internal readonly int Seed;
+
+            /// <summary>True for a near, wooded ridge; false for a far, bare one.</summary>
+            internal readonly bool Wooded;
+
+            internal Ridge(float x, float z, float yaw, float length, float height, int peaks, int seed, bool wooded)
+            {
+                Position = new Vector3(x, -ValleyDrop, z);
+                Yaw = yaw;
+                Length = length;
+                Height = height;
+                Peaks = peaks;
+                Seed = seed;
+                Wooded = wooded;
+            }
+
+            /// <summary>The highest point it can reach, above the middle of its foot.</summary>
+            internal Vector3 Top => Position + Vector3.up * Height;
+        }
+
+        /// <summary>
+        /// The valley ahead, in layers that the haze separates: low wooded ridges on both sides in the middle
+        /// distance, and bare ranges closing the view behind them. Each is one mesh of overlapping peaks.
+        /// </summary>
+        internal static readonly Ridge[] Ridges =
+        {
+            // Wooded, near: low enough to stay under the castle and to leave the sky behind the arch open.
+            new Ridge(-120f, 140f, 25f, 170f, 30f, 9, 101, true),
+            new Ridge(-55f, 230f, -5f, 130f, 26f, 7, 102, true),
+            new Ridge(205f, 150f, -35f, 150f, 30f, 8, 103, true),
+            new Ridge(-175f, 60f, 70f, 120f, 34f, 7, 104, true),
+
+            // Bare, far.
+            new Ridge(-90f, 330f, 8f, 320f, 105f, 9, 201, false),
+            new Ridge(170f, 345f, -12f, 280f, 125f, 8, 202, false),
+            new Ridge(-290f, 190f, 65f, 260f, 110f, 8, 203, false),
+            new Ridge(310f, 215f, -60f, 240f, 100f, 7, 204, false),
         };
 
         // ------------------------------------------------------------ walls and columns
