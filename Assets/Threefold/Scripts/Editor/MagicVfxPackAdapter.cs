@@ -236,7 +236,7 @@ namespace Threefold.EditorTools
         /// requires its Light), so those go first; a part that holds nothing but the light goes as a whole.
         /// Returns true only if the light is gone.
         /// </summary>
-        private static bool RemoveLight(Light light)
+        internal static bool RemoveLight(Light light)
         {
             GameObject part = light.gameObject;
             Component[] components = part.GetComponents<Component>();

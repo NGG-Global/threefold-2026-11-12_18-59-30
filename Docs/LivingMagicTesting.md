@@ -39,8 +39,10 @@ windows must be consecutive, a new choice gives 60 another chance, 30 not watche
 times ignored, no allocation); the diagnostics warnings; and zero allocation per frame for the
 reaction queue, the six example objects, the simulation step and a creature with armour and ward.
 An allocation injected into the queue and into the property set was caught by these tests
-(576,000 bytes each) before being removed. The allocation results hold for the .NET runner; in
-Unity's own test run they are inconclusive, because Unity's Mono does not count allocations.
+(576,000 bytes each) before being removed. The allocation results hold for the .NET runner. In
+Unity's own test runs up to 15 November 2026 they were inconclusive, because Unity's Mono does not count
+allocated bytes; since then the tests read Unity's `GC.Alloc` recorder there (see the run of 15 November
+below).
 
 ### Unity: Android builds on the laptop runner
 
@@ -63,6 +65,22 @@ Unity's own test run they are inconclusive, because Unity's Mono does not count 
 | 13 | `11552e1` (`main` plus the scripts' handling of a lock left by an interrupted run), tests and APK | **Succeeded.** The scripts set the leftover lock aside (renamed, not deleted). EditMode: 878 tests, 873 passed, **0 failed**, 5 inconclusive. APK built in 6 minutes (the runner's import cache was warm). Artifact `threefold-android-development-13` (54.2 MB zip). The game code is the same as `main`'s |
 
 Later runs are recorded below as they complete.
+
+### Unity: EditMode tests on `main`, 15 November 2026 (reported by the owner)
+
+1,119 tests: 1,102 passed, **7 failed**, 10 inconclusive. The results file was not available to the
+cloud session; the causes below were found from the failure messages and the code, and five of the seven
+failures were reproduced outside Unity once the plain runner behaved like NUnit (see the last row).
+**The fixes have not run in Unity yet.**
+
+| Test | Kind | Cause | Fix |
+| --- | --- | --- | --- |
+| `BrokenFoundryAssemblyTests.AssemblingTheFoundryTwiceGivesTheSameScene` (a Light cannot be removed while `UniversalAdditionalLightData` depends on it) | Defect in the setup tooling | The first pack adaptation in `MagicVfxSetup` (`Generated/VFX/Adapted`) removed lights with a plain `DestroyImmediate`. The two Free Slash slashes carry a Light with URP's additional light data, which requires its Light: Unity refuses, logs an error and leaves the light in the effect. The error fails whichever test first generates the effects | It now removes lights the way `MagicVfxPackAdapter` already did: the components that require the Light first |
+| `MagicVfxSetupTests.EveryMagicEffectIsWithinTheAndroidBudget` (`AegisSlash_Hovl`: 2 Built-in materials, 6 systems, up to 288 particles) | Defect in the setup tooling | The Aegis swing was the one presentation slot the cue-timed wiring never replaced, so it still held the first adaptation of Hovl's `Charge slash blue`. That path hides systems over its limit by deactivating their objects, which leaves their emission, their Built-in materials and their particle limits in place, and it caps each system at 48 particles, not the effect | The same pack effect is adapted by `MagicVfxPackAdapter` as a burst (at most 3 systems, 48 particles in all, URP copies of the materials) and replaces the old one in the slot. The budget is unchanged |
+| `MagicVfxSequencerTests`, four tests (expected 0 or 1, was 1, 2 or 3) | Test defect | The class keeps its command list in a field. NUnit uses one object of a class for all its tests, so each test started with the commands of the one before | The list is cleared before every test |
+| `MartialStylesTests.RandomPlayNeverLeavesAnAttackPlayingOrTheMageSlowed(23)` (expected more than 20 attacks, was 15) | Wrong assumption in the test | Every stuck-state assertion passed. The last line assumed 40 seconds of random play always start more than 20 strikes; random play holds the guard or has the hands busy for much of that time, and over 60 seeds the count runs from 9 to 43 (seed 23: 15, deterministically, on .NET as in Unity). The test had never run: the plain runner could not call a test with `[Values]`, and Unity had not run this suite | The play goes on, up to 120 seconds, until more than 20 strikes have started. The threshold and every assertion are unchanged |
+| 10 inconclusive allocation tests | Limit of the measurement | Unity's Mono returns 0 from `GC.GetAllocatedBytesForCurrentThread`. An eleventh test, `DiscoveryTests`' allocation test, had no check for that and passed in Unity without measuring anything | `AllocationMeter`: bytes on .NET, the profiler's `GC.Alloc` recorder in Unity; inconclusive only where neither works. All eleven use it |
+| The plain runner of `compile_check.sh` | Tooling | It made a new object for every test and could not call tests with `[Values]`, so it could not show the five test-side failures above | One object per class and one test per value, as NUnit does; inconclusive and ignored tests are counted apart |
 
 ### Unity: EditMode tests (run 6, the first time they ran in Unity)
 

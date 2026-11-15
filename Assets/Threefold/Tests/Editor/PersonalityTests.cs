@@ -17,8 +17,6 @@ namespace Threefold.Tests
         private const float Frame = 1f / 60f;
         private static readonly float[] FrameRates = { 20f, 30f, 60f, 120f };
         private static readonly MagicDiscipline[] Disciplines = { MagicDiscipline.Arcane, MagicDiscipline.Flame, MagicDiscipline.Aegis };
-        private static object probe;
-
         private static PersonalityPoseModel Model(MagicDiscipline discipline, uint seed = 7u)
         {
             var model = new PersonalityPoseModel(PersonalityDefaults.Create(), seed);
@@ -790,13 +788,7 @@ namespace Threefold.Tests
         [Test]
         public void AFrameAllocatesNothing()
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            probe = new object[8];
-            if (GC.GetAllocatedBytesForCurrentThread() == before)
-            {
-                Assert.Inconclusive("This runtime does not count allocations. The result comes from the .NET runner of " +
-                                    "Tools/ci/compile_check.sh.");
-            }
+            AllocationMeter.Require();
 
             PersonalityPoseModel model = Model(MagicDiscipline.Arcane);
             // Warm up every path once: discipline changes, each activity, both reactions, looks.
@@ -810,7 +802,7 @@ namespace Threefold.Tests
                 }
             }
 
-            long start = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int i = 0; i < 5000; i++)
             {
                 model.Advance(Frame, Disciplines[(i / 200) % 3], (PersonalityActivity)((i / 150) % 7));
@@ -821,7 +813,7 @@ namespace Threefold.Tests
                 }
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - start;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated, "The bearing is decided every frame and must allocate nothing.");
         }
     }

@@ -16,8 +16,6 @@ namespace Threefold.Tests
     public sealed class CombatAnimationTests
     {
         private const float Frame = 1f / 60f;
-        private static object probe;
-
         // ------------------------------------------------------------------ time warp
 
         private static CombatAnimationSlot Slot(float seconds, float entry, float contact, float recoveryEnd)
@@ -807,13 +805,7 @@ namespace Threefold.Tests
         [Test]
         public void TheModelAllocatesNothingPerFrameOnceWarm()
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            probe = new object[8];
-            if (GC.GetAllocatedBytesForCurrentThread() == before)
-            {
-                Assert.Inconclusive("This runtime does not count allocations. The result comes from the .NET runner of " +
-                                    "Tools/ci/compile_check.sh.");
-            }
+            AllocationMeter.Require();
 
             var model = new CombatAnimationModel(CombatAnimationDefaults.CreateMage());
             var body = new CombatBodyState(true, 1f);
@@ -839,11 +831,11 @@ namespace Threefold.Tests
             }
 
             Play(480);
-            long start = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             Play(2400);
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - start;
+            long allocated = AllocationMeter.End();
 
-            Assert.AreEqual(0L, allocated, "bytes allocated over 40 seconds of combat");
+            Assert.AreEqual(0L, allocated, "allocated over 40 seconds of combat");
         }
     }
 }

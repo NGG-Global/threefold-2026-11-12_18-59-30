@@ -618,9 +618,14 @@ namespace Threefold.EditorTools
 
         private static void StripHeavyModules(GameObject root, bool stripCollision, bool stripAudio, bool stripDistortion)
         {
+            // Not DestroyImmediate on the Light: URP's additional light data requires its Light, and Unity then
+            // refuses with an error and leaves the light in the effect (the Free Slash slashes have one).
             foreach (Light light in root.GetComponentsInChildren<Light>(true))
             {
-                Object.DestroyImmediate(light);
+                if (light != null)
+                {
+                    MagicVfxPackAdapter.RemoveLight(light);
+                }
             }
 
             if (stripAudio)
@@ -875,6 +880,9 @@ namespace Threefold.EditorTools
         private const string HovlSparksRedPath = "Assets/Hovl Studio/Magic effects pack/Prefabs/Sparks/Sparks explode red.prefab";
         private const string HovlGroundAoePath = "Assets/Hovl Studio/Magic effects pack/Prefabs/AoE effects/Ground AOE explosion.prefab";
 
+        /// <summary>The Aegis swing effect in Generated/VFX/Packs (Hovl "Charge slash blue", adapted).</summary>
+        internal const string AegisSwingName = "AegisSlash_Hovl";
+
         private static void AdaptPackEffects(StringBuilder report)
         {
             Color arcane = MagicVfxPrefabs.Soft(DisciplineCatalog.Get(MagicDiscipline.Arcane).Color);
@@ -885,6 +893,11 @@ namespace Threefold.EditorTools
             MagicVfxPackAdapter.Adapt(FreeSlashFirePath, "FlameSlash_FreeSlash", flame, 0.4f, MagicVfxRole.Burst, 0.7f, report);
             MagicVfxPackAdapter.Adapt(HovlSparksRedPath, "FlameSparks_Hovl", flame, 0.4f, MagicVfxRole.Burst, 0.6f, report);
             MagicVfxPackAdapter.Adapt(HovlGroundAoePath, "ForcePulseImpact_Hovl", aegis, 0.7f, MagicVfxRole.Burst, 0.45f, report);
+
+            // The Aegis swing was the one slot still holding a first adaptation from Generated/VFX/Adapted, which
+            // kept all six systems of the pack prefab and two Built-in materials. The same pack effect, within the
+            // budget of a burst. Its size is unchanged.
+            MagicVfxPackAdapter.Adapt(HovlChargeBlue, AegisSwingName, aegis, 0.7f, MagicVfxRole.Burst, 1f, report);
         }
 
         /// <summary>
@@ -939,6 +952,7 @@ namespace Threefold.EditorTools
                         break;
 
                     case MagicDiscipline.Aegis:
+                        changed |= Upgrade(ref look.meleeSwingEffect, MagicVfxPackAdapter.Load(AegisSwingName));
                         changed |= Upgrade(ref look.meleeImpactEffect, MagicVfxPrefabs.Load("AegisRipple"));
                         changed |= Upgrade(ref look.chargeLoopEffect, MagicVfxPrefabs.Load("AegisChargeCompress"));
                         changed |= Upgrade(ref look.limbTrailEffect, MagicVfxPrefabs.Load("AegisLimbTrail"));

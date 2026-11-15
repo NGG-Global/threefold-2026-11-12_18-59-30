@@ -12,30 +12,20 @@ namespace Threefold.Tests
     /// <summary>
     /// LM-08: the graphics presets and their frame-rate targets, the guard that lowers an unkept 60 to a
     /// steady 30, the warnings of the development diagnostics, and the allocations of the magical
-    /// simulation's per-frame work. Allocations are counted with the runtime's own counter for the
-    /// current thread; they say nothing about time, which only a device can measure. The counter is
-    /// read into a local before asserting: Assert.AreEqual(0L, ...) boxes its first argument, and that
-    /// box would otherwise be counted. Unity's Mono runtime is reported to return 0 from that counter
-    /// whatever is allocated, so each allocation test first checks that the counter moves and is
-    /// inconclusive where it does not: the guarantee comes from the .NET runner of compile_check.sh.
+    /// simulation's per-frame work. Allocations are counted by <see cref="AllocationMeter"/>; they say
+    /// nothing about time, which only a device can measure. The count is read into a local before
+    /// asserting: Assert.AreEqual(0L, ...) boxes its first argument, and that box would otherwise be
+    /// counted. Each allocation test first checks that a counter works on this runtime and is
+    /// inconclusive where none does.
     /// </summary>
     public sealed class MobilePerformanceTests
     {
         private const float Frame60 = 1f / 60f;
         private int nextEvent = 90000;
-        private static object probe;
-
-        /// <summary>Makes the test inconclusive on a runtime whose allocation counter does not count.</summary>
+        /// <summary>Makes the test inconclusive on a runtime where allocations cannot be counted.</summary>
         private static void RequireAllocationCounter()
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            probe = new object[8];
-            long after = GC.GetAllocatedBytesForCurrentThread();
-            if (after == before)
-            {
-                Assert.Inconclusive("This runtime does not count allocations (GC.GetAllocatedBytesForCurrentThread did not move). " +
-                                    "The allocation result comes from the .NET runner of Tools/ci/compile_check.sh.");
-            }
+            AllocationMeter.Require();
         }
 
         // ------------------------------------------------------------ presets
@@ -269,13 +259,13 @@ namespace Threefold.Tests
             guard.Request(60);
             guard.Observe(Frame60);
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int i = 0; i < 5000; i++)
             {
                 guard.Observe(i % 7 == 0 ? 1f / 30f : Frame60);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated);
         }
 
@@ -410,13 +400,13 @@ namespace Threefold.Tests
                 Frame(frame);
             }
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int frame = 0; frame < 2000; frame++)
             {
                 Frame(frame);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated, "Offering, refusing and carrying out reactions must not allocate.");
             Assert.Greater(targets[0].Received, 0);
             Assert.Greater(scheduler.Statistics.Delivered, 10000L);
@@ -458,13 +448,13 @@ namespace Threefold.Tests
                 Frame(frame);
             }
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int frame = 0; frame < 3000; frame++)
             {
                 Frame(frame);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated,
                 "Applying effects to the six example objects and advancing them in time must not allocate.");
         }
@@ -483,13 +473,13 @@ namespace Threefold.Tests
             }
 
             simulation.Tick(Frame60);
-            long before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int frame = 0; frame < 3000; frame++)
             {
                 simulation.Tick(Frame60);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated, "The simulation step must not allocate.");
             // As documented: the budget's worth are advanced, the rest wait with their state standing still.
             // Objects that never come to rest keep the waiting ones out (see Docs/MobilePerformance.md).
@@ -529,13 +519,13 @@ namespace Threefold.Tests
                 Frame(frame);
             }
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int frame = 0; frame < 3000; frame++)
             {
                 Frame(frame);
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated, "A creature's effect model must not allocate.");
             Assert.GreaterOrEqual(pushed, 0f);
         }

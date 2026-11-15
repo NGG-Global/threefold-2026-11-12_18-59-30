@@ -13,8 +13,6 @@ namespace Threefold.Tests
     public sealed class SecondaryMotionTests
     {
         private static readonly float[] FrameRates = { 20f, 30f, 60f, 120f };
-        private static object probe;
-
         private static float Angle(Vector3 a, Vector3 b)
         {
             return Mathf.Acos(Mathf.Clamp(Vector3.Dot(a.normalized, b.normalized), -1f, 1f)) * Mathf.Rad2Deg;
@@ -279,13 +277,7 @@ namespace Threefold.Tests
         [Test]
         public void AFrameAllocatesNothing()
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            probe = new object[8];
-            if (GC.GetAllocatedBytesForCurrentThread() == before)
-            {
-                Assert.Inconclusive("This runtime does not count allocations. The result comes from the .NET runner of " +
-                                    "Tools/ci/compile_check.sh.");
-            }
+            AllocationMeter.Require();
 
             var model = new SecondaryMotionModel(new SecondaryMotionTuning());
             for (int i = 0; i < 7; i++)
@@ -303,7 +295,7 @@ namespace Threefold.Tests
                 }
             }
 
-            long start = GC.GetAllocatedBytesForCurrentThread();
+            AllocationMeter.Begin();
             for (int frame = 0; frame < 3000; frame++)
             {
                 head += frame % 500 == 0 ? Vector3.forward * 50f : Vector3.forward * 0.1f;
@@ -313,7 +305,7 @@ namespace Threefold.Tests
                 }
             }
 
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - start;
+            long allocated = AllocationMeter.End();
             Assert.AreEqual(0L, allocated, "Seven bones are stepped every frame and must allocate nothing.");
         }
     }
