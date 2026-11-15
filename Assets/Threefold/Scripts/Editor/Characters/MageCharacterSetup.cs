@@ -712,6 +712,56 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
+        /// Gives the Wayfarer model the Humanoid mapping of Mage.fbx, when Unity's own differs. Unity maps a
+        /// Humanoid by itself from bone names and positions, and for the Wayfarer model it also takes the extra
+        /// face bones for eyes ("RightEye" on "face_blink", Android build run 19), which Mage.fbx does not have.
+        /// The clips of Mage.fbx would then turn those bones, so such a model is refused (MageLookRules). Here
+        /// the model's import settings are given Mage.fbx's mapping bone for bone, on the model's own skeleton
+        /// and rest pose, and the model is imported again: the same as setting the mapping by hand under
+        /// Rig > Configure. Nothing is changed if the mappings already agree, if either model is not a valid
+        /// Humanoid, or if the Wayfarer skeleton lacks a bone that Mage.fbx maps.
+        /// </summary>
+        internal static void AlignWayfarerMapping(Avatar libraryAvatar, StringBuilder report)
+        {
+            const string path = CharacterModelPostprocessor.MageWayfarerModelPath;
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            Avatar avatar = LoadSubAsset<Avatar>(path);
+            if (importer == null || libraryAvatar == null || !libraryAvatar.isValid || !libraryAvatar.isHuman ||
+                avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                return;
+            }
+
+            List<KeyValuePair<string, string>> library = HumanMapping(libraryAvatar);
+            string difference = MageLookRules.CompareHumanMappings(library, HumanMapping(avatar));
+            if (difference == null)
+            {
+                return;
+            }
+
+            HumanDescription description = avatar.humanDescription;
+            var skeleton = new HashSet<string>();
+            foreach (SkeletonBone bone in description.skeleton)
+            {
+                skeleton.Add(bone.name);
+            }
+
+            string missing = MageLookRules.FirstMissingBone(library, skeleton);
+            if (missing != null)
+            {
+                report.AppendLine($"The Wayfarer model's Humanoid mapping differs from Mage.fbx's ({difference}) and cannot be " +
+                                  $"made the same: its skeleton has no bone '{missing}'.");
+                return;
+            }
+
+            description.human = libraryAvatar.humanDescription.human;
+            importer.humanDescription = description;
+            importer.SaveAndReimport();
+            report.AppendLine($"Gave '{path}' the Humanoid mapping of Mage.fbx and imported it again: Unity's own mapping " +
+                              $"differed ({difference}).");
+        }
+
+        /// <summary>
         /// Why the Wayfarer model cannot be used, or null if it can: it must exist, be a valid Humanoid, and map
         /// every human bone to the same bone as Mage.fbx, whose clips it plays.
         /// </summary>
@@ -782,6 +832,7 @@ namespace Threefold.EditorTools
 
             if (look == MageLook.Wayfarer)
             {
+                AlignWayfarerMapping(avatar, report);
                 string problem = WayfarerProblem(avatar, out model, out avatar);
                 if (problem != null)
                 {
@@ -815,6 +866,7 @@ namespace Threefold.EditorTools
             Dictionary<string, Material> materials, StringBuilder report)
         {
             GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            AlignWayfarerMapping(libraryAvatar, report);
             string problem = WayfarerProblem(libraryAvatar, out GameObject wayfarerModel, out Avatar wayfarerAvatar);
             MageLookRules.Decision decision = MageLookRules.Decide(existing != null, GetVersion(PrefabPath), problem == null);
 

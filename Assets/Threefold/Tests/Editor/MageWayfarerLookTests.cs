@@ -46,8 +46,16 @@ namespace Threefold.Tests
             }
 
             Assert.IsNotNull(library, "Mage.fbx has no avatar.");
+            var report = new StringBuilder();
+            MageCharacterSetup.AlignWayfarerMapping(library, report);
             string problem = MageCharacterSetup.WayfarerProblem(library, out GameObject model, out Avatar avatar);
-            Assert.IsNull(problem, $"The Wayfarer look cannot be used: {problem}.\n{Describe()}");
+            Assert.IsNull(problem, $"The Wayfarer look cannot be used: {problem}.\n{report}\n{Describe()}");
+            Assert.IsTrue(avatar.isValid && avatar.isHuman, "The Wayfarer model's avatar is a valid Humanoid.");
+
+            // Aligning a second time finds nothing to do: the mapping is settled, not imported again on every setup.
+            var second = new StringBuilder();
+            MageCharacterSetup.AlignWayfarerMapping(library, second);
+            Assert.AreEqual(string.Empty, second.ToString());
             Assert.IsNotNull(model);
             Assert.IsNotNull(avatar);
         }
@@ -135,7 +143,8 @@ namespace Threefold.Tests
             DescribeAsset(text, WayfarerPath);
             if (AssetImporter.GetAtPath(WayfarerPath) is ModelImporter model)
             {
-                text.AppendLine($"  importer: animation {model.animationType}, materials {model.materialImportMode}");
+                text.AppendLine($"  importer: animation {model.animationType}, avatar {model.avatarSetup}, " +
+                                $"{model.humanDescription.human.Length} human bone(s) set in the import settings");
             }
 
             return text.ToString();
@@ -171,7 +180,7 @@ namespace Threefold.Tests
             {
                 string content = File.ReadAllText(meta);
                 text.AppendLine($"  {meta} ({content.Length} characters):");
-                text.AppendLine(content.Length > 1800 ? content.Substring(0, 1800) + "..." : content);
+                text.AppendLine(content.Length > 400 ? content.Substring(0, 400) + "..." : content);
             }
         }
     }

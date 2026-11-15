@@ -156,6 +156,15 @@ namespace Threefold.Tests
             Assert.IsFalse(byHand);
         }
 
+        [Test]
+        public void AVariantCanTakeTheMagesMappingOnlyIfItHasEveryMappedBone()
+        {
+            var library = Mapping("Hips", "pelvis", "Head", "Head");
+            Assert.IsNull(MageLookRules.FirstMissingBone(library, new HashSet<string> { "pelvis", "Head", "face_blink" }));
+            Assert.AreEqual("Head", MageLookRules.FirstMissingBone(library, new HashSet<string> { "pelvis", "face_blink" }));
+            Assert.AreEqual("pelvis", MageLookRules.FirstMissingBone(library, new HashSet<string>()));
+        }
+
         private static List<KeyValuePair<string, string>> Mapping(params string[] pairs)
         {
             var list = new List<KeyValuePair<string, string>>();
