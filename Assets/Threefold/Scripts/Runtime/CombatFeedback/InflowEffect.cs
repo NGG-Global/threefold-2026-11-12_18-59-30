@@ -95,6 +95,12 @@ namespace Threefold.CombatFeedback
                 return;
             }
 
+            if (effect.IsStopping)
+            {
+                playing = false;
+                return;
+            }
+
             float deltaTime = Time.deltaTime;
             elapsed += deltaTime;
             int count = MagicVfxGeometry.ParticlesThisFrame(streamRate * rateScale, deltaTime, ref carry);

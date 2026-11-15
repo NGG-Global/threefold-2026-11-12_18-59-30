@@ -5,7 +5,7 @@ Mage's body to the moments of each attack, as the combat animation cues report t
 audit and the first integration (`Docs/MagicVFX_Audit.md`, pull request #26) and on the combat animation
 cues (`Docs/CombatAnimationArchitecture.md`).
 
-**Status:** written; the rules are tested outside Unity (36 tests); everything compiles against the Unity
+**Status:** written; the rules are tested outside Unity (38 tests); everything compiles against the Unity
 6000.6.0f1 assemblies for the Editor and with Android player defines. **Nothing here has been seen in
 Unity, played, or measured on a device.** The effects have not been generated yet (that is a laptop
 step), so their look, scale and timing on screen are unverified, and every colour and size is a
@@ -16,7 +16,7 @@ proposal against the Art Bible, not approved art.
 | | Arcane: precise, flowing | Flame: aggressive, directional | Aegis: compressed force, stability |
 | --- | --- | --- | --- |
 | **Strike, before contact** | A thin ribbon drawn by the striking hand from the strike's effect moment; a ribbon swept round the body along the strike's arc | Fire on the fist from the start of the wind-up, emitted by distance travelled (it follows the punch's acceleration) and growing to full strength at contact | Force gathering into the striking palm or forearm through the wind-up; a short streak in the fast part only |
-| **Contact** | A small concentrated flash and a narrow cone of motes at the hand, along the blow; the adapted Free Slash impact on what was struck | A flash and a wide cone of flame at the fist; the adapted Hovl sparks on what was struck | A pressure ripple at the palm and on what was struck; on the heavy slam a ripple flat on the ground with a ring of dust |
+| **Contact (on a hit)** | A small concentrated flash and a narrow cone of motes at the hand, along the blow; the adapted Free Slash impact on what was struck | A flash and a wide cone of flame at the fist; the adapted Hovl sparks on what was struck | A pressure ripple at the palm and on what was struck; on the heavy slam (hit or miss) a ripple flat on the ground with a ring of dust |
 | **After contact** | The ribbon runs on through the follow-through and fades | Embers left where the fist was, which drift up and go out | Nothing lingers |
 | **Charge** | Motes drawn into the casting hand from a shell that shrinks as the charge grows | Heat along both forearms, denser and tighter as the charge grows | Energy pressed inwards in front of the chest, the shell shrinking as the charge grows |
 | **Release** | A burst at the casting hand, along the aim; a delicate ribbon follows the Arcane Arrow and fades where it ends; the adapted Free Slash impact where it strikes | A burst at the hand; a front of rising flame travels out across the Flame Wave's area; a flame burst on each target | A burst between the hands; a flat pressure ring travels out across the Force Pulse's area; the adapted Hovl ground burst on each target |
@@ -57,14 +57,25 @@ MagicalObject.AnyEffectReceived ──► WorldReactionVfx (plain C#) ──► 
 - **Pooling.** Every effect is a `PooledObject` spawned through `Pools`. Instances carry a generation
   number, so an effect recycled by its pool's cap is never stopped by its previous owner, and an instance
   recycled while attached to a bone is moved back under its pool first.
-- **Cancellation.** A cancelled strike or charge stops every effect it started, with a short drain
-  (0.08 s), and shows no contact, embers or release. The sequencer's tests prove that every effect that
+- **Cancellation.** A cancelled strike or charge stops every effect it started, its swing ribbon or slash
+  too, with a short drain (0.08 s), and shows no contact, embers or release. Scripted emitters stop
+  emitting the moment their effect is stopped.
+- **Hits and misses.** The contact flash at the limb and Flame's embers follow a strike that hit something
+  (the rules' hit count). A miss shows the trail and nothing at contact. The Aegis slam's ground ring shows
+  either way, because the slam strikes the ground. The sequencer's tests prove that every effect that
   starts is stopped exactly once, in 15,000 frames of random cues, including late cues from older actions.
 - **No damage from effects.** Effects read the rules and never call them: none of the new effect classes
   refers to `Health`, `AreaStrike`, a cast or `ReceiveEffect`. The contact and release cues arrive after
   the rules resolved the hit; the Flame Wave front and Force Pulse ring travel over an area whose hit was
   resolved at release. The only additions on the gameplay side are two events (`Projectile.Launched`,
-  `MagicalObject.AnyEffectReceived`), raised after the rules have acted, and they change nothing.
+  `MagicalObject.AnyEffectReceived`), raised after the rules have acted (a projectile only once it is in
+  flight; an object once its reactions and save are done). A listener that throws is logged and cannot
+  stop the rules.
+- **Subscriptions.** `DisciplineBodyEffects` subscribes once, guarded by a flag, and only while the game
+  runs: the setup command binding it in edit mode leaves nothing subscribed (the project enters Play mode
+  without a domain or scene reload).
+- **A swing per action.** Each action keeps the swing it began with, so a long frame that starts the next
+  swing before this one's contact is shown cannot turn its contact burst.
 - **Duplicates.** When `DisciplineBodyEffects` shows a combat, `DisciplineFeedback` leaves the swing
   effect, the charge and the release to it, so none is shown twice.
 - **Scripted emitters.** The Arcane sweep ribbon, the wave fronts and the inflows emit their particles by
@@ -122,7 +133,7 @@ charge's power and fit the budget; the pack prefabs are one-shot bursts with 4 t
 slash and impact, the Hovl spark streaks and ground burst.
 
 **Adaptation of a pack effect** (never editing the pack's own prefab): instantiated, unpacked completely,
-lights, audio sources and distortion children removed, collisions, the Lights module and sub-emitters
+lights (with the URP light data that requires them), audio sources and distortion children removed, collisions, the Lights module and sub-emitters
 off, renderers with a missing material off (no pink), Built-in materials replaced by URP Particles/Unlit
 copies that keep texture and blending, HDR colours above 1.2 brought down in project-owned copies of the
 materials (the Free Slash shader graphs are kept), systems over budget switched off, particle limits cut,

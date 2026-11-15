@@ -83,7 +83,7 @@ namespace Threefold.Tests
 
             sequencer.Cue(CombatCueKind.Effect, 1, output);
             Assert.AreEqual(1, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Trail));
-            Assert.AreEqual(1, Bursts(BodyEffectBurst.Swing));
+            Assert.AreEqual(1, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Swing));
 
             sequencer.Cue(CombatCueKind.HitWindowOpened, 1, output);
             sequencer.Cue(CombatCueKind.Contact, 1, output);
@@ -149,7 +149,7 @@ namespace Threefold.Tests
             Assert.AreEqual(0, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Trail), "no trail in the wind-up");
 
             sequencer.Cue(CombatCueKind.Effect, 1, output);
-            Assert.AreEqual(0, Bursts(BodyEffectBurst.Swing), "Aegis has no slash");
+            Assert.AreEqual(0, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Swing), "Aegis has no slash");
             sequencer.Cue(CombatCueKind.HitWindowOpened, 1, output);
             Assert.AreEqual(1, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Trail), "a streak in the fast part only");
 
@@ -220,7 +220,54 @@ namespace Threefold.Tests
             sequencer.Begin(Melee(MagicDiscipline.Arcane, 1), 0f, output);
             sequencer.Cue(CombatCueKind.HitWindowOpened, 1, output);
             Assert.AreEqual(1, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Trail));
-            Assert.AreEqual(1, Bursts(BodyEffectBurst.Swing));
+            Assert.AreEqual(1, Count(BodyEffectCommandKind.Start, BodyEffectLayer.Swing));
+        }
+
+        [Test]
+        public void ASwingEffectFinishesOnItsOwnUnlessItsStrikeIsCancelled()
+        {
+            var sequencer = new BodyEffectSequencer();
+            sequencer.Begin(Melee(MagicDiscipline.Arcane, 1), 0f, output);
+            sequencer.Cue(CombatCueKind.Effect, 1, output);
+            sequencer.Cue(CombatCueKind.Contact, 1, output);
+            output.Clear();
+            sequencer.Cue(CombatCueKind.Recovered, 1, output);
+            Assert.AreEqual(1, Count(BodyEffectCommandKind.Stop, BodyEffectLayer.Swing));
+            Assert.Less(output.Find(c => c.Layer == BodyEffectLayer.Swing).DrainSeconds, 0f, "let it finish");
+
+            output.Clear();
+            sequencer.Begin(Melee(MagicDiscipline.Arcane, 2), 1f, output);
+            sequencer.Cue(CombatCueKind.Effect, 2, output);
+            output.Clear();
+            sequencer.Cue(CombatCueKind.Cancelled, 2, output);
+            Assert.AreEqual(1, Count(BodyEffectCommandKind.Stop, BodyEffectLayer.Swing));
+            Assert.AreEqual(MagicVfxDefaults.For(MagicDiscipline.Arcane).cancelDrainSeconds,
+                output.Find(c => c.Layer == BodyEffectLayer.Swing).DrainSeconds, 0.0001f, "cut short");
+        }
+
+        [Test]
+        public void AMissShowsNoContactFlashAndNoEmbersButTheSlamStillMeetsTheGround()
+        {
+            var sequencer = new BodyEffectSequencer();
+            sequencer.Begin(Melee(MagicDiscipline.Flame, 1), 0f, output);
+            sequencer.Cue(CombatCueKind.Contact, 1, output, hits: 0);
+            sequencer.Cue(CombatCueKind.HitWindowClosed, 1, output);
+            sequencer.Cue(CombatCueKind.Recovered, 1, output);
+            Assert.AreEqual(0, Bursts(BodyEffectBurst.Contact));
+            Assert.AreEqual(0, Bursts(BodyEffectBurst.Linger));
+            Assert.AreEqual(1, Count(BodyEffectCommandKind.Stop, BodyEffectLayer.Trail), "the trail still ends");
+
+            output.Clear();
+            sequencer.Begin(Melee(MagicDiscipline.Aegis, 2, heavy: true), 1f, output);
+            sequencer.Cue(CombatCueKind.Contact, 2, output, hits: 0);
+            Assert.AreEqual(1, Bursts(BodyEffectBurst.HeavyContact));
+
+            output.Clear();
+            sequencer.Begin(Melee(MagicDiscipline.Flame, 3), 2f, output);
+            sequencer.Cue(CombatCueKind.Contact, 3, output, hits: 2);
+            sequencer.Cue(CombatCueKind.HitWindowClosed, 3, output);
+            Assert.AreEqual(1, Bursts(BodyEffectBurst.Contact));
+            Assert.AreEqual(1, Bursts(BodyEffectBurst.Linger));
         }
 
         // ---------------------------------------------------------------- charged

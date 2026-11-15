@@ -109,9 +109,9 @@ namespace Threefold.WorldMagic
         public event Action<MagicalObject, MagicEffect, EffectResponse> EffectReceived;
 
         /// <summary>
-        /// Raised for every effect that arrives at any magical object, after <see cref="EffectReceived"/>. For
-        /// feedback that is shown the same on every object (the magic arriving), so it needs no setup per object.
-        /// It changes nothing: the effect has already been applied.
+        /// Raised for every effect that arrives at any magical object, once the effect, its reactions and the save
+        /// are done. For feedback that is shown the same on every object (the magic arriving), so it needs no setup
+        /// per object. It changes nothing, and a listener that fails cannot stop the rules.
         /// </summary>
         public static event Action<MagicalObject, MagicEffect, EffectResponse> AnyEffectReceived;
 
@@ -272,7 +272,6 @@ namespace Threefold.WorldMagic
             }
 
             EffectReceived?.Invoke(this, effect, response);
-            AnyEffectReceived?.Invoke(this, effect, response);
 
             SendReactions();
 
@@ -287,7 +286,29 @@ namespace Threefold.WorldMagic
                 awake = WorldSimulation.Wake(this);
             }
 
+            AnnounceToAll(effect, response);
             return response;
+        }
+
+        /// <summary>
+        /// Tells whoever shows magic arriving, after the effect, its reactions and the save are done. A listener
+        /// that fails is reported and cannot stop the rules.
+        /// </summary>
+        private void AnnounceToAll(in MagicEffect effect, EffectResponse response)
+        {
+            if (AnyEffectReceived == null)
+            {
+                return;
+            }
+
+            try
+            {
+                AnyEffectReceived(this, effect, response);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+            }
         }
 
         /// <summary>

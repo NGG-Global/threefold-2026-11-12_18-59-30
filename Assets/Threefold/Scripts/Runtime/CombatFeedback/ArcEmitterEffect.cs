@@ -121,6 +121,13 @@ namespace Threefold.CombatFeedback
                 return;
             }
 
+            // Stopped from outside (its strike was cancelled): emit nothing more and let what is there fade.
+            if (effect.IsStopping)
+            {
+                playing = false;
+                return;
+            }
+
             float deltaTime = Time.deltaTime;
             elapsed += deltaTime;
             float progress = Mathf.Clamp01(elapsed / seconds);

@@ -201,8 +201,10 @@ namespace Threefold.EditorTools
         {
             foreach (Light light in root.GetComponentsInChildren<Light>(true))
             {
-                Object.DestroyImmediate(light);
-                changes.Lights++;
+                if (RemoveLight(light))
+                {
+                    changes.Lights++;
+                }
             }
 
             foreach (AudioSource audio in root.GetComponentsInChildren<AudioSource>(true))
@@ -227,6 +229,66 @@ namespace Threefold.EditorTools
                     changes.Removed++;
                 }
             }
+        }
+
+        /// <summary>
+        /// Removes a light. Unity refuses to remove a component another one requires (URP's additional light data
+        /// requires its Light), so those go first; a part that holds nothing but the light goes as a whole.
+        /// Returns true only if the light is gone.
+        /// </summary>
+        private static bool RemoveLight(Light light)
+        {
+            GameObject part = light.gameObject;
+            Component[] components = part.GetComponents<Component>();
+            bool onlyLight = part.transform.childCount == 0;
+            foreach (Component component in components)
+            {
+                if (component is Light || component is Transform)
+                {
+                    continue;
+                }
+
+                if (Requires(component, typeof(Light)))
+                {
+                    Object.DestroyImmediate(component);
+                }
+                else
+                {
+                    onlyLight = false;
+                }
+            }
+
+            if (onlyLight && part != part.transform.root.gameObject)
+            {
+                Object.DestroyImmediate(part);
+                return true;
+            }
+
+            if (light != null)
+            {
+                Object.DestroyImmediate(light);
+            }
+
+            return light == null;
+        }
+
+        private static bool Requires(Component component, System.Type required)
+        {
+            if (component == null)
+            {
+                return false;
+            }
+
+            foreach (object attribute in component.GetType().GetCustomAttributes(typeof(RequireComponent), true))
+            {
+                var requirement = (RequireComponent)attribute;
+                if (requirement.m_Type0 == required || requirement.m_Type1 == required || requirement.m_Type2 == required)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void AdaptSystems(GameObject root, MagicVfxRole role, Color tint, float tintAmount, Changes changes)

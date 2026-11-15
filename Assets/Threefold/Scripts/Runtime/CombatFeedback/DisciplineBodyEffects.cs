@@ -55,7 +55,9 @@ namespace Threefold.CombatFeedback
         private readonly Handle[] trail = new Handle[2];
         private readonly Handle[] gather = new Handle[2];
         private readonly Handle[] charge = new Handle[2];
+        private readonly Handle[] swingEffect = new Handle[1];
         private Handle barrier;
+        private bool subscribed;
 
         private DisciplineCombat subscribedCombat;
         private CombatAnimationDirector subscribedDirector;
@@ -68,6 +70,15 @@ namespace Threefold.CombatFeedback
 
         private MeleeSwing lastSwing;
         private bool hasSwing;
+
+        // The swing the action being shown began with, kept apart from the latest swing: a long frame can start
+        // the next swing before this one's contact is shown.
+        private MeleeSwing actionSwing;
+        private bool hasActionSwing;
+
+        // The last swing that landed, with its hit count, until its contact is shown.
+        private MeleeSwing landedSwing;
+        private bool hasLandedSwing;
         private Vector3 releaseDirection = Vector3.forward;
         private int barrierSlot = -1;
 
@@ -96,10 +107,10 @@ namespace Threefold.CombatFeedback
         public void Bind(DisciplineCombat disciplineCombat, CombatAnimationDirector animationDirector,
             DisciplineVfxSockets vfxSockets, PlayerGuard playerGuard, VisualStyleController styleController)
         {
-            bool wasEnabled = isActiveAndEnabled;
-            if (wasEnabled)
+            bool resubscribe = subscribed;
+            if (resubscribe)
             {
-                OnDisable();
+                Unsubscribe();
             }
 
             combat = disciplineCombat;
@@ -108,18 +119,31 @@ namespace Threefold.CombatFeedback
             guard = playerGuard;
             style = styleController;
 
-            if (wasEnabled)
+            // In edit mode (the setup command) nothing is subscribed: OnEnable does it when the game runs.
+            if (resubscribe && Application.isPlaying && isActiveAndEnabled)
             {
-                OnEnable();
+                Subscribe();
             }
         }
 
         private void OnEnable()
         {
-            if (combat == null)
+            Subscribe();
+        }
+
+        private void OnDisable()
+        {
+            Unsubscribe();
+        }
+
+        private void Subscribe()
+        {
+            if (subscribed || combat == null)
             {
                 return;
             }
+
+            subscribed = true;
 
             if (director == null) director = combat.GetComponent<CombatAnimationDirector>();
             if (sockets == null) sockets = combat.GetComponentInChildren<DisciplineVfxSockets>(true);
@@ -167,8 +191,14 @@ namespace Threefold.CombatFeedback
             }
         }
 
-        private void OnDisable()
+        private void Unsubscribe()
         {
+            if (!subscribed)
+            {
+                return;
+            }
+
+            subscribed = false;
             commands.Clear();
             sequencer.Reset(commands);
             Execute();
@@ -210,7 +240,7 @@ namespace Threefold.CombatFeedback
             }
 
             Projectile.Launched -= HandleProjectileLaunched;
-            hasSwing = false;
+            hasSwing = hasActionSwing = hasLandedSwing = false;
         }
 
         private void Update()
@@ -254,6 +284,10 @@ namespace Threefold.CombatFeedback
                 sequencer.Begin(Describe(cue.Action, cue.ActionId, cue.Discipline, cue.StepIndex, cue.Effector), cue.Time,
                     commands);
             }
+            else if (cue.Kind == CombatCueKind.Contact)
+            {
+                sequencer.Cue(cue.Kind, cue.ActionId, commands, HitsOf(cue.Discipline, cue.StepIndex));
+            }
             else
             {
                 sequencer.Cue(cue.Kind, cue.ActionId, commands);
@@ -285,13 +319,17 @@ namespace Threefold.CombatFeedback
 
         private void HandleSwingLanded(MeleeSwing swing)
         {
+            // The rules announce the landing before the director sends its contact cue (it runs later in the frame).
+            landedSwing = swing;
+            hasLandedSwing = true;
+
             if (usingCues)
             {
                 return;
             }
 
             commands.Clear();
-            sequencer.Cue(CombatCueKind.Contact, fallbackActionId, commands);
+            sequencer.Cue(CombatCueKind.Contact, fallbackActionId, commands, swing.HitCount);
             sequencer.Cue(CombatCueKind.HitWindowClosed, fallbackActionId, commands);
             sequencer.Cue(CombatCueKind.Recovered, fallbackActionId, commands);
             Execute();
@@ -444,6 +482,20 @@ namespace Threefold.CombatFeedback
                 BodyEffectCommand command = commands[i];
                 switch (command.Kind)
                 {
+                    case BodyEffectCommandKind.Start when command.Layer == BodyEffectLayer.Swing:
+                        swingEffect[0] = PlaySwing(command);
+                        break;
+                    case BodyEffectCommandKind.Stop when command.Layer == BodyEffectLayer.Swing:
+                        if (command.DrainSeconds < 0f)
+                        {
+                            swingEffect[0] = default; // not cut short: it finishes on its own
+                        }
+                        else
+                        {
+                            StopLayer(swingEffect, command.DrainSeconds, false);
+                        }
+
+                        break;
                     case BodyEffectCommandKind.Start:
                         StartLayer(command);
                         break;
@@ -527,14 +579,10 @@ namespace Threefold.CombatFeedback
 
             DisciplinePresentation look = definition.Presentation;
             Transform body = subscribedCombat.transform;
-            Vector3 swingDirection = hasSwing ? lastSwing.Direction : body.forward;
+            Vector3 swingDirection = hasActionSwing ? actionSwing.Direction : body.forward;
 
             switch (command.Burst)
             {
-                case BodyEffectBurst.Swing:
-                    PlaySwing(look, definition, command.Effector, body, swingDirection);
-                    break;
-
                 case BodyEffectBurst.Contact:
                     Spawn(look.contactEffect, LimbPoint(command.Effector), LookAlong(swingDirection), MaxBursts, false);
                     break;
@@ -542,7 +590,7 @@ namespace Threefold.CombatFeedback
                 case BodyEffectBurst.HeavyContact:
                 {
                     PooledObject heavy = look.heavyContactEffect != null ? look.heavyContactEffect : look.contactEffect;
-                    float reach = hasSwing && lastSwing.Step != null ? lastSwing.Step.reach : 2f;
+                    float reach = hasActionSwing && actionSwing.Step != null ? actionSwing.Step.reach : 2f;
                     Vector3 ground = body.position + Flat(swingDirection) * Mathf.Min(reach * 0.45f, 1.2f) + Vector3.up * 0.05f;
                     Spawn(heavy, ground, LookAlong(swingDirection), MaxBursts, false);
                     if (look.contactEffect != null && heavy != look.contactEffect)
@@ -573,24 +621,34 @@ namespace Threefold.CombatFeedback
             }
         }
 
-        private void PlaySwing(DisciplinePresentation look, DisciplineDefinition definition, CombatEffector effector,
-            Transform body, Vector3 swingDirection)
+        private Handle PlaySwing(in BodyEffectCommand command)
         {
-            if (look.meleeSwingEffect == null)
+            DisciplineDefinition definition = Definition(command.Discipline);
+            if (definition == null || subscribedCombat == null || definition.Presentation.meleeSwingEffect == null)
             {
-                return;
+                return default;
             }
 
+            DisciplinePresentation look = definition.Presentation;
+            Transform body = subscribedCombat.transform;
+            Vector3 swingDirection = hasActionSwing ? actionSwing.Direction : body.forward;
             Vector3 origin = body.position + Vector3.up * Mathf.Max(0f, look.effectHeight);
             PooledObject instance = Spawn(look.meleeSwingEffect, origin, LookAlong(swingDirection), MaxBursts, false);
-            if (instance != null && instance.TryGetComponent(out ArcEmitterEffect ribbon) && hasSwing && lastSwing.Step != null)
+            if (instance == null)
+            {
+                return default;
+            }
+
+            if (instance.TryGetComponent(out ArcEmitterEffect ribbon) && hasActionSwing && actionSwing.Step != null)
             {
                 // A right-hand strike sweeps from right to left in front of the body; a left-hand one the other way.
-                bool reverse = effector == CombatEffector.RightHand || effector == CombatEffector.RightFoot;
-                float seconds = Mathf.Max(0.08f, lastSwing.Step.startupSeconds + 0.12f);
-                ribbon.Play(origin, swingDirection, lastSwing.Step.reach, lastSwing.Step.arcDegrees, seconds,
+                bool reverse = command.Effector == CombatEffector.RightHand || command.Effector == CombatEffector.RightFoot;
+                float seconds = Mathf.Max(0.08f, actionSwing.Step.startupSeconds + 0.12f);
+                ribbon.Play(origin, swingDirection, actionSwing.Step.reach, actionSwing.Step.arcDegrees, seconds,
                     definition.Color, CurrentLevel().EmitterRateScale, reverse);
             }
+
+            return new Handle { Instance = instance, Generation = instance.Generation };
         }
 
         // ---------------------------------------------------------- helpers
@@ -608,14 +666,29 @@ namespace Threefold.CombatFeedback
                 Timing = definition != null ? Timing(definition) : MagicVfxDefaults.For((MagicDiscipline)Mathf.Max(0, slot)),
             };
 
+            hasActionSwing = false;
             if (action == CombatActionKind.Melee && hasSwing && lastSwing.Step != null && lastSwing.StepIndex == stepIndex &&
                 lastSwing.Discipline == definition)
             {
                 info.SecondsToContact = lastSwing.Step.startupSeconds;
                 info.Heavy = lastSwing.Step.hitTrauma >= info.Timing.heavyHitTrauma;
+                actionSwing = lastSwing;
+                hasActionSwing = true;
             }
 
             return info;
+        }
+
+        /// <summary>How many targets the landed swing of this discipline and step hit, or -1 when it is not known.</summary>
+        private int HitsOf(int slot, int stepIndex)
+        {
+            if (!hasLandedSwing || landedSwing.StepIndex != stepIndex || landedSwing.Discipline != Definition(slot))
+            {
+                return -1;
+            }
+
+            hasLandedSwing = false;
+            return landedSwing.HitCount;
         }
 
         private static BodyEffectTiming Timing(DisciplineDefinition definition)
@@ -663,6 +736,8 @@ namespace Threefold.CombatFeedback
                     return trail;
                 case BodyEffectLayer.Gather:
                     return gather;
+                case BodyEffectLayer.Swing:
+                    return swingEffect;
                 default:
                     return charge;
             }

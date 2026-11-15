@@ -16,21 +16,24 @@ namespace Threefold.CombatFeedback
 
         /// <summary>The buildup of a charged attack.</summary>
         Charge = 2,
+
+        /// <summary>
+        /// The oriented ribbon or slash around the body. It plays its own course; it is cut short only when its
+        /// strike is cancelled (a stop with a negative drain means: let it finish).
+        /// </summary>
+        Swing = 3,
     }
 
     /// <summary>A one-off effect.</summary>
     public enum BodyEffectBurst
     {
-        /// <summary>The oriented ribbon or slash around the body.</summary>
-        Swing = 0,
-
-        /// <summary>Concentrated energy at the limb at the moment of contact.</summary>
+        /// <summary>Concentrated energy at the limb at the moment of contact, when the strike hit something.</summary>
         Contact = 1,
 
-        /// <summary>The contact of a heavy strike.</summary>
+        /// <summary>The contact of a heavy strike: shown whether or not it hit, because it strikes the ground.</summary>
         HeavyContact = 2,
 
-        /// <summary>Embers or motes left behind after a strike that made contact.</summary>
+        /// <summary>Embers or motes left behind after a strike that hit something.</summary>
         Linger = 3,
 
         /// <summary>A charged attack leaves the hand.</summary>
@@ -60,7 +63,10 @@ namespace Threefold.CombatFeedback
 
         public readonly float Radius;
 
-        /// <summary>Stop: seconds to let the effect fade before it is returned.</summary>
+        /// <summary>
+        /// Stop: seconds to let the effect fade before it is returned. Negative: it was not cut short, let it finish
+        /// on its own (a swing effect after a strike that was not cancelled).
+        /// </summary>
         public readonly float DrainSeconds;
 
         public BodyEffectCommand(BodyEffectCommandKind kind, BodyEffectLayer layer, BodyEffectBurst burst, int actionId,
@@ -104,7 +110,9 @@ namespace Threefold.CombatFeedback
     ///
     /// Guarantees:
     /// - every effect that starts is stopped exactly once, at the latest when its action ends;
-    /// - a cancelled action shows no contact, linger or release burst, and its effects stop with a short drain;
+    /// - a cancelled action shows no contact, linger or release burst, and its effects (its swing effect too) stop
+    ///   with a short drain;
+    /// - contact flashes and lingering embers follow a strike that hit something, not a miss;
     /// - contact and release bursts are shown at most once per action;
     /// - nothing of an action is shown after it has ended, or after a newer action began;
     /// - a strike's trail grows only towards its contact, never past full strength.
@@ -121,6 +129,8 @@ namespace Threefold.CombatFeedback
         private bool trailOn;
         private bool gatherOn;
         private bool chargeOn;
+        private bool swingOn;
+        private bool landed;
         private bool swingShown;
         private bool contactShown;
         private bool lingerShown;
@@ -141,6 +151,8 @@ namespace Threefold.CombatFeedback
                     return trailOn;
                 case BodyEffectLayer.Gather:
                     return gatherOn;
+                case BodyEffectLayer.Swing:
+                    return swingOn;
                 default:
                     return chargeOn;
             }
@@ -166,8 +178,8 @@ namespace Threefold.CombatFeedback
 
             active = true;
             beginTime = now;
-            trailOn = gatherOn = chargeOn = false;
-            swingShown = contactShown = lingerShown = releaseShown = false;
+            trailOn = gatherOn = chargeOn = swingOn = false;
+            swingShown = contactShown = lingerShown = releaseShown = landed = false;
 
             BodyEffectTiming timing = current.Timing;
             if (current.Action == CombatActionKind.Charged)
@@ -185,8 +197,12 @@ namespace Threefold.CombatFeedback
             ReachMoment(BodyEffectMoment.Windup, output);
         }
 
-        /// <summary>A moment of the action. Cues of an older action, or of none, are ignored.</summary>
-        public void Cue(CombatCueKind kind, int actionId, List<BodyEffectCommand> output)
+        /// <summary>
+        /// A moment of the action. Cues of an older action, or of none, are ignored. For a contact,
+        /// <paramref name="hits"/> is how many targets the strike hit (from the rules), or -1 when not known, which
+        /// counts as a hit.
+        /// </summary>
+        public void Cue(CombatCueKind kind, int actionId, List<BodyEffectCommand> output, int hits = -1)
         {
             if (!active || actionId != current.ActionId)
             {
@@ -213,7 +229,7 @@ namespace Threefold.CombatFeedback
                     break;
 
                 case CombatCueKind.Contact:
-                    Contact(output);
+                    Contact(hits != 0, output);
                     break;
 
                 case CombatCueKind.HitWindowClosed:
@@ -319,11 +335,11 @@ namespace Threefold.CombatFeedback
             if (!swingShown && timing.swingFrom != BodyEffectMoment.None && timing.swingFrom <= moment)
             {
                 swingShown = true;
-                output.Add(Command(BodyEffectCommandKind.Burst, default, BodyEffectBurst.Swing, 1f, 0f, 0f));
+                StartLayer(BodyEffectLayer.Swing, 1f, 0f, output);
             }
         }
 
-        private void Contact(List<BodyEffectCommand> output)
+        private void Contact(bool hit, List<BodyEffectCommand> output)
         {
             if (current.Action != CombatActionKind.Melee || contactShown)
             {
@@ -331,6 +347,7 @@ namespace Threefold.CombatFeedback
             }
 
             contactShown = true;
+            landed = hit;
             BodyEffectTiming timing = current.Timing;
 
             // The gathered force is spent in the strike.
@@ -350,13 +367,20 @@ namespace Threefold.CombatFeedback
                 }
             }
 
-            output.Add(Command(BodyEffectCommandKind.Burst, default,
-                current.Heavy ? BodyEffectBurst.HeavyContact : BodyEffectBurst.Contact, 1f, 0f, 0f));
+            // A heavy strike meets the ground whether or not it hit; a light one shows its contact only on a hit.
+            if (current.Heavy)
+            {
+                output.Add(Command(BodyEffectCommandKind.Burst, default, BodyEffectBurst.HeavyContact, 1f, 0f, 0f));
+            }
+            else if (landed)
+            {
+                output.Add(Command(BodyEffectCommandKind.Burst, default, BodyEffectBurst.Contact, 1f, 0f, 0f));
+            }
         }
 
         private void Linger(List<BodyEffectCommand> output)
         {
-            if (contactShown && !lingerShown && current.Timing.lingerAfterStrike)
+            if (contactShown && landed && !lingerShown && current.Timing.lingerAfterStrike)
             {
                 lingerShown = true;
                 output.Add(Command(BodyEffectCommandKind.Burst, default, BodyEffectBurst.Linger, 1f, 0f, 0f));
@@ -388,6 +412,9 @@ namespace Threefold.CombatFeedback
             StopLayer(BodyEffectLayer.Trail, drain, output);
             StopLayer(BodyEffectLayer.Gather, cancelled ? timing.cancelDrainSeconds : drain, output);
             StopLayer(BodyEffectLayer.Charge, timing.cancelDrainSeconds, output);
+
+            // A swing effect plays its own course after a strike; a cancelled strike cuts it short.
+            StopLayer(BodyEffectLayer.Swing, cancelled ? timing.cancelDrainSeconds : -1f, output);
             active = false;
         }
 
@@ -400,6 +427,9 @@ namespace Threefold.CombatFeedback
                     break;
                 case BodyEffectLayer.Gather:
                     gatherOn = true;
+                    break;
+                case BodyEffectLayer.Swing:
+                    swingOn = true;
                     break;
                 default:
                     chargeOn = true;
@@ -429,6 +459,15 @@ namespace Threefold.CombatFeedback
                     }
 
                     gatherOn = false;
+                    break;
+
+                case BodyEffectLayer.Swing:
+                    if (!swingOn)
+                    {
+                        return;
+                    }
+
+                    swingOn = false;
                     break;
 
                 default:
