@@ -466,6 +466,34 @@ namespace Threefold.EditorTools
             return clips;
         }
 
+        /// <summary>
+        /// The generated MageVisual prefab, created first if it does not exist yet, with the same rules as
+        /// <see cref="Ensure"/>: an existing prefab, its look and its materials are kept. For scenes that show
+        /// the Mage without the playable rig, such as the main menu. Null if the model cannot be used.
+        /// </summary>
+        internal static GameObject EnsureVisualPrefab(StringBuilder report)
+        {
+            GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterModelPostprocessor.MageModelPath);
+            if (model == null)
+            {
+                report.AppendLine($"WARNING: the character model '{CharacterModelPostprocessor.MageModelPath}' was not found.");
+                return null;
+            }
+
+            Avatar avatar = LoadSubAsset<Avatar>(CharacterModelPostprocessor.MageModelPath);
+            if (avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                report.AppendLine("WARNING: the Mage model has no valid Humanoid avatar. Check the model's Rig settings and the Console.");
+                return null;
+            }
+
+            EnsureFolder(Folder);
+            Dictionary<string, Material> materials = EnsureMaterials(report);
+            CombatAnimationSet combatAnimations = EnsureCombatAnimationSet(report);
+            AnimatorController controller = EnsureController(report, combatAnimations);
+            return EnsurePrefab(model, avatar, controller, materials, report);
+        }
+
         /// <summary>The generated MageVisual prefab (model, materials, Animator), or null before the setup has run.</summary>
         internal static GameObject LoadVisualPrefab()
         {
