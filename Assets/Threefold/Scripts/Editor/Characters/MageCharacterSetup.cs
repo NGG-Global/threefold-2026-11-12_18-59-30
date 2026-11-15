@@ -731,7 +731,12 @@ namespace Threefold.EditorTools
 
             if (AssetDatabase.LoadAssetAtPath<Texture2D>(CharacterModelPostprocessor.MagePaintTexturePath) == null)
             {
-                return $"its painted texture '{CharacterModelPostprocessor.MagePaintTexturePath}' is missing";
+                // Say which: a file that is not there, or one that Unity imported as something else (a cubemap, for example).
+                System.Type imported = AssetDatabase.GetMainAssetTypeAtPath(CharacterModelPostprocessor.MagePaintTexturePath);
+                return imported == null
+                    ? $"its painted texture '{CharacterModelPostprocessor.MagePaintTexturePath}' is missing"
+                    : $"its painted texture '{CharacterModelPostprocessor.MagePaintTexturePath}' was imported as a " +
+                      $"{imported.Name}, not as an ordinary 2D texture";
             }
 
             return MageLookRules.CompareHumanMappings(HumanMapping(libraryAvatar), HumanMapping(avatar));
