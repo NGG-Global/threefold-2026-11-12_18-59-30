@@ -8,7 +8,7 @@ Each discipline replaces the generic second jump with an aerial ability of its o
 | Flame | **Fire Glide** | While Jump is held, fire directed downward slows the fall to a capped glide and lets the joystick steer, from a limited fuel budget |
 | Aegis | **Force Dash** | A short, fast horizontal dash where the joystick points (or where the Mage faces), stopped by walls |
 
-**Status:** written; tested outside Unity with 36 tests (28 for the rules, covering every scenario of the brief
+**Status:** written; tested outside Unity with 40 tests (32 for the rules, covering every scenario of the brief
 at 15 to 120 frames per second; 7 for the test course, checked against the motor, the traversal limits and the
 tuning; 1 for multi-touch input); everything compiles against the Unity 6000.6.0f1 assemblies for the Editor
 and with Android player defines. **Nothing has been played in Unity or on a device.** How the abilities feel
@@ -37,6 +37,11 @@ The rules are one explicit state machine, `AerialAbilityModel` (plain C#): Idle,
 - **A new press in the air** starts the ability. The press of the first jump, held, starts nothing, so holding
   JUMP for a full jump never triggers the glide. A press the ability uses is taken from the motor, so it
   neither jumps nor is remembered for a jump on landing.
+- **The jump buffer is kept.** A press when the ground will be reached within the motor's jump-buffer time
+  (0.12 s at the current fall speed) is left to the motor, which jumps on landing as it always has; the ability
+  is not used and stays available. A press on the frame of a jump off a ledge belongs to that jump, never to the
+  ability. The ground is read as the motor will read it in that frame, so no ability starts on the landing frame,
+  and a dash that meets the ground ends at once, keeping only its exit speed.
 - **One activation per airborne sequence**, whatever the discipline: switching in the air, however fast, never
   gives another. An ability under way finishes as the one it began as (a dash stays a dash if Flame is selected
   mid-dash).
@@ -54,6 +59,15 @@ The rules are one explicit state machine, `AerialAbilityModel` (plain C#): Idle,
   rate; glide fuel is counted in seconds; the ascension's impulse is corrected for the frame time, so it adds
   3.0 m at 15 or 120 frames per second. (The first jump's height drifts with the frame rate, by about 0.2 m
   between 120 and 15 fps; that is the motor's existing behaviour and is unchanged.)
+
+### Landing after an Ascension
+
+An Ascension from flat ground and back down is a fall of about 4.6 m, which lands at about 18 m/s, above the
+motor's hard-landing speed (13 m/s). The existing hard landing therefore applies: speed is reduced to 35% for
+0.25 s and the landing plays out. This is deliberate and unchanged: any fall of that height is a hard landing,
+however it began. Landing on top of the pillar is a short drop and is not hard; the glide lands at 2.4 m/s and a
+dash from a jump at about 11 m/s, both below it. To soften the Ascension's return, lower `height`, or raise the
+motor's `hardLandingSpeed` (which changes every fall).
 
 ### With combat
 
@@ -130,7 +144,8 @@ input ──► AerialAbilities (runs before the motor) ──► AerialAbilityM
 ```
 
 - `ThirdPersonMotor` gained a per-frame `ApplyAerialMotion` (a vertical speed, a stored or one-frame horizontal
-  velocity, different air steering), `ConsumeJumpPress`, jump counters, and the wall the last move ran into.
+  velocity, different air steering), `ConsumeJumpPress`, jump counters, the wall the last move ran into,
+  `GroundedNow` (the ground as its next update will see it) and `LandsWithin` (for the jump buffer).
   Its gravity step moved unchanged into `JumpPhysics.AirborneStep`, which the simulator shares. Collisions are
   the character controller's own: a dash is a swept move, so it cannot pass through a wall at any frame rate.
 - `AerialSimulator` runs a jump with the real model and the motor's gravity step, so flights are tested outside
@@ -194,7 +209,7 @@ floor.
 | Flame fuel exhaustion | `TheFuelRunsOutAndNormalGravityReturns`, `TheFuelBudgetIsTheSameAtAnyFrameRate` |
 | Aegis dash distance | `ADashCoversItsDistanceAtEveryFrameRate`, `ADashGoesWhereTheJoystickPointsOrWhereTheMageFaces`, `TheDashCrossesTheDashGapAndAJumpDoesNot` |
 | Aegis dash into a wall | `AWallStopsADashHeadOnAndTurnsAGlancingOne`, `TheDashWallStopsADashFromItsMarker` |
-| Landing resets | `AConfirmedLandingGivesTheAbilityBackForTheNextJump`, `AOneFrameTouchOfGroundOrAWallDoesNotGiveTheAbilityBack`, `AJumpOffALedgeDoesNotGiveASpentAbilityBack` |
+| Landing resets | `AConfirmedLandingGivesTheAbilityBackForTheNextJump`, `AOneFrameTouchOfGroundOrAWallDoesNotGiveTheAbilityBack`, `AJumpOffALedgeDoesNotGiveASpentAbilityBack`, `ThePressOfAJumpOffALedgeIsThatJumpsOnly`, `APressJustBeforeLandingIsLeftToTheJumpBuffer`, `ADashThatMeetsTheGroundEndsAndKeepsOnlyItsExitSpeed`, `AJumpFromTheGroundDuringADashDoesNotCarryItsSpeed` |
 | Rapid discipline switching | `SwitchingDisciplinesInTheAirNeverGivesAnotherUse`, `AnAbilityInProgressFinishesAsTheOneItBeganAs` |
 | Jump-button spam | `OneActivationPerAirborneSequenceHoweverOftenJumpIsPressed`, `ADashNeverStacksSpeed` |
 | Attack interruption | `AnAerialAbilityAbandonsASwingThatHasNotLanded` (with the real combat rules), `TheHandsAreBusyWhileAnAbilityUsesThem`, `NothingStartsWhileChargingBlockingStaggeredOrClimbing`, `AChargeOrAHitPausesTheGlideAndKeepsItsFuel` |
@@ -202,8 +217,9 @@ floor.
 | Mobile multi-touch | `MultiTouchRoutingTests.AGlideHeldOnJumpSurvivesMovingAndTurningTheCameraAtTheSameTime` |
 | No allocation | `AerialAbilityTests.SteadyFramesAllocateNothing` |
 
-Not tested outside Unity: the motor with the character controller (collisions, slopes, steps), the
-Animator, the effects, and the component wiring. Play Mode tests for movement do not exist yet in this
+Not tested outside Unity: the motor with the character controller (collisions, slopes, steps, `GroundedNow`,
+`LandsWithin`), the Animator, the effects, and the component wiring. The simulator stands in for the controller
+with flat ground; it does not model the jump buffer. Play Mode tests for movement do not exist yet in this
 project.
 
 ## Laptop actions

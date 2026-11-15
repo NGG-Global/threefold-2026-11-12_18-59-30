@@ -190,6 +190,41 @@ namespace Threefold.Characters
         public float Acceleration => acceleration;
         public float AirControl => airControl;
 
+        /// <summary>A jump pressed this long before landing is performed on landing, in seconds.</summary>
+        public float JumpBufferTime => jumpBufferTime;
+
+        /// <summary>
+        /// Whether the character stands on walkable ground right now, worked out the way the next motor update will
+        /// work it out, without changing anything. For components that run before the motor in the frame, which
+        /// would otherwise see the ground state of the last frame.
+        /// </summary>
+        public bool GroundedNow
+        {
+            get
+            {
+                if (externalControl || controller == null || !controller.enabled)
+                {
+                    return false;
+                }
+
+                return verticalSpeed <= 0.01f && (controller.isGrounded || ProbeGround());
+            }
+        }
+
+        /// <summary>
+        /// Whether, falling as it is now, the character will reach walkable ground within <paramref name="seconds"/>.
+        /// False while rising. Used to leave a press just before landing to the jump buffer.
+        /// </summary>
+        public bool LandsWithin(float seconds)
+        {
+            if (externalControl || controller == null || !controller.enabled || verticalSpeed >= 0f || seconds <= 0f)
+            {
+                return false;
+            }
+
+            return ProbeGround(groundProbeDistance - verticalSpeed * seconds);
+        }
+
         /// <summary>Jumps made from the ground (or within coyote time) so far. Aerial abilities count them.</summary>
         public int GroundJumpCount => groundJumpCount;
 
@@ -561,13 +596,18 @@ namespace Threefold.Characters
         /// </summary>
         private bool ProbeGround()
         {
+            return ProbeGround(groundProbeDistance);
+        }
+
+        private bool ProbeGround(float probeDistance)
+        {
             Vector3 scale = transform.lossyScale;
             float radius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
             float halfHeight = Mathf.Max(controller.height * Mathf.Abs(scale.y) * 0.5f, radius);
 
             Vector3 centre = transform.TransformPoint(controller.center);
             Vector3 origin = centre + Vector3.down * (halfHeight - radius) + Vector3.up * ProbeLift;
-            float distance = ProbeLift + controller.skinWidth + groundProbeDistance;
+            float distance = ProbeLift + controller.skinWidth + probeDistance;
 
             if (!Physics.SphereCast(origin, radius * 0.95f, Vector3.down, out RaycastHit hit, distance,
                     groundLayers, QueryTriggerInteraction.Ignore))

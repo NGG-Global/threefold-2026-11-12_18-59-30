@@ -225,7 +225,9 @@ namespace Threefold.Magic
             var input = new AerialFrameInput
             {
                 DeltaTime = deltaTime,
-                Grounded = motor.IsGrounded,
+                // The ground as the motor will see it this frame, not as it was last frame.
+                Grounded = motor.GroundedNow,
+                LandingImminent = motor.LandsWithin(motor.JumpBufferTime),
                 VerticalSpeed = motor.VerticalSpeed,
                 Gravity = motor.Gravity,
                 JumpedFromGround = motor.GroundJumpCount != seenGroundJumps,

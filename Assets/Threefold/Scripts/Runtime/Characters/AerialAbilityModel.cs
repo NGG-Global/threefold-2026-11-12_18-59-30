@@ -52,6 +52,12 @@ namespace Threefold.Characters
         public bool JumpPressed;
         public bool JumpHeld;
 
+        /// <summary>
+        /// Falling, the ground will be reached within the motor's jump-buffer time: a press now is left to the motor,
+        /// which jumps on landing as it always has.
+        /// </summary>
+        public bool LandingImminent;
+
         /// <summary>The ability of the selected discipline.</summary>
         public AerialAbilityKind Selected;
 
@@ -137,7 +143,9 @@ namespace Threefold.Characters
     /// Rules:
     /// - The first jump is the motor's own and is unchanged. An ability becomes usable only after the character
     ///   left the ground by a jump (falling off an edge does not count), and only with a new press of Jump in the
-    ///   air: holding the press of the first jump starts nothing.
+    ///   air: holding the press of the first jump starts nothing. A press on the frame of a jump (from the ground
+    ///   or off a ledge) is that jump's, never the ability's, and a press just before landing is left to the motor's
+    ///   jump buffer.
     /// - One activation per airborne sequence, whichever discipline is selected: switching discipline in the air
     ///   never gives another. An ability in progress finishes as the one it began as.
     /// - A confirmed landing (ground for some frames in a row) gives it back. A one-frame touch of ground, a wall,
@@ -256,7 +264,11 @@ namespace Threefold.Characters
                     break;
             }
 
-            if (state == AerialState.Idle && input.JumpPressed && !input.Grounded && armed && !interrupted && !restrained)
+            // The press of a jump made this frame (from the ground or off a ledge) belongs to that jump; a press just
+            // before landing belongs to the motor's jump buffer.
+            bool pressIsFree = !input.JumpedFromGround && !input.LaunchedFromLedge && !input.LandingImminent;
+            if (state == AerialState.Idle && input.JumpPressed && pressIsFree && !input.Grounded && armed && !interrupted &&
+                !restrained)
             {
                 TryStart(input, deltaTime, ref motion, events);
             }
@@ -518,6 +530,16 @@ namespace Threefold.Characters
                 return;
             }
 
+            if (input.Grounded)
+            {
+                // A dash is an aerial move: on the ground it ends at once and keeps only its exit speed, from this frame.
+                ExitDash(dash.exitSpeed);
+                motion.HasStoredHorizontal = true;
+                motion.StoredHorizontal = exitVelocity;
+                End(AerialEndReason.Landed, events);
+                return;
+            }
+
             if (input.HitWall)
             {
                 if (WallStopsDash(dashDirection, input.WallNormal, dash.stopAngle))
@@ -582,6 +604,12 @@ namespace Threefold.Characters
             if (state == AerialState.Idle)
             {
                 return;
+            }
+
+            if (state == AerialState.Dashing && reason == AerialEndReason.Landed)
+            {
+                // Landing, or a jump from the ground, during a dash: the dash's speed is not carried along the ground.
+                ExitDash(dash.exitSpeed);
             }
 
             AerialAbilityKind ended = active;

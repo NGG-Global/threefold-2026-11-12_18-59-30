@@ -254,6 +254,62 @@ namespace Threefold.Tests
             Assert.AreEqual(1, Count(AerialEventKind.Activated));
         }
 
+        [Test]
+        public void ThePressOfAJumpOffALedgeIsThatJumpsOnly()
+        {
+            // Caught a ledge without using the ability, then jumped off it backwards with one press.
+            JumpFromGround(AerialAbilityKind.Dash);
+            AerialFrameInput leap = Air(AerialAbilityKind.Dash, press: true, verticalSpeed: 5f);
+            leap.LaunchedFromLedge = true;
+            Tick(leap);
+            Assert.AreEqual(0, Count(AerialEventKind.Activated), "the back jump keeps its arc");
+            Assert.IsFalse(motion.ConsumeJumpPress);
+
+            Tick(Air(AerialAbilityKind.Dash, press: true));
+            Assert.AreEqual(1, Count(AerialEventKind.Activated), "a new press afterwards starts the dash");
+        }
+
+        [Test]
+        public void APressJustBeforeLandingIsLeftToTheJumpBuffer()
+        {
+            JumpFromGround(AerialAbilityKind.Ascension);
+            AerialFrameInput nearGround = Air(AerialAbilityKind.Ascension, press: true, verticalSpeed: -8f);
+            nearGround.LandingImminent = true;
+            Tick(nearGround);
+            Assert.AreEqual(0, Count(AerialEventKind.Activated));
+            Assert.IsFalse(motion.ConsumeJumpPress, "the motor jumps on landing, as before");
+            Assert.AreEqual(1, model.UsesLeft);
+        }
+
+        [Test]
+        public void ADashThatMeetsTheGroundEndsAndKeepsOnlyItsExitSpeed()
+        {
+            DashTuning tuning = AerialAbilityDefaults.Dash();
+            JumpFromGround(AerialAbilityKind.Dash);
+            Tick(Air(AerialAbilityKind.Dash, press: true));
+            Tick(Ground(AerialAbilityKind.Dash));
+            Assert.AreEqual(AerialState.Idle, model.State);
+            Assert.IsTrue(events.Exists(e => e.Kind == AerialEventKind.Ended && e.Reason == AerialEndReason.Landed));
+            Assert.IsTrue(motion.HasStoredHorizontal, "clamped on the landing frame");
+            Assert.AreEqual(tuning.exitSpeed, motion.StoredHorizontal.magnitude, 0.001f);
+            Assert.IsFalse(motion.HasDashVelocity, "no dash along the ground");
+        }
+
+        [Test]
+        public void AJumpFromTheGroundDuringADashDoesNotCarryItsSpeed()
+        {
+            DashTuning tuning = AerialAbilityDefaults.Dash();
+            JumpFromGround(AerialAbilityKind.Dash);
+            Tick(Air(AerialAbilityKind.Dash, press: true));
+            AerialFrameInput jumped = Air(AerialAbilityKind.Dash, held: true, verticalSpeed: 9f);
+            jumped.JumpedFromGround = true;
+            Tick(jumped);
+            Assert.AreEqual(AerialState.Idle, model.State);
+            Tick(Air(AerialAbilityKind.Dash, held: true, verticalSpeed: 8f));
+            Assert.IsTrue(motion.HasStoredHorizontal);
+            Assert.LessOrEqual(motion.StoredHorizontal.magnitude, tuning.exitSpeed + 0.001f);
+        }
+
         // ----------------------------------------------------------- Ascension
 
         [Test]
