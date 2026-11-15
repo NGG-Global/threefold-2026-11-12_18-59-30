@@ -106,6 +106,12 @@ namespace Threefold.Combat
         private bool baseScaleKnown;
         private int effectEventId;
 
+        /// <summary>
+        /// Raised when any projectile is launched, after it has been placed and before it can strike. For
+        /// presentation only (a ribbon that follows it); the projectile flies the same with or without listeners.
+        /// </summary>
+        public static event System.Action<Projectile> Launched;
+
         /// <summary>The kind of magic this projectile carries.</summary>
         public SpellElement Element
         {
@@ -213,6 +219,8 @@ namespace Threefold.Combat
                 trail.Clear();
             }
 
+            Launched?.Invoke(this);
+
             // A sweep does not report colliders it starts inside, so check for a point-blank target first.
             int count = Physics.OverlapSphereNonAlloc(transform.position, data.Radius, overlaps, data.HitLayers,
                 QueryTriggerInteraction.Ignore);
@@ -243,6 +251,7 @@ namespace Threefold.Combat
         {
             Deflectable.Clear();
             flyingCount = 0;
+            Launched = null;
         }
 
         private void SetFlying(bool value)

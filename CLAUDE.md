@@ -67,6 +67,15 @@ separates approved decisions from proposals; do not present a proposal as decide
   from that tool's measurements of the exported model. Movement restriction of a strike is data
   (`MeleeStepProfile` commitment), never code per discipline. A placeholder that stands in for a
   missing motion (the Flame kick) is listed under "What needs new animation"; do not call it final.
+- Magical combat effects (`Docs/MagicVfx.md`) follow the rules and the animation cues and never lead them:
+  no effect deals damage or calls a rule. What starts, grows and stops when is decided in plain C#
+  (`BodyEffectSequencer`, `MagicVfxGeometry`, `MagicVfxQuality`, `MagicVfxBudget`, `WorldReactionVfx`);
+  `DisciplineBodyEffects` and `WorldMagicFeedback` only carry it out. Differences between disciplines are data
+  (`BodyEffectTiming` in each discipline's presentation; starting values in `MagicVfxDefaults`), never code
+  per discipline. Every effect is pooled, has no light, collision, audio or sub-emitter, and stays within
+  `MagicVfxBudget`. Third-party pack prefabs are never edited: `MagicVfxPackAdapter` makes project-owned
+  copies. Pack facts come from `Tools/vfx/analyse_vfx_packs.py`, not from prefab names. The look is a proposal
+  until the owner has reviewed it in Unity and on a device.
 - How the world responds to magic (`Docs/WorldMagic.md`) follows from properties and effects, not
   from a script per object or a table of spell-on-object cases. The rules (`MagicalPropertySet`,
   the properties in `WorldProperties`, `CreatureEffectModel`, `MagicalObjectRules`) are plain C#;

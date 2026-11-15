@@ -12,6 +12,24 @@ namespace Threefold.Pooling
     {
         internal Pool Owner;
 
+        /// <summary>
+        /// Counts the times this instance has been handed out. Whoever keeps a reference to a spawned instance
+        /// keeps this number too: when it has changed, the instance was reused for something else, and the
+        /// old owner must leave it alone.
+        /// </summary>
+        public int Generation { get; private set; }
+
+        internal void MarkSpawned()
+        {
+            Generation++;
+        }
+
+        /// <summary>True while this instance is still the one handed out with <paramref name="generation"/>.</summary>
+        public bool IsSpawn(int generation)
+        {
+            return Generation == generation && isActiveAndEnabled;
+        }
+
         /// <summary>Switches the object off and makes it available for reuse.</summary>
         public void ReturnToPool()
         {

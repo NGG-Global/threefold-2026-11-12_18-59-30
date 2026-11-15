@@ -39,6 +39,40 @@ namespace Threefold.Magic
         [Tooltip("If the Animator has no trigger for a melee swing, use the casting gesture instead, so a swing is " +
                  "visible on a character without melee animations.")]
         public bool castGestureForMelee = true;
+
+        [Header("Body effects (timed by the combat animation cues)")]
+        [Tooltip("Trail on the striking hand or foot. Attached to the bone; drawn in world space.")]
+        public PooledObject limbTrailEffect;
+
+        [Tooltip("Energy gathering at the striking limb before contact.")]
+        public PooledObject gatherEffect;
+
+        [Tooltip("Concentrated burst at the striking limb at the moment of contact, along the swing.")]
+        public PooledObject contactEffect;
+
+        [Tooltip("Contact of a heavy strike. Falls back to the contact effect.")]
+        public PooledObject heavyContactEffect;
+
+        [Tooltip("Embers or motes left where the limb was after a strike that made contact.")]
+        public PooledObject lingerEffect;
+
+        [Tooltip("When each body effect starts, grows and stops. Uses MagicVfxDefaults until configured.")]
+        public BodyEffectTiming bodyTiming = new BodyEffectTiming();
+
+        [Header("Charged attack effects")]
+        [Tooltip("A wave front or pulse ring that travels over the charged attack's area after release.")]
+        public PooledObject areaWaveEffect;
+
+        [Tooltip("Seconds the wave front takes to cross the area. Visual only: the hit is resolved at release.")]
+        [Min(0.05f)]
+        public float areaWaveSeconds = 0.22f;
+
+        [Tooltip("A ribbon that follows the charged projectile and fades where it ends.")]
+        public PooledObject projectileTrailEffect;
+
+        [Header("Defence")]
+        [Tooltip("Optional. A restrained barrier held in front of the Mage while blocking with this discipline.")]
+        public PooledObject blockBarrierEffect;
     }
 
     /// <summary>

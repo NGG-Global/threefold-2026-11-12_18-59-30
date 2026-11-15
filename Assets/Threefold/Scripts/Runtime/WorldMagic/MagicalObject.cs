@@ -109,6 +109,20 @@ namespace Threefold.WorldMagic
         public event Action<MagicalObject, MagicEffect, EffectResponse> EffectReceived;
 
         /// <summary>
+        /// Raised for every effect that arrives at any magical object, after <see cref="EffectReceived"/>. For
+        /// feedback that is shown the same on every object (the magic arriving), so it needs no setup per object.
+        /// It changes nothing: the effect has already been applied.
+        /// </summary>
+        public static event Action<MagicalObject, MagicEffect, EffectResponse> AnyEffectReceived;
+
+        // Static state survives between Play sessions when domain reload is disabled in the Editor.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticEvents()
+        {
+            AnyEffectReceived = null;
+        }
+
+        /// <summary>
         /// Raised when the object's state was set as a whole rather than changed step by step: put back
         /// to how it started, loaded from the saved world, or brought up to date after being switched
         /// off. Whoever shows the state looks at it afresh; nothing that already happened is played again.
@@ -258,6 +272,7 @@ namespace Threefold.WorldMagic
             }
 
             EffectReceived?.Invoke(this, effect, response);
+            AnyEffectReceived?.Invoke(this, effect, response);
 
             SendReactions();
 
