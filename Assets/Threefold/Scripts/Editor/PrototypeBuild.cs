@@ -30,10 +30,9 @@ namespace Threefold.EditorTools
         private static StreamWriter logWriter;
 
         /// <summary>
-        /// Assembles the Broken Foundry, the Combat Arena and the Fantasy Playground, validates them and
-        /// builds a development APK that starts in the playground; its south gate leads to the arena.
-        /// The foundry has no portal yet: in a development build the diagnostics (three-finger tap)
-        /// offer "Next scene".
+        /// Assembles the scenes of <see cref="DevelopmentScenes"/>, validates them and builds a development
+        /// APK that starts in the playground; its south gate leads to the arena. The other scenes have no
+        /// portal: the diagnostics (three-finger tap) list every scene of the build.
         /// The output path is taken from the -customBuildPath argument when present. The Editor
         /// exits with code 0 on success and 1 on any failure.
         /// </summary>
@@ -43,12 +42,21 @@ namespace Threefold.EditorTools
 
             try
             {
-                // The arena is assembled first: the playground is then the scene left open, and its
-                // portal to the arena already finds the arena in Build Settings.
-                if (!AssembleAndValidate(BrokenFoundrySetup.BuildForAutomation) ||
-                    !AssembleAndValidate(CombatArenaSetup.BuildForAutomation) ||
-                    !AssembleAndValidate(FantasyPlaygroundSetup.BuildForAutomation))
+                // The playground is assembled last: it is then the scene left open, and its portal to the
+                // arena already finds the arena in Build Settings.
+                foreach (DevelopmentScene scene in AssemblyOrder())
                 {
+                    if (!AssembleAndValidate(scene))
+                    {
+                        Exit(1);
+                        return;
+                    }
+                }
+
+                string missing = FirstMissingScene(ScenePaths(), File.Exists);
+                if (missing != null)
+                {
+                    Debug.LogError($"[Threefold] The scene '{missing}' was not written, so the build was stopped.");
                     Exit(1);
                     return;
                 }
@@ -65,7 +73,7 @@ namespace Threefold.EditorTools
 
                 var options = new BuildPlayerOptions
                 {
-                    scenes = new[] { FantasyPlaygroundSetup.ScenePath, CombatArenaSetup.ScenePath, BrokenFoundrySetup.ScenePath },
+                    scenes = ScenePaths(),
                     locationPathName = outputPath,
                     target = BuildTarget.Android,
                     targetGroup = BuildTargetGroup.Android,
@@ -94,12 +102,82 @@ namespace Threefold.EditorTools
             }
         }
 
-        private static bool AssembleAndValidate(Func<Scene> assemble)
+        /// <summary>A scene of the development build: where it is saved, how it is assembled and how it is checked.</summary>
+        internal readonly struct DevelopmentScene
         {
-            Scene scene = assemble();
+            internal readonly string Path;
+            internal readonly Func<Scene> Assemble;
+            internal readonly Func<Scene, StringBuilder, int> Validate;
+
+            internal DevelopmentScene(string path, Func<Scene> assemble, Func<Scene, StringBuilder, int> validate)
+            {
+                Path = path;
+                Assemble = assemble;
+                Validate = validate;
+            }
+        }
+
+        /// <summary>
+        /// The scenes of the development build, in the order of the build: the first is the one the game
+        /// starts in. The gameplay scenes come first and are unchanged; the review scenes follow (the Style
+        /// Lab, the main menu, the Reference Courtyard) and are reached only through the development
+        /// diagnostics' scene list. This method builds development builds only; there is no release build yet,
+        /// and when there is one it must not take the review scenes from here.
+        /// </summary>
+        internal static DevelopmentScene[] DevelopmentScenes()
+        {
+            return new[]
+            {
+                new DevelopmentScene(FantasyPlaygroundSetup.ScenePath, FantasyPlaygroundSetup.BuildForAutomation, PrototypeValidator.Validate),
+                new DevelopmentScene(CombatArenaSetup.ScenePath, CombatArenaSetup.BuildForAutomation, PrototypeValidator.Validate),
+                new DevelopmentScene(BrokenFoundrySetup.ScenePath, BrokenFoundrySetup.BuildForAutomation, PrototypeValidator.Validate),
+                new DevelopmentScene(StyleLabSetup.ScenePath, StyleLabSetup.BuildForAutomation, PrototypeValidator.Validate),
+                new DevelopmentScene(MainMenuSetup.ScenePath, MainMenuSetup.BuildForAutomation, MainMenuSetup.Validate),
+                new DevelopmentScene(ReferenceCourtyardSetup.ScenePath, ReferenceCourtyardSetup.BuildForAutomation, PrototypeValidator.Validate),
+            };
+        }
+
+        /// <summary>The scenes' paths in the order of the build.</summary>
+        internal static string[] ScenePaths()
+        {
+            DevelopmentScene[] scenes = DevelopmentScenes();
+            var paths = new string[scenes.Length];
+            for (int i = 0; i < scenes.Length; i++)
+            {
+                paths[i] = scenes[i].Path;
+            }
+
+            return paths;
+        }
+
+        /// <summary>The order in which the scenes are assembled: the build's order turned round, so the first scene is assembled last.</summary>
+        internal static DevelopmentScene[] AssemblyOrder()
+        {
+            DevelopmentScene[] scenes = DevelopmentScenes();
+            Array.Reverse(scenes);
+            return scenes;
+        }
+
+        /// <summary>The first scene of the list that does not exist, or null if all do.</summary>
+        internal static string FirstMissingScene(string[] paths, Func<string, bool> exists)
+        {
+            foreach (string path in paths)
+            {
+                if (!exists(path))
+                {
+                    return path;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool AssembleAndValidate(DevelopmentScene entry)
+        {
+            Scene scene = entry.Assemble();
 
             var problems = new StringBuilder();
-            int problemCount = PrototypeValidator.Validate(scene, problems);
+            int problemCount = entry.Validate(scene, problems);
             if (problemCount > 0)
             {
                 Debug.LogError($"[Threefold] The assembled scene '{scene.path}' has {problemCount} problem(s); the build was stopped.\n{problems}");

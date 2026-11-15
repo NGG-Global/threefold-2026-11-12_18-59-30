@@ -20,7 +20,8 @@ namespace Threefold.DevTools
     /// enemies and projectiles, performance warnings (<see cref="PerformanceWarnings"/>), the current
     /// discipline, the magical object in the middle of the view with its properties and state, every
     /// temporary state running, the reaction queue, and the level's puzzle progression. It also offers
-    /// a restart, a retry from the last checkpoint and a way to load another scene in the build.
+    /// a restart, a retry from the last checkpoint and a list of the build's scenes to load one
+    /// (<see cref="DevSceneSwitcher"/>; four fingers on the screen load the next scene without the list).
     ///
     /// Hidden in normal play. It switches itself off completely in a build that is not a development
     /// build. To show or hide it: F3 or the back-quote key, the gamepad's Select (View) button, or a
@@ -78,7 +79,9 @@ namespace Threefold.DevTools
         private string shown = string.Empty;
         private float nextRefresh;
         private float nextRescan;
-        private int touchesBefore;
+        private readonly DevSceneSwitcher sceneSwitcher = new DevSceneSwitcher();
+        private string[] sceneNames = new string[0];
+        private bool scenesOpen;
         private long deliveredBefore;
         private float deliveredAt;
         private float deliveredPerSecond;
@@ -122,6 +125,13 @@ namespace Threefold.DevTools
             // Which build this is, read once: the build writes the file (PrototypeBuild); without it the line says so.
             var stamp = Resources.Load<TextAsset>(BuildStamp.ResourceName);
             buildLine = BuildStamp.DescribeForDiagnostics(Application.isEditor, stamp != null ? stamp.text : null);
+
+            // The scenes of this build, by name, for the scene list.
+            sceneNames = new string[SceneManager.sceneCountInBuildSettings];
+            for (int i = 0; i < sceneNames.Length; i++)
+            {
+                sceneNames[i] = DevSceneSwitcher.DisplayName(SceneUtility.GetScenePathByBuildIndex(i));
+            }
         }
 
         private void Update()
@@ -134,9 +144,15 @@ namespace Threefold.DevTools
                 FrameTimingManager.CaptureFrameTimings();
             }
 
-            if (TogglePressed())
+            DevGesture gesture = ReadGesture();
+            if (gesture == DevGesture.ToggleDiagnostics)
             {
                 SetVisible(!visible);
+            }
+            else if (gesture == DevGesture.NextScene)
+            {
+                LoadScene(DevSceneSwitcher.NextIndex(SceneManager.GetActiveScene().buildIndex, SceneManager.sceneCountInBuildSettings));
+                return;
             }
 
             if (!visible || Time.unscaledTime < nextRefresh)
@@ -155,24 +171,37 @@ namespace Threefold.DevTools
             Compose();
         }
 
-        private bool TogglePressed()
+        /// <summary>
+        /// Keys and buttons act at once; fingers are counted until they leave (<see cref="DevSceneSwitcher"/>):
+        /// a short tap of three shows or hides the diagnostics, and one of four loads the next scene while they are
+        /// shown. F4 loads the next scene too.
+        /// </summary>
+        private DevGesture ReadGesture()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && (keyboard.f3Key.wasPressedThisFrame || keyboard.backquoteKey.wasPressedThisFrame))
+            if (keyboard != null)
             {
-                return true;
+                if (keyboard.f3Key.wasPressedThisFrame || keyboard.backquoteKey.wasPressedThisFrame)
+                {
+                    return DevGesture.ToggleDiagnostics;
+                }
+
+                if (keyboard.f4Key.wasPressedThisFrame)
+                {
+                    return DevGesture.NextScene;
+                }
             }
 
             Gamepad gamepad = Gamepad.current;
             if (gamepad != null && gamepad.selectButton.wasPressedThisFrame)
             {
-                return true;
+                return DevGesture.ToggleDiagnostics;
             }
 
             Touchscreen touchscreen = Touchscreen.current;
             if (touchscreen == null)
             {
-                return false;
+                return DevGesture.None;
             }
 
             int touches = 0;
@@ -184,9 +213,17 @@ namespace Threefold.DevTools
                 }
             }
 
-            bool tapped = touches >= 3 && touchesBefore < 3;
-            touchesBefore = touches;
-            return tapped;
+            return sceneSwitcher.Update(touches, Time.unscaledDeltaTime, visible);
+        }
+
+        /// <summary>Loads a scene of the build by its index, if there is more than one and the index names one.</summary>
+        private static void LoadScene(int buildIndex)
+        {
+            int count = SceneManager.sceneCountInBuildSettings;
+            if (count > 1 && buildIndex >= 0 && buildIndex < count && buildIndex != SceneManager.GetActiveScene().buildIndex)
+            {
+                SceneManager.LoadScene(buildIndex);
+            }
         }
 
         private void Compose()
@@ -551,14 +588,32 @@ namespace Threefold.DevTools
                 session.RetryFromCheckpoint();
             }
 
-            int scenes = SceneManager.sceneCountInBuildSettings;
-            if (scenes > 1 && GUILayout.Button("Next scene", buttonStyle))
+            int active = SceneManager.GetActiveScene().buildIndex;
+            if (sceneNames.Length > 1 && GUILayout.Button(scenesOpen ? "Scenes (close)" : "Scenes", buttonStyle))
             {
-                int next = (SceneManager.GetActiveScene().buildIndex + 1) % scenes;
-                SceneManager.LoadScene(next);
+                scenesOpen = !scenesOpen;
+            }
+
+            if (sceneNames.Length > 1 && GUILayout.Button("Next scene", buttonStyle))
+            {
+                LoadScene(DevSceneSwitcher.NextIndex(active, sceneNames.Length));
             }
 
             GUILayout.EndHorizontal();
+
+            // The scene list: one button for each scene of the build; the one that is open is marked.
+            if (scenesOpen)
+            {
+                for (int i = 0; i < sceneNames.Length; i++)
+                {
+                    if (GUILayout.Button((i == active ? "> " : "   ") + sceneNames[i] + (i == active ? "  (open)" : string.Empty), buttonStyle))
+                    {
+                        scenesOpen = false;
+                        LoadScene(i);
+                    }
+                }
+            }
+
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label(shown, labelStyle);
             GUILayout.EndScrollView();

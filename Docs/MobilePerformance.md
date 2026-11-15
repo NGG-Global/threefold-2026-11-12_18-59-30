@@ -120,7 +120,10 @@ the laptop, commit `ProjectSettings/ProjectSettings.asset`.
 ## Development diagnostics
 
 Development builds only (it switches itself off otherwise). F3, back-quote, gamepad Select or a
-three-finger tap. It shows:
+short three-finger tap. Its **Scenes** button lists every scene of the build and loads the one chosen;
+**Next scene**, F4, or a short four-finger tap while the diagnostics are shown load the next one. The
+gestures are taps of at most 0.7 s, so playing with several fingers on the screen changes nothing
+(`DevSceneSwitcher`, tested outside Unity; not yet tried on a device). It shows:
 
 - which build this is: the version, the commit, the number of the build run, the branch and the build
   time (`BuildStamp`). The build writes them into the game; a build started by hand has no run number and

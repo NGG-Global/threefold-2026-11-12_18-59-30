@@ -149,6 +149,17 @@ separates approved decisions from proposals; do not present a proposal as decide
   `MainMenuScreen` only carries them out. It offers one predefined protagonist: no character creation,
   class selection or switching. The name Eryn, his described appearance and the menu's look are proposals
   until the owner approves them; the character shown is the intermediate Mage, never call it Eryn's final art.
+- The Reference Courtyard (`Docs/VisualReferencePrototype.md`) is a review scene for the visual direction,
+  built only by `ReferenceCourtyardSetup` from `ReferenceCourtyardLayout`: change the numbers there and keep
+  `ReferenceCourtyardLayoutTests` passing (they check the first view's composition as arithmetic). Its meshes
+  are made by code (`ReferenceCourtyardMeshes`); generated meshes are kept, so a changed shape needs a new
+  name (raise `Version`). Nothing in it is transparent, it has one light, and it stays under the layout's
+  triangle limit. It is isolated: no gameplay scene leads to it and it adds no rule. Never say it matches
+  the owner's reference picture; say what the renders show. `ReviewRenders` pictures are Editor renders,
+  not the game on a device.
+- The development build's scenes are `PrototypeBuild.DevelopmentScenes`: the gameplay scenes first and
+  unchanged, review scenes after them, reached only through the diagnostics' scene list
+  (`DevSceneSwitcher`, plain C#). A release build must not take the review scenes.
 - A class deriving from `MonoBehaviour` or `ScriptableObject` (directly or not) must be alone in a
   file of its own name, or Unity saves its assets without a script. `check_unity_repo.py` checks it.
 - Project rendering settings (`Assets/Settings`, `ProjectSettings`) are not changed by tooling

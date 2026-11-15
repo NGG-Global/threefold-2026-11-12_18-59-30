@@ -81,8 +81,10 @@ The art bible asks for the first prototype to be "a small isolated scene" (secti
 holds what that section lists: the Mage as the test character, playable; paved ground, an arch
 with columns and walls, a foliage cluster, mountains and haze; props in wood, cloth and metal;
 two lighting conditions and the outline switch. One training construct stands on a plinth so the
-usual objective works and there is something to cast at. The lab is not part of the Android
-build.
+usual objective works and there is something to cast at. The lab is one of the review scenes of
+the development APK: it is reached through the diagnostics' scene list, never from the game
+(`Docs/CloudBuild.md`). A second, composed test scene, the Reference Courtyard, is described in
+`Docs/VisualReferencePrototype.md`.
 
 One difference from the bible's list: there is no scripted camera orbit. The camera is the
 game's own; orbit it by hand to check that lines and brushwork hold steady in motion.
