@@ -66,6 +66,15 @@ Described part by part, with before and after images, in `Docs/Characters/Mage.m
 | Painterly materials, delicate linework | A painted atlas with drawn hems, seams and bands; the style's contour line as before |
 | Avoided | No hat, no hood over the face, no armour, nothing large on the back, no skin shader, no thick outline, no cloth simulation |
 
+### The second pass
+
+A first look at the character in Unity's renders showed that the list above was met in parts and missed as
+a whole: from behind, the Wayfarer was a cap over a rectangle. The second pass
+(`Docs/Characters/Mage.md`, "The second pass") gives him an outline of his own from that side: tufted,
+swept-back hair, the hood lying on his back, and a cloak that widens and narrows to two slanted points.
+The contour line is thinner and lighter. The identity is unchanged: the same asymmetry, the same palette,
+the same restraint in magical detail, and no hat, armour or hood over the face.
+
 ## 4. Bearing by discipline
 
 `CharacterPersonality` on the Mage adds each discipline's bearing after the Animator has posed the
