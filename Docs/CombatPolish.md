@@ -3,7 +3,7 @@
 **Status (16 November 2026).** An audit of the combat animation system and of the imported asset packs, and
 a first, deliberately small reference implementation on one strike: the Flame hook. Rules tested outside
 Unity and in Unity on the build runner; the strike drawn frame by frame by Unity before and after.
-**Nothing has been played, and no effect has been seen.** Whether the hook now feels fluid, and whether
+**Nothing has been played, and no effect has been seen:** the frames show the animation only. Whether the hook now feels fluid, and whether
 the impact reads as stronger, are for the owner to judge on a device before any of this is extended.
 
 No combat rule, number or timing is changed: start-up, recovery, damage, the combo window and the moment
@@ -92,6 +92,35 @@ How it is built, so the same can be applied to other strikes:
 
 Nothing in the chain waits for anything else: damage and every effect come from the rules' contact, as
 before.
+
+### What Unity's frames show
+
+`StrikeSequenceCapture` plays the hook the way the game does (the animation model decides, the binding
+hands that to the Mage's own Animator Controller, the Animator is advanced a thirtieth of a second at a
+time) and draws 26 frames, once with the slot as it was generated before and once as it is now. Run 30 on
+the build runner; Editor renders, no effects, no enemy, no swing of cloak or hair.
+
+Before:
+
+![The hook before](CombatPolish/images/hook-sequence-before-run30.png)
+
+After:
+
+![The hook after](CombatPolish/images/hook-sequence-after-run30.png)
+
+Read from the frames and from the model's own record of each frame:
+
+- **The wind-up and the blow are the same in both**: frames 1 to 4, at 2.22x, contact at 0.12 s.
+- **Before**, the body is back in the stance by frame 13 (0.40 s): the lunge is held for about five frames
+  and then pulled back at 2.95x.
+- **After**, the lunge and its return last to frame 18 (0.57 s) at 1.6x. The Mage is free at 0.38 s, as
+  before; the last 0.19 s are the tail.
+- **A caution the frames raise.** The library clip itself holds the extended pose for a long moment. At
+  1.6x that hold is about nine frames (0.3 s), and it may read as the Mage standing in the lunge rather
+  than as follow-through. If it does, the value to try next is 2.0x to 2.2x; it is one number in the
+  animation set. The frames cannot settle this; motion on a device can.
+- The first frame of a strike is drawn at a little over half weight (0.56 before, 0.67 after): the layer
+  fades in while the state cross-fades, as the audit found.
 
 ## 4. Evaluated and left alone
 

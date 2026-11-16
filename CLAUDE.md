@@ -169,6 +169,12 @@ separates approved decisions from proposals; do not present a proposal as decide
   camera does by itself is decided in plain C# (`CameraRecenter`) and `ThirdPersonCamera` only carries it out.
   Never change `Time.timeScale` for feel: the combat rules run on game time. Hit-stop and haptics are
   evaluated in that document and not built; do not add them without the owner's decision.
+- Combat polish (`Docs/CombatPolish.md`) is done one strike at a time and judged before it is extended. A
+  strike's follow-through may outlast the rules' recovery as a tail (`CombatAnimationSlot.followThroughSpeed`);
+  the rules never wait for it and contact never moves. Impact layers are data on the discipline's presentation
+  (`heavyImpactEffect`, `heavyImpactFromStep`) and their rules are plain C# (`ImpactLayers`). A change to a
+  generated animation set goes through `CombatAnimationDefaults.DataVersion` and leaves hand-tuned slots alone;
+  a changed pack effect is a new adapted prefab. Show a changed strike with `StrikeSequenceCapture` before and after.
 - The development build's scenes are `PrototypeBuild.DevelopmentScenes`: the gameplay scenes first and
   unchanged, review scenes after them, reached only through the diagnostics' scene list
   (`DevSceneSwitcher`, plain C#). A release build must not take the review scenes.
