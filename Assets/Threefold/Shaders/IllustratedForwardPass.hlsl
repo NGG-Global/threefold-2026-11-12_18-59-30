@@ -83,13 +83,14 @@ half4 IllustratedFragment(Varyings input) : SV_Target
 
     half3 albedo = albedoAlpha.rgb * _BaseColor.rgb;
 
-#if defined(_PAINT_VARIATION)
-    albedo = ApplyPaintVariation(albedo, input.positionWS);
-#endif
-
     InputData inputData = (InputData)0;
     inputData.positionWS = input.positionWS;
     inputData.normalWS = NormalizeNormalPerPixel(input.normalWS);
+
+#if defined(_PAINT_VARIATION)
+    albedo = ApplyPaintVariation(albedo, input.positionWS, inputData.normalWS);
+#endif
+
     inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
 
 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)

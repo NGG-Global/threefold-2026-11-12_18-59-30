@@ -26,6 +26,7 @@ Shader "Threefold/Illustrated Lit"
         [NoScaleOffset] _PaintMap("Variation Map (R value, G warmth)", 2D) = "gray" {}
         _PaintStrength("Strength", Range(0, 0.5)) = 0.12
         _PaintScale("Repeats Per Metre", Range(0.01, 1)) = 0.08
+        _TopTint("Weathering On Faces That Look Up (multiplied in; alpha is the strength)", Color) = (0.74, 0.84, 0.58, 0)
 
         [Header(Emission)]
         [Toggle(_EMISSION)] _Emission("Emission", Float) = 0

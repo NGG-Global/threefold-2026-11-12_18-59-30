@@ -55,6 +55,15 @@ namespace Threefold.EditorTools
 
         /// <summary>Drawn from both sides, for thin shapes such as grass blades.</summary>
         public bool TwoSided;
+
+        /// <summary>
+        /// Weathering on faces that look up: what their colour is multiplied by, in soft patches. Stone takes
+        /// moss and damp this way without a second material. It works only with paint variation on.
+        /// </summary>
+        public Rgb TopTint = StylePalette.Weathering;
+
+        /// <summary>0 to 1. 0 leaves the surface without weathering.</summary>
+        public float TopTintStrength;
     }
 
     /// <summary>
@@ -65,6 +74,12 @@ namespace Threefold.EditorTools
     public static class StyleMaterialPresets
     {
         public const string Prefix = "Illustrated_";
+
+        /// <summary>
+        /// Raised when the values of the presets change, so that materials generated earlier take the new
+        /// values (VisualStyleAssets). 2: material cohesion (Docs/MaterialCohesion.md).
+        /// </summary>
+        public const int Revision = 2;
 
         private static List<StyleMaterialPreset> all;
 
@@ -106,25 +121,28 @@ namespace Threefold.EditorTools
                     Name = Prefix + "Stone", Family = MaterialFamily.Stone, Replaces = "Stone",
                     Texture = PaintedTextureRecipe.Create("Stone", PaintedSurface.StoneBlocks, StylePalette.Stone,
                         StylePalette.InkCool, 11),
+                    PaintStrength = 0.2f, TopTintStrength = 0.5f,
                 },
                 new StyleMaterialPreset
                 {
                     Name = Prefix + "StoneDark", Family = MaterialFamily.Stone, Replaces = "StoneDark",
                     Texture = PaintedTextureRecipe.Create("StoneDark", PaintedSurface.StoneBlocks, StylePalette.StoneDark,
                         StylePalette.InkCool, 23),
+                    PaintStrength = 0.18f, TopTintStrength = 0.4f,
                 },
                 new StyleMaterialPreset
                 {
                     Name = Prefix + "Paving", Family = MaterialFamily.Stone, Replaces = "Paving",
                     Texture = PaintedTextureRecipe.Create("Paving", PaintedSurface.Flagstones, StylePalette.Paving,
                         StylePalette.InkWarm, 37),
+                    PaintStrength = 0.17f, TopTint = StylePalette.Grime, TopTintStrength = 0.35f,
                 },
                 new StyleMaterialPreset
                 {
                     Name = Prefix + "Wood", Family = MaterialFamily.Wood,
                     Texture = PaintedTextureRecipe.Create("Wood", PaintedSurface.Planks, StylePalette.Wood,
                         StylePalette.InkWarm, 41),
-                    PaintStrength = 0.08f,
+                    PaintStrength = 0.12f,
                 },
                 new StyleMaterialPreset
                 {
@@ -138,14 +156,14 @@ namespace Threefold.EditorTools
                     Name = Prefix + "Cloth", Family = MaterialFamily.Cloth,
                     Texture = PaintedTextureRecipe.Create("Cloth", PaintedSurface.Cloth, StylePalette.Cloth,
                         StylePalette.InkPlum, 53, 256),
-                    Wrap = 0.5f, PaintStrength = 0f,
+                    Tint = new Rgb(0.93f, 0.90f, 0.88f), Wrap = 0.55f, PaintStrength = 0f,
                 },
                 new StyleMaterialPreset
                 {
                     Name = Prefix + "ClothCool", Family = MaterialFamily.Cloth,
                     Texture = PaintedTextureRecipe.Create("ClothCool", PaintedSurface.Cloth, StylePalette.ClothCool,
                         StylePalette.InkPlum, 59, 256),
-                    Wrap = 0.5f, PaintStrength = 0f,
+                    Tint = new Rgb(0.90f, 0.92f, 0.94f), Wrap = 0.55f, PaintStrength = 0f,
                 },
                 new StyleMaterialPreset
                 {
@@ -160,7 +178,8 @@ namespace Threefold.EditorTools
                     Name = Prefix + "Foliage", Family = MaterialFamily.Vegetation, Replaces = "Foliage",
                     Texture = PaintedTextureRecipe.Create("Foliage", PaintedSurface.LeafMass, StylePalette.Foliage,
                         StylePalette.InkCool, 67, 256),
-                    Shade = StylePalette.ShadeGreen, Wrap = 0.55f, PaintStrength = 0.14f, PaintScale = 0.05f,
+                    Tint = new Rgb(0.92f, 0.96f, 0.92f), Shade = StylePalette.ShadeGreen, Wrap = 0.55f, PaintStrength = 0.14f,
+                    PaintScale = 0.05f,
                 },
                 new StyleMaterialPreset
                 {
@@ -175,7 +194,9 @@ namespace Threefold.EditorTools
                     Name = Prefix + "Moss", Family = MaterialFamily.Vegetation, Replaces = "Moss",
                     Texture = PaintedTextureRecipe.Create("Moss", PaintedSurface.Earth, StylePalette.MossSurface,
                         StylePalette.InkCool, 73, 256),
-                    Shade = StylePalette.ShadeGreen, Wrap = 0.5f,
+
+                    // Duller and nearer to the stone it lies on, so that it reads as growth on the stone.
+                    Tint = new Rgb(0.84f, 0.86f, 0.80f), Shade = StylePalette.ShadeGreen, Wrap = 0.55f,
                 },
                 new StyleMaterialPreset
                 {

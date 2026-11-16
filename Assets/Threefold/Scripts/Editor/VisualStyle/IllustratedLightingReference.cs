@@ -82,6 +82,24 @@ namespace Threefold.EditorTools
                 Math.Max(0f, albedo.B * value * (1f - warmth)));
         }
 
+        /// <summary>
+        /// How much of the weathering tint a surface takes, 0 to <paramref name="strength"/>: only faces that
+        /// look up (the normal's height above 0.4, in full from 0.8), and only in the soft patches that the
+        /// variation map's second channel marks. Mirrors the end of ApplyPaintVariation in the shader.
+        /// </summary>
+        public static float TopTintAmount(float normalY, float paintG, float strength)
+        {
+            float facesUp = Clamp01(normalY * 2.5f - 1f);
+            float patch = Clamp01((paintG - 0.5f + 0.07f) * 5f);
+            return strength * facesUp * patch;
+        }
+
+        /// <summary>The weathering itself: the colour multiplied towards the tint by <see cref="TopTintAmount"/>.</summary>
+        public static Rgb ApplyTopTint(Rgb albedo, Rgb tint, float amount)
+        {
+            return albedo * Rgb.Lerp(new Rgb(1f, 1f, 1f), tint, amount);
+        }
+
         /// <summary>Where the shader samples the variation map for a point in the world.</summary>
         public static void PaintVariationUv(float worldX, float worldY, float worldZ, float repeatsPerMetre, out float u,
             out float v)

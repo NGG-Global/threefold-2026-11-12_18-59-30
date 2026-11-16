@@ -286,7 +286,41 @@ def error_lines(output: str, work: str):
     return lines
 
 
-def compile_stage(work, source_name, stage, entry, defines):
+def measure_stage(work, fixed_name, stage, entry):
+    """Size of one compiled stage: instructions and texture samples after dead code is removed.
+
+    The shader is compiled to SPIR-V, optimised with spirv-opt -O (which removes the library functions
+    the shader never calls) and disassembled. The counts are a proxy for cost, made with a different
+    compiler from Unity's: use them to compare two versions of the shader, not as a measure of a phone.
+    Returns None if the SPIR-V tools are missing or fail.
+    """
+    if shutil.which("spirv-opt") is None or shutil.which("spirv-dis") is None:
+        return None
+    raw, optimised = fixed_name + ".spv", fixed_name + ".opt.spv"
+    code, _, _ = run(["glslangValidator", "-D", "-S", stage, "-e", entry, "--target-env", "vulkan1.1",
+                      "-V", "-o", raw, fixed_name], work)
+    if code != 0:
+        return None
+    code, _, _ = run(["spirv-opt", "-O", raw, "-o", optimised], work)
+    if code != 0:
+        return None
+    code, listing, _ = run(["spirv-dis", "--no-header", optimised], work)
+    if code != 0:
+        return None
+    body = [line.strip() for line in listing.splitlines() if line.strip()]
+    declarations = ("OpName", "OpMemberName", "OpDecorate", "OpMemberDecorate", "OpType", "OpConstant", "OpVariable",
+                    "OpCapability", "OpExtInstImport", "OpMemoryModel", "OpEntryPoint", "OpExecutionMode", "OpSource",
+                    "OpLabel", "OpFunction", "OpFunctionEnd", "OpReturn", "OpUndef")
+    operations = [line for line in body if not any((" " + d) in (" " + line.split("= ")[-1]) and line.split("= ")[-1].startswith(d)
+                                                   for d in declarations)]
+    return {
+        "instructions": len(operations),
+        "samples": sum(1 for line in operations if "OpImageSample" in line),
+        "branches": sum(1 for line in operations if "OpBranchConditional" in line or "OpSwitch" in line),
+    }
+
+
+def compile_stage(work, source_name, stage, entry, defines, measure=False):
     base = ["glslangValidator", "-D", "-S", stage, "-I.", "-I" + SHADER_DIR]
     for define in defines:
         base.append("-D" + define + "=1")
@@ -313,6 +347,8 @@ def compile_stage(work, source_name, stage, entry, defines):
         problems = [output.strip()[-400:]]
     if "Entry point not found" in output:
         problems.append(f"entry point '{entry}' not found")
+    if measure:
+        return problems, (measure_stage(work, fixed_name, stage, entry) if not problems else None)
     return problems, removed
 
 
@@ -321,6 +357,9 @@ def main() -> int:
     parser.add_argument("--urp", default=default_library(),
                         help="folder holding the URP and Core packages of the project's Unity version")
     parser.add_argument("--keep", action="store_true", help="keep the working folder for inspection")
+    parser.add_argument("--measure", action="store_true",
+                        help="also print the size of every compiled stage (instructions, texture samples, branches "
+                             "after spirv-opt -O; needs the package 'spirv-tools'). A proxy for comparing versions")
     parser.add_argument("files", nargs="*", help="shader files to check (default: every project shader)")
     arguments = parser.parse_args()
 
@@ -371,8 +410,15 @@ def main() -> int:
                         handle.write(PREAMBLE + body)
 
                     for stage, entry in (("vert", vertex), ("frag", fragment)):
-                        problems, _ = compile_stage(work, source_name, stage, entry, active)
+                        problems, size = compile_stage(work, source_name, stage, entry, active, arguments.measure)
                         compiled += 1
+                        if arguments.measure and not problems:
+                            keywords = " ".join(active) or "no keywords"
+                            if size is None:
+                                print(f"SIZE  {pass_name:<13} {stage}  not measured (spirv-tools missing or failed)  [{keywords}]")
+                            else:
+                                print(f"SIZE  {pass_name:<13} {stage}  {size['instructions']:>5} instructions  "
+                                      f"{size['samples']:>2} samples  {size['branches']:>2} branches  [{keywords}]")
                         if problems:
                             failures += 1
                             print(f"FAIL  {label}  pass '{pass_name}'  {stage}  [{' '.join(active) or 'no keywords'}]")

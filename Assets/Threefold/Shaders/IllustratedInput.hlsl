@@ -14,6 +14,7 @@ CBUFFER_START(UnityPerMaterial)
     half4 _HighlightColor;
     half4 _EmissionColor;
     half4 _OutlineColor;
+    half4 _TopTint;
     half _Cutoff;
     half _Wrap;
     half _HighlightSize;
@@ -36,14 +37,24 @@ SAMPLER(sampler_PaintMap);
 // to hide the repetition of a tiled texture on large floors and walls. One texture sample serves
 // any surface: height is skewed into both axes, so walls vary as floors do.
 //
-// Keep in step with IllustratedLighting.ApplyPaintVariation in the C# reference.
-half3 ApplyPaintVariation(half3 albedo, float3 positionWS)
+//
+// The same sample also places weathering: on faces that look up (tops of walls, ledges, paving),
+// in soft patches, the colour is multiplied by _TopTint, as moss and damp stain stone where rain
+// lies. It needs no second texture and no second keyword; a strength of 0 leaves the colour as it
+// was. The painted lines of the base map stay, because the tint multiplies.
+//
+// Keep in step with IllustratedLightingReference.ApplyPaintVariation and TopTintAmount in C#.
+half3 ApplyPaintVariation(half3 albedo, float3 positionWS, half3 normalWS)
 {
     float2 uv = (positionWS.xz + positionWS.y * float2(0.37, 0.61)) * _PaintScale;
     half2 paint = SAMPLE_TEXTURE2D(_PaintMap, sampler_PaintMap, uv).rg - 0.5;
 
     albedo *= 1.0 + paint.r * (2.0 * _PaintStrength);
     albedo *= 1.0 + paint.g * _PaintStrength * half3(1.0, 0.2, -1.0);
+
+    half facesUp = saturate(normalWS.y * 2.5 - 1.0);
+    half patch = saturate((paint.g + 0.07) * 5.0);
+    albedo *= lerp(half3(1.0, 1.0, 1.0), _TopTint.rgb, _TopTint.a * facesUp * patch);
     return max(albedo, 0.0);
 }
 #endif
