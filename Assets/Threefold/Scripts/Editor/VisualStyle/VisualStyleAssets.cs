@@ -31,7 +31,16 @@ namespace Threefold.EditorTools
         private const string CharacterPrefix = StyleMaterialPresets.Prefix + "Character_";
 
         // The contour line: 0.22% of the screen's height is about 2.4 pixels at 1080p.
-        internal const float OutlineWidth = 0.0022f;
+        // 0.0022 at first. In the renders of the Wayfarer look the line stood as heavy as the forms it drew
+        // round; it is a fifth thinner now, and drawn in a lighter, warmer dark (StylePalette.ContourSoft).
+        internal const float OutlineWidth = 0.0018f;
+
+        /// <summary>
+        /// Raised when what the style decides for a character's material changes (shade, softness, contour
+        /// line), so that character materials generated earlier take the new values, as preset materials do.
+        /// 2: the shade tint the environment has, and the lighter contour line.
+        /// </summary>
+        internal const int CharacterRevision = 2;
         internal const float OutlineFadeStart = 12f;
         internal const float OutlineFadeEnd = 28f;
 
@@ -350,9 +359,11 @@ namespace Threefold.EditorTools
                 }
 
                 string key = original.name.StartsWith("Mage_") ? original.name.Substring("Mage_".Length) : original.name;
-                Material styled = EnsureMaterial($"{MaterialFolder}/{CharacterPrefix}Mage_{key}.mat",
+                string styledPath = $"{MaterialFolder}/{CharacterPrefix}Mage_{key}.mat";
+                Material styled = EnsureMaterial(styledPath,
                     () => CreateCharacterMaterial(original, key, smoothNormals),
                     existing => ConfigureIllustratedCharacter(existing, original, key, smoothNormals));
+                ReviseCharacterIfOlder(styled, styledPath, original, key, smoothNormals);
 
                 if (styled != null)
                 {
@@ -366,6 +377,33 @@ namespace Threefold.EditorTools
                     Replacements[original] = styled;
                 }
             }
+        }
+
+        /// <summary>
+        /// A character material made under an earlier revision takes the present shade, softness, highlight
+        /// and contour line, once. Its colour and its painting stay. Without this the Mage would keep the
+        /// shade tint of the day his material was generated while the stone round him took the new one.
+        /// </summary>
+        private void ReviseCharacterIfOlder(Material styled, string path, Material original, string key, bool smoothNormals)
+        {
+            string stamp = "threefold-style-character-" + CharacterRevision;
+            AssetImporter importer = AssetImporter.GetAtPath(path);
+            if (styled == null || importer == null || importer.userData == stamp ||
+                !UsesIllustratedShader || styled.shader == null || styled.shader.name != ShaderName)
+            {
+                return;
+            }
+
+            if (!justCreated.Contains(path))
+            {
+                ConfigureIllustratedCharacter(styled, original, key, smoothNormals);
+                EditorUtility.SetDirty(styled);
+                revised++;
+            }
+
+            importer.userData = stamp;
+            EditorUtility.SetDirty(importer);
+            AssetDatabase.WriteImportSettingsIfDirty(path);
         }
 
         private Material CreateCharacterMaterial(Material original, string key, bool smoothNormals)
@@ -422,7 +460,7 @@ namespace Threefold.EditorTools
             SetFloat(material, "_PaintVariation", 0f);
             SetKeyword(material, "_PAINT_VARIATION", false);
 
-            SetColor(material, "_OutlineColor", ToColor(StylePalette.Contour));
+            SetColor(material, "_OutlineColor", ToColor(StylePalette.ContourSoft));
             SetFloat(material, "_OutlineWidth", OutlineWidth);
             SetFloat(material, "_OutlineFadeStart", OutlineFadeStart);
             SetFloat(material, "_OutlineFadeEnd", OutlineFadeEnd);

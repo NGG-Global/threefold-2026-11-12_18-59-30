@@ -136,6 +136,26 @@ namespace Threefold.Tests
         }
 
         [Test]
+        public void TheCharactersLineIsAWarmDarkLighterThanInkAndStillALine()
+        {
+            Rgb line = StylePalette.ContourSoft;
+            Assert.Greater(line.R, line.G);
+            Assert.Greater(line.G, line.B, "A warm dark, never black or blue.");
+            Assert.Greater(line.Luma, StylePalette.Contour.Luma, "Lighter than the first contour.");
+            Assert.Less(line.Luma, 0.22f, "Still a line: darker than any painted surface of the character.");
+
+            Assert.Less(VisualStyleAssets.OutlineWidth, 0.0022f, "Thinner than the first contour.");
+            Assert.GreaterOrEqual(VisualStyleAssets.OutlineWidth, 0.0014f, "And not so thin that it breaks up on a phone.");
+            Assert.GreaterOrEqual(VisualStyleAssets.CharacterRevision, 2);
+
+            // On a 1080-pixel-high screen the line is about two pixels.
+            float pixels = OutlineRules.WidthPixels(VisualStyleAssets.OutlineWidth, 1080f, 5f, VisualStyleAssets.OutlineFadeStart,
+                VisualStyleAssets.OutlineFadeEnd);
+            Assert.Greater(pixels, 1.5f);
+            Assert.Less(pixels, 2.5f);
+        }
+
+        [Test]
         public void TheSunIsWarmAndTheShadeIsCool()
         {
             LightingPreset light = LightingPreset.GoldenAfternoon();

@@ -97,6 +97,52 @@ namespace Threefold.Tests
             AssertWearsTheWayfarerLook(mage, "The Mage in the Fantasy Playground");
         }
 
+        [Test]
+        public void TheWayfarerModelKeepsItsExtraBonesAndStaysLight()
+        {
+            GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(WayfarerPath);
+            Assert.IsNotNull(model, Describe());
+
+            // The bones the game's secondary motion and face look for by name. A rebuilt model must keep them all.
+            string[] expected =
+            {
+                "sec_cloak_l_01", "sec_cloak_l_02", "sec_cloak_r_01", "sec_cloak_r_02", "sec_hair_01", "sec_hair_02",
+                "sec_sash_01", "face_blink", "face_brows",
+            };
+            var names = new System.Collections.Generic.HashSet<string>();
+            foreach (Transform bone in model.GetComponentsInChildren<Transform>(true))
+            {
+                names.Add(bone.name);
+            }
+
+            foreach (string bone in expected)
+            {
+                Assert.IsTrue(names.Contains(bone), $"The Wayfarer model has no bone '{bone}'.");
+            }
+
+            long triangles = 0;
+            var materials = new System.Collections.Generic.HashSet<string>();
+            int mostBones = 0;
+            foreach (SkinnedMeshRenderer renderer in model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                Assert.IsNotNull(renderer.sharedMesh);
+                triangles += renderer.sharedMesh.triangles.Length / 3;
+                mostBones = Mathf.Max(mostBones, renderer.bones.Length);
+                foreach (Material material in renderer.sharedMaterials)
+                {
+                    if (material != null)
+                    {
+                        materials.Add(material.name);
+                    }
+                }
+            }
+
+            Assert.Greater(triangles, 0);
+            Assert.LessOrEqual(triangles, 20000, $"The Wayfarer model has {triangles} triangles.");
+            Assert.LessOrEqual(materials.Count, 2, "One painted material and the crystal: two draw calls for the body, no more.");
+            TestContext.WriteLine($"Wayfarer model: {triangles} triangles, {materials.Count} material(s), {mostBones} bones on its largest mesh.");
+        }
+
         /// <summary>Every skinned mesh comes from MageWayfarer.fbx, and a material on them shows the painted atlas.</summary>
         private static void AssertWearsTheWayfarerLook(GameObject root, string what)
         {
