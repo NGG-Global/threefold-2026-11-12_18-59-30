@@ -122,6 +122,12 @@ namespace Threefold.Cameras
         private float pitchVelocity;
         private float currentDistance;
 
+        // Coming round behind the character by itself (CameraRecenter decides, this carries it out).
+        private readonly CameraRecenter recenter = new CameraRecenter();
+        private Vector3 lastTargetPosition;
+        private bool hasLastTargetPosition;
+        private bool lookedThisFrame;
+
         public Transform Target
         {
             get => target;
@@ -186,6 +192,7 @@ namespace Threefold.Cameras
             }
 
             ApplyLookInput();
+            ApplyRecentering(deltaTime);
 
             if (rotationSmoothTime > 0f)
             {
@@ -254,6 +261,8 @@ namespace Threefold.Cameras
             pivot = target.position + targetOffset;
             pivotVelocityXZ = Vector2.zero;
             pivotVelocityY = 0f;
+            recenter.Reset();
+            hasLastTargetPosition = false;
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
             framingPivot = GetFramingPivot(rotation);
@@ -262,14 +271,44 @@ namespace Threefold.Cameras
             ApplyTransform(rotation);
         }
 
+        /// <summary>
+        /// Turns the view towards the way the character faces, when the feel settings ask for it and
+        /// <see cref="CameraRecenter"/> allows it. It goes through the same target heading as look input, so
+        /// the usual smoothing applies and it never jumps. Off by default: the camera then behaves as before.
+        /// </summary>
+        private void ApplyRecentering(float deltaTime)
+        {
+            Vector3 position = target.position;
+            float speed = 0f;
+            if (hasLastTargetPosition)
+            {
+                Vector3 moved = position - lastTargetPosition;
+                moved.y = 0f;
+                speed = moved.magnitude / deltaTime;
+            }
+
+            lastTargetPosition = position;
+            hasLastTargetPosition = true;
+
+            Threefold.Feel.FeelSettings feel = Threefold.Feel.FeelSettingsStore.Current;
+            CameraRecenterSettings settings = CameraRecenterSettings.Default;
+            settings.Enabled = feel.AutoRecenter;
+            settings.DelaySeconds = feel.RecenterDelay;
+            settings.DegreesPerSecond = feel.RecenterSpeed;
+
+            targetYaw += recenter.Step(settings, targetYaw, target.eulerAngles.y, speed, lookedThisFrame, deltaTime);
+        }
+
         private void ApplyLookInput()
         {
+            lookedThisFrame = false;
             if (inputSource == null)
             {
                 return;
             }
 
             Vector2 look = inputSource.LookDelta;
+            lookedThisFrame = look.sqrMagnitude > 0.0001f;
             float verticalDirection = invertVertical ? 1f : -1f;
 
             targetYaw += look.x * horizontalSensitivity;
@@ -292,7 +331,8 @@ namespace Threefold.Cameras
             if (trauma > 0f && maxShakeAngle > 0f)
             {
                 // Squaring makes small amounts subtle and keeps strong hits pronounced.
-                float strength = trauma * trauma * maxShakeAngle;
+                // The feel settings' shake is 1 unless it was changed; 0 switches shake off.
+                float strength = trauma * trauma * maxShakeAngle * Threefold.Feel.FeelSettingsStore.Current.Shake;
                 float time = Time.unscaledTime * shakeFrequency;
                 float shakePitch = (Mathf.PerlinNoise(time, 0.37f) - 0.5f) * 2f * strength;
                 float shakeYaw = (Mathf.PerlinNoise(0.71f, time) - 0.5f) * 2f * strength;

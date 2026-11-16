@@ -77,6 +77,7 @@ below).
 | 26 | `eedc239` (Wayfarer, second pass), tests, renders and APK | **Green.** EditMode: **1,219 tests, 1,219 passed**. The rebuilt model was given the Humanoid mapping of `Mage.fbx` again and accepted; no fallback to the mesh of `Mage.fbx` in tests or build. Unity counts 17,494 triangles and 2 materials on it. APK built with 0 errors (artifact `threefold-android-development-26`); build stamp "commit eedc239, run 26" |
 | 27 | `1379561` (render tool: the pose is checked), renders | The bones were posed and the pictures still showed the rest pose: the meshes had not been skinned again |
 | 28 | `e86c8c4` (render tool: skin again for every render), renders | **The Mage is drawn posed** with Idle, Jog and Flame_Hook on the rebuilt Wayfarer model: the first pictures from Unity of the model following the game's clips |
+| 29 | `f27069c` (camera and controls feel, first pass), tests and APK | **Green.** EditMode: **1,244 tests, 1,244 passed**, including the 25 cases of `CameraFeelTests`. APK built (artifact `threefold-android-development-29`, 62 MB zip). The Feel panel and the recentering have not been tried on a device |
 
 Later runs are recorded below as they complete.
 

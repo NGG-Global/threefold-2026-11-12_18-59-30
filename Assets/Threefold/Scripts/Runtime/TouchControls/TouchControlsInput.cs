@@ -502,7 +502,9 @@ namespace Threefold.TouchControls
             lookDelta = Vector2.zero;
             if (lookArea != null && Screen.height > 0)
             {
-                float pixelsToLookUnits = ReferenceScreenHeight / Screen.height * lookSensitivity;
+                // The feel settings' look speed is 1 unless it was changed from the diagnostics' Feel panel.
+                float pixelsToLookUnits = ReferenceScreenHeight / Screen.height * lookSensitivity *
+                                          Threefold.Feel.FeelSettingsStore.Current.LookSpeed;
                 Vector2 delta = lookArea.ConsumeDelta() * pixelsToLookUnits;
                 lookDelta = new Vector2(delta.x * horizontalLookScale, delta.y * verticalLookScale);
             }
