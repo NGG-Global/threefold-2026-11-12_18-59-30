@@ -99,6 +99,12 @@ namespace Threefold.EditorTools
         /// <summary>The contour line around characters: deep warm brown.</summary>
         public static readonly Rgb Contour = new Rgb(0.17f, 0.11f, 0.09f);
 
+        /// <summary>
+        /// The contour line as characters carry it: the same warm dark, lighter, so the line sits in the
+        /// painting instead of standing in front of it. Still clearly darker than every painted surface.
+        /// </summary>
+        public static readonly Rgb ContourSoft = new Rgb(0.25f, 0.16f, 0.12f);
+
         // Surfaces.
         public static readonly Rgb Stone = new Rgb(0.75f, 0.70f, 0.60f);
         public static readonly Rgb StoneDark = new Rgb(0.48f, 0.50f, 0.54f);

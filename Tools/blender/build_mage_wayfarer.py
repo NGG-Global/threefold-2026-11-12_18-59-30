@@ -177,8 +177,11 @@ def paint_tile(key, colour, rng, size):
     elif key in ("Tunic", "Cloak", "Trousers", "Sash"):
         # Fold marks: a few soft darker creases and a drawn hem.
         folds = strokes(rng, size, 9, size * 0.30, size * 0.02, True)
-        value -= np.clip(folds, 0.0, 1.0) * 0.08
+        value -= np.clip(folds, 0.0, 1.0) * (0.14 if key == "Cloak" else 0.08)
         ink += band(v, 0.015, 0.012) * 0.45
+        if key == "Cloak":
+            value += band(v, 0.07, 0.03, 0.04) * 0.07                # the hem, worn lighter above its drawn edge
+            value -= band(v, 0.97, 0.10, 0.12) * 0.07                # and darker under the hood and the mantle
         if key == "Tunic":
             ink += band(u, 0.0, 0.006) * 0.3                     # the front closure, down the middle
     elif key == "Leather":
@@ -544,10 +547,10 @@ def build_outfit(body, armature, materials):
             a = 2 * math.pi * s / segments
             direction = Vector((math.sin(polar) * math.cos(a), math.sin(polar) * math.sin(a), math.cos(polar)))
             front = direction.dot(forward)
-            lump = 1.0 + 0.045 * math.sin(5.0 * a + 1.3) * math.sin(polar * 3.0)
-            scale = Vector((radius.x * 1.13, radius.y * 1.12, radius.z * 1.10)) * lump
+            lump = 1.0 + 0.060 * math.sin(5.0 * a + 1.3) * math.sin(polar * 3.0)
+            scale = Vector((radius.x * 1.15, radius.y * 1.14, radius.z * 1.12)) * lump
             point = head_centre + Vector((direction.x * scale.x, direction.y * scale.y, direction.z * scale.z))
-            point += up * 0.018 * max(0.0, direction.z) - forward * 0.022 * max(0.0, -front)   # volume up and back
+            point += up * 0.026 * max(0.0, direction.z) - forward * 0.034 * max(0.0, -front)   # volume up and back
             point += right * 0.012 * max(0.0, direction.z)                                    # swept to one side
             row.append(hair.vert(point, head, (mirrored(a), 1.0 - r / rings)))
         rows.append(row)
@@ -575,15 +578,32 @@ def build_outfit(body, armature, materials):
         hair.tube(points, [thickness, thickness * 1.15, thickness, thickness * 0.75, thickness * 0.3],
                   [head] * 5, "Hair", sides=5, flatten=0.55)
 
+    # Locks swept back over the crown and the back of the head. From behind, which is how the player sees
+    # the character, the hair was a smooth cap; these give it an outline of its own: uneven, a little
+    # wind-blown, higher on the side the fringe is parted from. Each is a short flattened tube that starts
+    # inside the mass and ends in a point outside it. They move with the head; only the tail swings.
+    for side_x, lift, reach, drop, thickness in ((0.050, 0.012, 0.110, 0.012, 0.030), (0.012, 0.018, 0.125, 0.000, 0.033),
+                                                 (-0.034, 0.010, 0.115, 0.016, 0.030), (-0.066, 0.002, 0.090, 0.040, 0.026),
+                                                 (0.074, 0.002, 0.086, 0.046, 0.025), (0.026, -0.030, 0.100, 0.070, 0.027),
+                                                 (-0.022, -0.036, 0.094, 0.078, 0.025)):
+        root = head_centre + right * side_x + up * (radius.z * 0.74 + lift * 0.4) - forward * radius.y * 0.40
+        if lift < 0.0:
+            root = head_centre + right * side_x - forward * radius.y * 0.80 + up * (radius.z * 0.30 + lift)
+        tip = root - forward * reach + up * (lift - drop) + right * side_x * 0.25
+        middle = (root + tip) / 2 + up * 0.014 - forward * 0.010
+        hair.tube([root, root.lerp(middle, 0.7), middle, middle.lerp(tip, 0.6), tip],
+                  [thickness, thickness * 1.2, thickness * 1.05, thickness * 0.7, thickness * 0.18],
+                  [head] * 5, "Hair", sides=5, flatten=0.6)
+
     # The tail: gathered at the back of the head, tied, hanging to the base of the neck.
     back = head_centre - forward * (radius.y * 1.12 + 0.01) - up * radius.z * 0.10
-    tail_points = [back + forward * 0.03, back - forward * 0.035 - up * 0.01, back - forward * 0.06 - up * 0.07,
-                   back - forward * 0.065 - up * 0.15, back - forward * 0.055 - up * 0.23]
+    tail_points = [back + forward * 0.03, back - forward * 0.040 - up * 0.01, back - forward * 0.072 - up * 0.08,
+                   back - forward * 0.080 - up * 0.18, back - forward * 0.066 - up * 0.29]
     hair_1, hair_2 = SECONDARY_PREFIX + "hair_01", SECONDARY_PREFIX + "hair_02"
-    hair.tube(tail_points, [0.030, 0.034, 0.032, 0.024, 0.008],
+    hair.tube(tail_points, [0.034, 0.040, 0.040, 0.030, 0.008],
               [head, {"Head": 0.5, hair_1: 0.5}, {hair_1: 1.0}, {hair_1: 0.3, hair_2: 0.7}, {hair_2: 1.0}],
               "Hair", sides=6)
-    hair.tube([tail_points[1] + up * 0.004, tail_points[1] - forward * 0.016 - up * 0.008], [0.038, 0.038],
+    hair.tube([tail_points[1] + up * 0.004, tail_points[1] - forward * 0.016 - up * 0.008], [0.044, 0.044],
               [{"Head": 0.5, hair_1: 0.5}] * 2, "Trim", sides=6, cap=False)
     new_bones += [(hair_1, "Head", tail_points[1], tail_points[3]), (hair_2, hair_1, tail_points[3], tail_points[4])]
     parts.append(hair.to_object(armature, materials, solidify=0.0))
@@ -682,21 +702,27 @@ def build_outfit(body, armature, materials):
     cowl = Part("Cowl")
     cowl_centre = centre - forward * 0.018
     rows = []
-    for r, (z, rx, ry) in enumerate(((shoulder_z + 0.040, 0.128, 0.122), (neck_z + 0.012, 0.150, 0.146),
-                                     (neck_z + 0.052, 0.140, 0.142), (neck_z + 0.072, 0.108, 0.112),
-                                     (neck_z + 0.060, 0.086, 0.090))):
+    for r, (z, rx, ry) in enumerate(((shoulder_z + 0.040, 0.134, 0.128), (neck_z + 0.012, 0.166, 0.164),
+                                     (neck_z + 0.058, 0.156, 0.160), (neck_z + 0.082, 0.116, 0.122),
+                                     (neck_z + 0.066, 0.088, 0.092))):
         rows.append([cowl.vert(at_angle(cowl_centre, rx, ry, 2 * math.pi * s / 20, z + 0.014 * max(0.0, -math.sin(2 * math.pi * s / 20))),
                                {"spine_03": 0.8, "neck_01": 0.2} if r > 1 else chest, (mirrored(2 * math.pi * s / 20), r / 4))
                      for s in range(20)])
     cowl.grid(rows, "Cloak", closed=True)
-    bag_centre = Vector((0.0, cowl_centre.y - 0.150, shoulder_z + 0.005))
+    # The hood itself, lying open on the back: wide at the shoulders, deep enough to stand off the cloak,
+    # and drawn down to a point that falls to the left, away from the mantle's side. It is the largest
+    # shape between the head and the cloak when the character is seen from behind.
+    bag_centre = Vector((-0.012, cowl_centre.y - 0.170, shoulder_z - 0.012))
     rows = []
-    for r in range(6):
-        polar = math.pi * (0.08 + 0.84 * r / 5)
-        rows.append([cowl.vert(bag_centre + Vector((math.sin(polar) * math.cos(a) * 0.105,
-                                                    math.sin(polar) * math.sin(a) * 0.050 - 0.012 * math.cos(polar),
-                                                    math.cos(polar) * 0.110 - 0.02)), chest,
-                               (abs(a - math.pi) / math.pi, 1.0 - r / 5))
+    for r in range(8):
+        along_hood = r / 7
+        polar = math.pi * (0.07 + 0.86 * along_hood)
+        taper = 1.0 - 0.55 * smoothstep(0.55, 1.0, along_hood)          # narrows towards the point
+        lean = -0.050 * smoothstep(0.35, 1.0, along_hood)               # the point falls to the left
+        rows.append([cowl.vert(bag_centre + Vector((math.sin(polar) * math.cos(a) * 0.140 * taper + lean,
+                                                    math.sin(polar) * math.sin(a) * 0.066 * taper - 0.016 * math.cos(polar),
+                                                    math.cos(polar) * 0.165 - 0.035)), chest,
+                               (abs(a - math.pi) / math.pi, 1.0 - along_hood))
                      for a in (2 * math.pi * s / 10 for s in range(10))])
     cowl.grid(rows, "Cloak", closed=True)
     cowl.index()
@@ -714,28 +740,38 @@ def build_outfit(body, armature, materials):
     # that a light spring swings at runtime; without it they follow the chest.
     cloak = Part("Cloak")
     top_z = shoulder_z - 0.035
-    for side, hem_z, name in ((-1.0, 0.86, "l"), (1.0, 0.68, "r")):
+    # The first version hung as two flat boards of even width with level hems; from behind the character
+    # read as a rectangle. Each tail now widens from the shoulders, then narrows to a slanted hem that is
+    # lowest at its outer corner, and its cloth runs in shallow folds, so the outline changes all the way
+    # down and the two tails differ. The bones and their weights are as before.
+    for side, hem_z, name in ((-1.0, 0.83, "l"), (1.0, 0.61, "r")):
         bone_1, bone_2 = f"{SECONDARY_PREFIX}cloak_{name}_01", f"{SECONDARY_PREFIX}cloak_{name}_02"
         start = back_angle + side * math.radians(3.0)
-        span = side * math.radians(56.0)
-        rows_count, columns = 7, 5
+        span = side * math.radians(62.0)
+        rows_count, columns = 7, 8
         rows = []
         middles = []
         for r in range(rows_count + 1):
             t = 0.955 if r == rows_count - 1 else (1.0 if r == rows_count else r / (rows_count - 1) * 0.955)
             z = top_z + (hem_z - top_z) * t
-            rx = shoulder_span + 0.030 + 0.030 * t
-            ry = chest_ry + 0.062 + (0.215 - chest_ry - 0.062) * smoothstep(0.0, 1.0, t)
+            rx = shoulder_span + 0.030 + 0.075 * t
+            ry = chest_ry + 0.062 + (0.228 - chest_ry - 0.062) * smoothstep(0.0, 1.0, t)
+            narrowing = 1.0 - 0.30 * smoothstep(0.45, 1.0, t)               # the tail draws in towards its hem
             if t < 0.30:
                 weights = {"spine_03": 1.0 - t / 0.30 * 0.7, bone_1: t / 0.30 * 0.7}
             elif t < 0.65:
                 weights = {"spine_03": 0.3 * (0.65 - t) / 0.35, bone_1: 1.0 - 0.3 * (0.65 - t) / 0.35}
             else:
                 weights = {bone_1: (1.0 - t) / 0.35, bone_2: 1.0 - (1.0 - t) / 0.35}
-            row = [cloak.vert(at_angle(centre, rx, ry, start + span * c / columns, z - 0.02 * t * (c / columns) ** 2),
-                              weights, (c / columns, 1.0 - t)) for c in range(columns + 1)]
+            row = []
+            for c in range(columns + 1):
+                across = c / columns                                         # 0 at the split, 1 at the outer edge
+                fold = 1.0 + 0.045 * t * math.sin(across * math.pi * 3.0 + (0.6 if side > 0 else 2.1))
+                slant = 0.085 * t * across ** 1.5                            # the hem is lowest at the outer corner
+                row.append(cloak.vert(at_angle(centre, rx * fold, ry * fold, start + span * across * narrowing, z - slant),
+                                      weights, (across, 1.0 - t)))
             rows.append(row if side > 0 else list(reversed(row)))
-            middles.append(at_angle(centre, rx, ry, start + span * 0.5, z))
+            middles.append(at_angle(centre, rx, ry, start + span * 0.5 * narrowing, z))
         rows.reverse()
         cloak.grid(rows, "Cloak", key_of_row=lambda r: "Trim" if r == 0 else "Cloak")
         new_bones += [(bone_1, "spine_03", middles[1], middles[4]), (bone_2, bone_1, middles[4], middles[rows_count])]

@@ -115,6 +115,89 @@ Two menu commands switch the look by hand, for comparing them in the same scene:
 **Threefold > Characters > Use Wayfarer Look** and **Use Library Look**. A look chosen there is kept
 by later setup runs.
 
+## The second pass: an outline of his own (16 November 2026)
+
+**Status.** Implemented. The model was rebuilt in Blender, imported by Unity on the build runner, worn by
+the Mage in the assembled scenes (checked by test) and rendered by Unity before and after. Not seen on a
+device. Still an intermediate character on the library mannequin: not production art.
+
+### The audit
+
+Made from Unity's own renders of the first version, not from the Blender previews. Seen from behind,
+which is how the player sees him for nearly all of the game, the Wayfarer was a rectangle:
+
+| Finding | Cost to improve | Benefit | Done |
+| --- | --- | --- | --- |
+| The cloak hangs as two flat boards of even width with level hems | Low: numbers in the build script | High: the largest shape on screen | Yes |
+| Nothing stands between head and cloak; the hood worn down is a small lump | Low | High: breaks the rectangle at the shoulders | Yes |
+| The hair is a smooth cap, like a helmet | Low | High: the head is the top of the outline | Yes |
+| The contour line is as heavy as the forms it draws round | Very low: two values | Medium | Yes |
+| The Mage's material kept the shade tint of the day it was generated, while the stone took a cooler one | Low: a revision | Medium: one light on character and world | Yes |
+| The face is a few drawn marks on a blank head | High: needs a modelled head | Low at gameplay distance, high in the main menu | No |
+| The body is the library mannequin: proportions, hands, legs | High: needs a designed character | High | No |
+| Cloak and hair swing on seven spring bones already | None | Already present | Kept |
+
+### What changed
+
+All of it in `Tools/blender/build_mage_wayfarer.py`, which rebuilt `MageWayfarer.fbx` and the atlas:
+
+- **Hair.** More volume up and back; seven locks swept back over the crown and the back of the head, each
+  a short flattened tube ending in a point outside the mass; a thicker, longer tail on its two spring bones.
+- **Hood.** A fuller roll round the neck, and a real hood lying open on the back, drawn to a point that
+  falls to the left, away from the mantle's side.
+- **Cloak.** Each tail widens from the shoulders, narrows to a slanted hem that is lowest at its outer
+  corner, and runs in shallow folds. The left tail ends at 0.83 m, the right at 0.61 m (0.86 and 0.68 before).
+- **Atlas.** Stronger folds on the cloak, a worn lighter hem, shade under the hood. Only constants
+  changed, so every other tile is painted pixel for pixel as before.
+
+In Unity (`VisualStyleAssets`):
+
+- **Contour line.** A fifth thinner (0.0022 to 0.0018 of the screen's height, about two pixels on a
+  1080-pixel screen) and a lighter warm dark (`StylePalette.ContourSoft`). Still on the character only.
+- **Character materials carry a revision**, as preset materials do, so the Mage's material takes the
+  cooler shade tint the environment has had since the material pass.
+
+### What did not change
+
+- `Mage.fbx`, and with it every clip, every contact moment and every combat and traversal rule.
+- The skeleton: the 65 library bones and the same nine extra bones (`check_mage_wayfarer.py` passes).
+- The materials: one painted material and the crystal. The atlas is the same size.
+- The secondary motion: the same seven spring bones and the same springs. The cloak is 7 cm longer on the
+  right; whether the springs still suit it has to be watched in the game.
+- The face, the body, the palette and the identity described in `Docs/CharacterIdentity.md`.
+
+| Measure | First version | Second pass |
+| --- | --- | --- |
+| Triangles | 16,960 | 17,514 |
+| Vertices | 8,859 | 9,150 |
+| Materials | 2 | 2 |
+| Extra bones | 9 | 9 |
+| Atlas | 1024 x 1024 | 1024 x 1024 |
+
+### Before and after
+
+Unity, Editor renders on the runner from the same cameras (runs 25 and 26). The Mage stands in the
+model's rest pose in both: posing him outside Play mode had no effect in these runs.
+
+| First version (run 25) | Second pass (run 26) |
+| --- | --- |
+| ![](images/unity-before-run25-7-mage-back.png) | ![](images/unity-after-run26-7-mage-back.png) |
+| ![](images/unity-before-run25-5-mage.png) | ![](images/unity-after-run26-5-mage.png) |
+
+Blender, posed with the game's clips (Idle from behind and from the side, Jog, the head):
+
+| First version | Second pass |
+| --- | --- |
+| ![](images/wayfarer-v1-back.png) | ![](images/wayfarer-back.png) |
+| ![](images/wayfarer-v1-side.png) | ![](images/wayfarer-side.png) |
+| ![](images/wayfarer-v1-jog.png) | ![](images/wayfarer-jog.png) |
+| ![](images/wayfarer-v1-head.png) | ![](images/wayfarer-head.png) |
+
+What the pictures show: from behind the outline now changes from head to hem (tufted hair, the hood's
+mass, a cloak that widens and narrows to two slanted points of different length) where it was a cap over a
+rectangle. From the front little changes, as intended. The hood is a smooth egg and the locks are simple
+tubes: they improve the outline and are not fine modelling.
+
 ## How it is made
 
 Everything is generated by code from free sources and can be rebuilt with one command per file.
