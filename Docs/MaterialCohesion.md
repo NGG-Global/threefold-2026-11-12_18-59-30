@@ -120,11 +120,14 @@ Intel integrated graphics, quality level `PC`, nothing animated, no HUD. They ar
 | Fragment stage, variants with paint variation (instructions after `spirv-opt -O`) | 180 and 194 | 197 and 211 |
 | Fragment stage, the other compiled variants; every vertex stage | | unchanged (52 of 54 stages) |
 | Texture samples in any stage | | unchanged |
+| The shader as Unity compiled it for Android, all variants, before compression (build logs of runs 17 and 24) | GLES3 1.69 MB, Vulkan 0.89 MB | GLES3 1.70 MB, Vulkan 0.90 MB |
 | Render call per view, CPU, Editor (ms): start, arch, castle, wall, Mage, overview | 9.6, 7.1, 4.5, 5.7, 4.7, 5.6 | 10.2, 6.2, 4.6, 5.2, 5.1, 3.9 |
 
 How to read them:
 
 - The counts are exact and did not move: the pass added no material, texture or variant.
+- Unity's own compiler accepted the changed shader for both of Android's graphics interfaces, and the
+  compiled size of all its variants together grew by about 0.01 MB on each.
 - The shader's fragment stage is about 9% longer (17 instructions) where paint variation is on, with no
   extra texture sample or branch. The count is a proxy made with glslang and `spirv-opt`, a different
   compiler from Unity's. It supports "no significant increase"; it does not prove a frame time.
@@ -148,7 +151,8 @@ How to read them:
 ## Not verified
 
 - Anything on a device: appearance, frame rate, memory, heat.
-- That Unity's shader compiler produces code of the size the proxy suggests.
+- The cost of the longer fragment stage on a phone's GPU. Unity's compiled size and the proxy both say it
+  is small; neither is a frame time.
 - The other scenes with the new values: they were assembled and validated by the tests, not looked at.
 - The scene in motion, and whether the weathering patches shimmer or swim as the camera moves. They are
   placed in world space, so they should stay on the stone; this has not been watched.
