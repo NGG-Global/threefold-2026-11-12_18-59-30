@@ -485,6 +485,12 @@ namespace Threefold.EditorTools
                 report.AppendLine("Brought the quality levels up to date: named Performance, Balanced and Quality, with frame-rate targets " +
                                   "30, 60 and 60 where none was set, and contour lines kept on Performance. Other values are unchanged.");
             }
+            if (controller.UpgradeLighting())
+            {
+                report.AppendLine($"Brought the lighting presets Golden Afternoon and Overcast Morning to revision {LightingPreset.Revision}. " +
+                                  "Presets with other names are unchanged.");
+            }
+
             MarkChanged(controller);
 
             if (sun == null)

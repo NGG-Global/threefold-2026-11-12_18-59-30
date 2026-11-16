@@ -115,9 +115,15 @@ namespace Threefold.EditorTools
         public static readonly Rgb Mountain = new Rgb(0.50f, 0.57f, 0.67f);
 
         /// <summary>What ambient light is multiplied by in shade: cool, to set off the warm sun.</summary>
-        public static readonly Rgb ShadeCool = new Rgb(0.78f, 0.85f, 1.00f);
+        public static readonly Rgb ShadeCool = new Rgb(0.72f, 0.82f, 1.00f);
 
         /// <summary>A warmer shade for foliage, whose shadows are filled by light through the leaves.</summary>
-        public static readonly Rgb ShadeGreen = new Rgb(0.80f, 0.92f, 0.88f);
+        public static readonly Rgb ShadeGreen = new Rgb(0.78f, 0.92f, 0.86f);
+
+        /// <summary>What stone's colour is multiplied by where moss and damp lie on its tops: greener and darker.</summary>
+        public static readonly Rgb Weathering = new Rgb(0.74f, 0.84f, 0.58f);
+
+        /// <summary>The same for paving that is walked on: darker and a little green, never mossy.</summary>
+        public static readonly Rgb Grime = new Rgb(0.80f, 0.83f, 0.68f);
     }
 }

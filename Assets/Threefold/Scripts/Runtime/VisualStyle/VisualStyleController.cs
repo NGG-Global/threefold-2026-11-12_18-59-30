@@ -30,6 +30,8 @@ namespace Threefold.VisualStyle
         private static readonly int OutlineSuppressId = Shader.PropertyToID("_ThreefoldOutlineSuppress");
         private static readonly int SkyTintId = Shader.PropertyToID("_SkyTint");
         private static readonly int SkyExposureId = Shader.PropertyToID("_Exposure");
+        private static readonly int SkyGroundId = Shader.PropertyToID("_GroundColor");
+        private static readonly int SkyAtmosphereId = Shader.PropertyToID("_AtmosphereThickness");
 
         [Header("Scene")]
         [Tooltip("The directional light that acts as the sun.")]
@@ -65,6 +67,9 @@ namespace Threefold.VisualStyle
 
         [Min(0)]
         [SerializeField] private int lighting;
+
+        [Tooltip("The revision of the provided lighting presets' values. Raised by the setup tooling when it brings them up to date.")]
+        [SerializeField] private int lightingVersion;
 
         [Header("Testing")]
         [Tooltip("F6, F7 and F8 switch quality, contour lines and lighting.")]
@@ -146,6 +151,24 @@ namespace Threefold.VisualStyle
             // Kept at 0 by default, so a controller saved before LM-08 (which has no version) is upgraded once.
             presetVersion = GraphicsPresets.DataVersion;
             return GraphicsPresets.Upgrade(qualityLevels);
+        }
+
+        /// <summary>
+        /// Brings the provided lighting presets of a controller made earlier to their present values, once per
+        /// revision. A scene keeps its controller, and the controller keeps its presets, so without this a
+        /// change of a preset would reach only scenes that had never been assembled. Presets with other names
+        /// are kept; values tuned by hand on a provided preset are replaced. Called by the setup tooling.
+        /// Returns true if any preset was replaced.
+        /// </summary>
+        public bool UpgradeLighting()
+        {
+            if (lightingVersion >= LightingPreset.Revision)
+            {
+                return false;
+            }
+
+            lightingVersion = LightingPreset.Revision;
+            return LightingPreset.Upgrade(lightingPresets);
         }
 
         /// <summary>
@@ -296,6 +319,16 @@ namespace Threefold.VisualStyle
                 if (sky.HasProperty(SkyExposureId))
                 {
                     sky.SetFloat(SkyExposureId, preset.skyExposure);
+                }
+
+                if (sky.HasProperty(SkyGroundId))
+                {
+                    sky.SetColor(SkyGroundId, preset.skyGroundColor);
+                }
+
+                if (sky.HasProperty(SkyAtmosphereId))
+                {
+                    sky.SetFloat(SkyAtmosphereId, preset.skyAtmosphere);
                 }
             }
         }

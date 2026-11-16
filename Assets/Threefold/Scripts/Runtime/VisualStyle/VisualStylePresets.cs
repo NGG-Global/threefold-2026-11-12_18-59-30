@@ -25,13 +25,20 @@ namespace Threefold.VisualStyle
     [Serializable]
     public sealed class LightingPreset
     {
+        /// <summary>
+        /// Raised when the values of the two provided presets change, so that a scene's controller made
+        /// earlier takes the new values (VisualStyleController.UpgradeLighting).
+        /// 2: warmer sun against cooler shade, haze and sky brought together (Docs/MaterialCohesion.md).
+        /// </summary>
+        public const int Revision = 2;
+
         public string displayName = "Golden Afternoon";
 
         [Header("Sun")]
-        public Color sunColor = new Color(1f, 0.93f, 0.80f);
+        public Color sunColor = new Color(1f, 0.90f, 0.74f);
 
         [Min(0f)]
-        public float sunIntensity = 1.1f;
+        public float sunIntensity = 1.15f;
 
         [Tooltip("Angle above the horizon, in degrees.")]
         [Range(5f, 90f)]
@@ -47,12 +54,12 @@ namespace Threefold.VisualStyle
         // Ambient light is kept strong against the sun: shade stays about half as bright as lit
         // surfaces on screen, so painted colour remains readable in shadow.
         [Header("Ambient light (sky, horizon, ground)")]
-        public Color skyColor = new Color(0.60f, 0.70f, 0.88f);
+        public Color skyColor = new Color(0.55f, 0.68f, 0.93f);
         public Color horizonColor = new Color(0.60f, 0.60f, 0.58f);
-        public Color groundColor = new Color(0.44f, 0.39f, 0.32f);
+        public Color groundColor = new Color(0.50f, 0.42f, 0.31f);
 
         [Header("Atmosphere")]
-        public Color fogColor = new Color(0.66f, 0.72f, 0.78f);
+        public Color fogColor = new Color(0.69f, 0.76f, 0.82f);
 
         [Tooltip("Distance at which haze begins, in metres. Kept beyond fighting distance so it never hides a silhouette that matters.")]
         [Min(0f)]
@@ -66,6 +73,43 @@ namespace Threefold.VisualStyle
 
         [Range(0f, 4f)]
         public float skyExposure = 1.1f;
+
+        [Tooltip("The sky's colour below the horizon. Near the haze's colour, so that far ridges sink into the sky instead of standing cut out against it.")]
+        public Color skyGroundColor = new Color(0.63f, 0.70f, 0.76f);
+
+        [Tooltip("How thick the sky's air is. Higher gives a yellower, heavier horizon.")]
+        [Range(0f, 5f)]
+        public float skyAtmosphere = 1.0f;
+
+        /// <summary>
+        /// Replaces every preset that carries the name of a provided one (Golden Afternoon, Overcast Morning)
+        /// with that preset's present values. Presets with other names, which somebody added, are kept.
+        /// Returns true if any was replaced.
+        /// </summary>
+        public static bool Upgrade(LightingPreset[] presets)
+        {
+            if (presets == null)
+            {
+                return false;
+            }
+
+            bool changed = false;
+            LightingPreset[] provided = { GoldenAfternoon(), OvercastMorning() };
+            for (int i = 0; i < presets.Length; i++)
+            {
+                foreach (LightingPreset current in provided)
+                {
+                    if (presets[i] != null && presets[i].displayName == current.displayName)
+                    {
+                        presets[i] = current;
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            return changed;
+        }
 
         /// <summary>Late afternoon: a low, warm sun against cool shade. The default.</summary>
         public static LightingPreset GoldenAfternoon()
@@ -92,6 +136,8 @@ namespace Threefold.VisualStyle
                 fogEnd = 280f,
                 skyTint = new Color(0.62f, 0.66f, 0.72f),
                 skyExposure = 0.95f,
+                skyGroundColor = new Color(0.70f, 0.74f, 0.77f),
+                skyAtmosphere = 1.2f,
             };
         }
     }

@@ -40,6 +40,8 @@ namespace Threefold.EditorTools
         private int created;
         private int kept;
         private int upgraded;
+        private int revised;
+        private readonly HashSet<string> justCreated = new HashSet<string>();
 
         private VisualStyleAssets(StringBuilder report, bool regenerate)
         {
@@ -125,9 +127,11 @@ namespace Threefold.EditorTools
                         () => PaintedTextureGenerator.Generate(recipe));
                 }
 
-                Material material = EnsureMaterial($"{MaterialFolder}/{preset.Name}.mat",
+                string materialPath = $"{MaterialFolder}/{preset.Name}.mat";
+                Material material = EnsureMaterial(materialPath,
                     () => CreatePresetMaterial(preset, map, variation),
                     existing => ConfigureIllustratedPreset(existing, preset, variation));
+                ReviseIfOlder(material, materialPath, preset, variation);
                 ByName[preset.Name] = material;
 
                 if (preset.Replaces != null)
@@ -146,6 +150,13 @@ namespace Threefold.EditorTools
             AssetDatabase.SaveAssets();
 
             report.AppendLine($"Visual style assets: {created} created, {kept} kept. Folder: '{Folder}'.");
+            if (revised > 0)
+            {
+                report.AppendLine($"{revised} material(s) of the style were brought to revision {StyleMaterialPresets.Revision}: " +
+                                  "tint, light response, paint variation and weathering now have the presets' values. " +
+                                  "Their textures were kept.");
+            }
+
             if (upgraded > 0)
             {
                 report.AppendLine($"{upgraded} material(s) made earlier with the stock shader now use '{ShaderName}'. " +
@@ -228,8 +239,46 @@ namespace Threefold.EditorTools
             }
 
             AssetDatabase.CreateAsset(material, path);
+            justCreated.Add(path);
             created++;
             return material;
+        }
+
+        /// <summary>
+        /// A preset material made under an earlier revision of the presets takes the present values of what
+        /// the presets decide: tint, shade, softness, highlight, paint variation and weathering. Its texture,
+        /// its culling and anything else set on it stay. Generated materials are otherwise kept for good, so
+        /// without this a change of a preset would reach only computers that had never generated the style.
+        /// A value tuned by hand on such a material is replaced, once, when the revision is raised.
+        /// </summary>
+        private void ReviseIfOlder(Material material, string path, StyleMaterialPreset preset, Texture2D variation)
+        {
+            string stamp = "threefold-style-" + StyleMaterialPresets.Revision;
+            AssetImporter importer = AssetImporter.GetAtPath(path);
+            if (material == null || importer == null || importer.userData == stamp)
+            {
+                return;
+            }
+
+            // A material that still carries the stock shader has none of these properties; it is stamped
+            // only once it carries the style's shader.
+            if (!UsesIllustratedShader || material.shader == null || material.shader.name != ShaderName)
+            {
+                return;
+            }
+
+            // A material made in this very run already has the values and needs only its stamp.
+            if (!justCreated.Contains(path))
+            {
+                SetColor(material, "_BaseColor", ToColor(preset.Tint));
+                ConfigureIllustratedPreset(material, preset, variation);
+                EditorUtility.SetDirty(material);
+                revised++;
+            }
+
+            importer.userData = stamp;
+            EditorUtility.SetDirty(importer);
+            AssetDatabase.WriteImportSettingsIfDirty(path);
         }
 
         private Material CreatePresetMaterial(StyleMaterialPreset preset, Texture2D map, Texture2D variation)
@@ -267,6 +316,9 @@ namespace Threefold.EditorTools
             SetTexture(material, "_PaintMap", variation);
             SetFloat(material, "_PaintStrength", preset.PaintStrength);
             SetFloat(material, "_PaintScale", preset.PaintScale);
+            Color weathering = ToColor(preset.TopTint);
+            weathering.a = paint ? Mathf.Clamp01(preset.TopTintStrength) : 0f;
+            SetColor(material, "_TopTint", weathering);
 
             // The environment carries its lines in its textures; contour lines are for characters.
             // The pass is switched off, and the width is zero as well: should the pass be drawn
