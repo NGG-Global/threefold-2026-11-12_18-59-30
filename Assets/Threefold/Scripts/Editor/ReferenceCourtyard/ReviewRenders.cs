@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.Profiling;
 using Debug = UnityEngine.Debug;
 using UnityEngine.SceneManagement;
@@ -48,9 +49,9 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
-        /// Poses the Mage with one moment of a clip of Mage.fbx, through the Editor's animation preview
-        /// (AnimationMode), which plays Humanoid clips on a model outside Play mode. The first attempt,
-        /// asking the Animator to update itself, left the model in its rest pose (runs 21 to 24). Nothing
+        /// Poses the Mage with one moment of a clip of Mage.fbx, outside Play mode. Asking the Animator to
+        /// update itself left the model in its rest pose (runs 21 to 24), and so did the Editor's animation
+        /// preview, without any error (run 25); the ways are now tried in turn and each is checked. Nothing
         /// moves after this: a picture shows a pose, not animation, and nothing the game adds while it runs
         /// (the bearing, the swing of cloak and hair, blinking) is in it. Returns what was done, for the log.
         /// </summary>
@@ -92,6 +93,44 @@ namespace Threefold.EditorTools
                 return $"Mage.fbx has no clip '{clipName}'; rest pose";
             }
 
+            // Three ways to pose a model outside Play mode, tried in turn, and each one checked: the pose
+            // counts only if the upper arms really left the rest pose. Run 25 showed why the check is
+            // needed: the animation preview reported no error and the Mage still stood with his arms out.
+            float seconds = Mathf.Clamp01(clipTime) * clip.length;
+            Transform arm = animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            Quaternion rest = arm != null ? arm.localRotation : Quaternion.identity;
+            bool Moved() => arm != null && Quaternion.Angle(rest, arm.localRotation) > 2f;
+            var tried = new StringBuilder();
+
+            try
+            {
+                var graph = UnityEngine.Playables.PlayableGraph.Create("ReviewRenders");
+                try
+                {
+                    graph.SetTimeUpdateMode(UnityEngine.Playables.DirectorUpdateMode.Manual);
+                    var output = UnityEngine.Animations.AnimationPlayableOutput.Create(graph, "pose", animator);
+                    var playable = UnityEngine.Animations.AnimationClipPlayable.Create(graph, clip);
+                    output.SetSourcePlayable(playable);
+                    playable.SetTime(seconds);
+                    graph.Evaluate(0f);
+                }
+                finally
+                {
+                    graph.Destroy();
+                }
+
+                if (Moved())
+                {
+                    return $"posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (playable graph)";
+                }
+
+                tried.Append("playable graph: no change; ");
+            }
+            catch (Exception exception)
+            {
+                tried.Append($"playable graph: {exception.Message}; ");
+            }
+
             try
             {
                 if (!AnimationMode.InAnimationMode())
@@ -100,14 +139,36 @@ namespace Threefold.EditorTools
                 }
 
                 AnimationMode.BeginSampling();
-                AnimationMode.SampleAnimationClip(animator.gameObject, clip, Mathf.Clamp01(clipTime) * clip.length);
+                AnimationMode.SampleAnimationClip(animator.gameObject, clip, seconds);
                 AnimationMode.EndSampling();
-                return $"posed with '{clipName}' at {Mathf.Clamp01(clipTime) * clip.length:0.00} s of {clip.length:0.00} s";
+                if (Moved())
+                {
+                    return $"posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (animation preview)";
+                }
+
+                tried.Append("animation preview: no change; ");
             }
             catch (Exception exception)
             {
-                return $"could not be posed with '{clipName}' ({exception.Message}); rest pose";
+                tried.Append($"animation preview: {exception.Message}; ");
             }
+
+            try
+            {
+                clip.SampleAnimation(animator.gameObject, seconds);
+                if (Moved())
+                {
+                    return $"posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (clip sampling)";
+                }
+
+                tried.Append("clip sampling: no change");
+            }
+            catch (Exception exception)
+            {
+                tried.Append($"clip sampling: {exception.Message}");
+            }
+
+            return $"NOT posed with '{clipName}': rest pose ({tried})";
         }
 
         // ------------------------------------------------------------ metrics
