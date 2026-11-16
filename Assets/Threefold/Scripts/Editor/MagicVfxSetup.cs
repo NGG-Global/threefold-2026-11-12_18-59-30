@@ -878,6 +878,7 @@ namespace Threefold.EditorTools
         private const string FreeSlashImpactPath = "Assets/Free Slash VFX/Prefabs/Impact.prefab";
         private const string FreeSlashFirePath = "Assets/Free Slash VFX/Prefabs/Slash Fire VFX.prefab";
         private const string HovlSparksRedPath = "Assets/Hovl Studio/Magic effects pack/Prefabs/Sparks/Sparks explode red.prefab";
+        private const string HovlExplosionPath = "Assets/Hovl Studio/Magic effects pack/Prefabs/Hits and explosions/Explosion.prefab";
         private const string HovlGroundAoePath = "Assets/Hovl Studio/Magic effects pack/Prefabs/AoE effects/Ground AOE explosion.prefab";
 
         /// <summary>The Aegis swing effect in Generated/VFX/Packs (Hovl "Charge slash blue", adapted).</summary>
@@ -892,6 +893,10 @@ namespace Threefold.EditorTools
             MagicVfxPackAdapter.Adapt(FreeSlashImpactPath, "ArcaneImpact_FreeSlash", arcane, 0.6f, MagicVfxRole.Burst, 0.55f, report);
             MagicVfxPackAdapter.Adapt(FreeSlashFirePath, "FlameSlash_FreeSlash", flame, 0.4f, MagicVfxRole.Burst, 0.7f, report);
             MagicVfxPackAdapter.Adapt(HovlSparksRedPath, "FlameSparks_Hovl", flame, 0.4f, MagicVfxRole.Burst, 0.6f, report);
+
+            // The heavy layer of the Flame combo's later strikes: a short burst of fire under the sparks. It was in
+            // the pack and unused. Larger than the sparks, and within the same burst budget.
+            MagicVfxPackAdapter.Adapt(HovlExplosionPath, "FlameImpactBurst_Hovl", flame, 0.5f, MagicVfxRole.Burst, 0.85f, report);
             MagicVfxPackAdapter.Adapt(HovlGroundAoePath, "ForcePulseImpact_Hovl", aegis, 0.7f, MagicVfxRole.Burst, 0.45f, report);
 
             // The Aegis swing was the one slot still holding a first adaptation from Generated/VFX/Adapted, which
@@ -942,6 +947,7 @@ namespace Threefold.EditorTools
                     case MagicDiscipline.Flame:
                         changed |= Upgrade(ref look.meleeSwingEffect, MagicVfxPackAdapter.Load("FlameSlash_FreeSlash"));
                         changed |= Upgrade(ref look.meleeImpactEffect, MagicVfxPackAdapter.Load("FlameSparks_Hovl"));
+                        changed |= Upgrade(ref look.heavyImpactEffect, MagicVfxPackAdapter.Load("FlameImpactBurst_Hovl"));
                         changed |= Upgrade(ref look.chargeLoopEffect, MagicVfxPrefabs.Load("FlameChargeHeat"));
                         changed |= Upgrade(ref look.limbTrailEffect, MagicVfxPrefabs.Load("FlameLimbTrail"));
                         changed |= Upgrade(ref look.contactEffect, MagicVfxPrefabs.Load("FlameContact"));

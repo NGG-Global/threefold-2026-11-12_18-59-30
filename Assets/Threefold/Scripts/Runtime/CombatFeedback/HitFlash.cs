@@ -30,11 +30,20 @@ namespace Threefold.CombatFeedback
         [Min(0.01f)]
         [SerializeField] private float punchSeconds = 0.16f;
 
+        [Tooltip("How much the object gives under a blow: it is squashed across and stretched upwards by this share, swings " +
+                 "back once and comes to rest. 0 switches it off. Presentation only.")]
+        [Range(0f, 0.3f)]
+        [SerializeField] private float squash = 0.07f;
+
+        [Min(0.01f)]
+        [SerializeField] private float squashSeconds = 0.3f;
+
         private Renderer[] renderers = new Renderer[0];
         private MaterialPropertyBlock block;
         private Vector3 restScale = Vector3.one;
         private float flashRemaining;
         private float punchRemaining;
+        private float squashRemaining;
         private bool flashing;
 
         /// <summary>Connects the component. Called by the setup tooling.</summary>
@@ -78,6 +87,7 @@ namespace Threefold.CombatFeedback
                 visual.localScale = restScale;
             }
             punchRemaining = 0f;
+            squashRemaining = 0f;
         }
 
         private void Update()
@@ -91,11 +101,15 @@ namespace Threefold.CombatFeedback
                 }
             }
 
-            if (punchRemaining > 0f)
+            if (punchRemaining > 0f || squashRemaining > 0f)
             {
-                punchRemaining -= Time.deltaTime;
-                float progress = Mathf.Clamp01(punchRemaining / punchSeconds);
-                visual.localScale = restScale * (1f + punchScale * progress);
+                punchRemaining = Mathf.Max(0f, punchRemaining - Time.deltaTime);
+                squashRemaining = Mathf.Max(0f, squashRemaining - Time.deltaTime);
+
+                float swell = 1f + punchScale * Mathf.Clamp01(punchRemaining / punchSeconds);
+                float give = squash * Threefold.Combat.ImpactLayers.Squash(1f - Mathf.Clamp01(squashRemaining / squashSeconds));
+                visual.localScale = new Vector3(restScale.x * swell * (1f - give), restScale.y * swell * (1f + give),
+                    restScale.z * swell * (1f - give));
             }
         }
 
@@ -103,6 +117,7 @@ namespace Threefold.CombatFeedback
         {
             flashRemaining = flashSeconds;
             punchRemaining = punchSeconds;
+            squashRemaining = squash > 0f ? squashSeconds : 0f;
 
             if (flashing)
             {

@@ -281,16 +281,31 @@ namespace Threefold.CombatFeedback
                 return;
             }
 
-            PooledObject impact = swing.Discipline.Presentation.meleeImpactEffect;
-            if (impact != null && subscribedCombat != null)
+            DisciplinePresentation look = swing.Discipline.Presentation;
+            PooledObject impact = look.meleeImpactEffect;
+
+            // The later strikes of a combo land with a second, larger layer over the first: sparks, and a burst.
+            PooledObject heavy = ImpactLayers.ShowsHeavyLayer(swing.StepIndex, look.heavyImpactFromStep) ? look.heavyImpactEffect : null;
+            if ((impact != null || heavy != null) && subscribedCombat != null)
             {
                 var struck = subscribedCombat.LastStruck;
                 for (int i = 0; i < struck.Count; i++)
                 {
-                    if (struck[i] != null)
+                    if (struck[i] == null)
                     {
-                        // Along the swing, so a directional burst points the way the blow travelled.
+                        continue;
+                    }
+
+                    // Along the swing, so a directional burst points the way the blow travelled.
+                    if (impact != null)
+                    {
                         SpawnShared(impact, struck[i].AimPoint, LookAlong(swing.Direction), MaxImpacts);
+                    }
+
+                    // One heavy layer for each swing, on the first target: several at once would hide the enemies.
+                    if (heavy != null && i < ImpactLayers.MaxHeavyPerSwing)
+                    {
+                        SpawnShared(heavy, struck[i].AimPoint, LookAlong(swing.Direction), ImpactLayers.MaxHeavyPerSwing);
                     }
                 }
             }

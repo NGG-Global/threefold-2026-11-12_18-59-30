@@ -151,7 +151,13 @@ namespace Threefold.CombatAnimation
 
             if (clipRecovery > Epsilon)
             {
-                recoverySpeed = recoverySeconds > Epsilon ? Mathf.Clamp(clipRecovery / recoverySeconds, min, max) : max;
+                // A slot may ask for a slower follow-through than the limit that fits the rules' recovery. The
+                // motion then outlasts the rules' recovery and the lag below says by how much; the rules do
+                // not wait for it.
+                float recoveryMax = slot != null && slot.followThroughSpeed > 0f
+                    ? Mathf.Clamp(slot.followThroughSpeed, min, max)
+                    : max;
+                recoverySpeed = recoverySeconds > Epsilon ? Mathf.Clamp(clipRecovery / recoverySeconds, min, recoveryMax) : recoveryMax;
                 shownRecovery = clipRecovery / recoverySpeed;
             }
 

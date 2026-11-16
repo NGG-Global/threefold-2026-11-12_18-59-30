@@ -30,7 +30,14 @@ namespace Threefold.CombatAnimation
         /// The version of the slots a newly generated set holds. 1: the first placeholders (Sprint 1). 2: the martial
         /// styles: new stances and strikes, three Aegis strikes.
         /// </summary>
-        public const int DataVersion = 2;
+        // 3: the Flame hook's follow-through and entry (Docs/CombatPolish.md).
+        public const int DataVersion = 3;
+
+        /// <summary>The Flame hook after the first polish pass: how fast its follow-through plays at most, and its blend in.</summary>
+        public const float HookFollowThroughSpeed = 1.6f;
+        public const float HookBlendIn = 0.05f;
+        private const string HookClip = "Flame_Hook";
+        private const float HookBlendInBefore = 0.06f;
 
         /// <summary>Every clip the defaults use. The Mage model must contain all of them.</summary>
         public static readonly string[] RequiredClips =
@@ -67,6 +74,11 @@ namespace Threefold.CombatAnimation
                 return 0;
             }
 
+            if (fromVersion >= 2)
+            {
+                return UpgradeToVersion3(library);
+            }
+
             int updated = 0;
             CombatAnimationLibrary current = CreateMage();
             foreach (DisciplineAnimationSet set in library.disciplines)
@@ -91,6 +103,38 @@ namespace Threefold.CombatAnimation
                 set.stance = latest.stance;
                 set.attacks = latest.attacks;
                 updated++;
+            }
+
+            return updated;
+        }
+
+        /// <summary>
+        /// Version 2 to 3: the Flame hook takes its follow-through speed and its shorter blend in. Only a slot
+        /// that still plays the hook's clip with the blend it was generated with is changed; one that was
+        /// tuned by hand is left as it is. Returns the number of disciplines changed (0 or 1).
+        /// </summary>
+        private static int UpgradeToVersion3(CombatAnimationLibrary library)
+        {
+            int updated = 0;
+            foreach (DisciplineAnimationSet set in library.disciplines)
+            {
+                if (set?.attacks == null)
+                {
+                    continue;
+                }
+
+                foreach (CombatAnimationSlot slot in set.attacks)
+                {
+                    if (slot == null || slot.clip != HookClip || slot.followThroughSpeed > 0f ||
+                        System.Math.Abs(slot.blendInSeconds - HookBlendInBefore) > 0.0005f)
+                    {
+                        continue;
+                    }
+
+                    slot.followThroughSpeed = HookFollowThroughSpeed;
+                    slot.blendInSeconds = HookBlendIn;
+                    updated++;
+                }
             }
 
             return updated;
@@ -193,8 +237,12 @@ namespace Threefold.CombatAnimation
                     Strike("Flame_Punch", 1f, CombatEffector.RightHand, open: 0.2f, contact: 0.267f, close: 0.333f,
                         recoveryEnd: 0.867f),
                     // Ember Hook. 34 frames; fastest frame 9 (41 m/s), a lunge of 0.46 m that comes back; settled frame 32.
-                    FullBody(Strike("Flame_Hook", 1.1f, CombatEffector.RightHand, open: 0.182f, contact: 0.242f, close: 0.303f,
-                        recoveryEnd: 0.939f, blendOut: 0.18f)),
+                    // Polish pass: the blend in is shorter, so more of the 0.12 s wind-up is the clip's own coil
+                    // and less a cross-fade; and the follow-through plays at 1.6x at most instead of 2.95x, so
+                    // the arm carries through and settles instead of snapping back. It then lasts 0.48 s against
+                    // the rules' 0.26 s (the blend in stays at the 0.05 s every strike keeps); the rules do not wait, and the next strike cuts into it.
+                    FollowThrough(FullBody(Strike("Flame_Hook", 1.1f, CombatEffector.RightHand, open: 0.182f, contact: 0.242f,
+                        close: 0.303f, recoveryEnd: 0.939f, blendOut: 0.18f, blendIn: HookBlendIn)), HookFollowThroughSpeed),
                     // Flare. 43 frames; coils down, then sweeps up and round, turning the hips 146 degrees; contact at
                     // the fastest frame 9; turned back to the front by frame 41.
                     FullBody(Strike("Flame_Flare", 1.4f, CombatEffector.RightHand, open: 0.143f, contact: 0.19f, close: 0.238f,
@@ -353,6 +401,13 @@ namespace Threefold.CombatAnimation
         private static CombatAnimationSlot Mirrored(CombatAnimationSlot slot)
         {
             slot.mirror = true;
+            return slot;
+        }
+
+        /// <summary>Lets the part after contact play no faster than this; see CombatAnimationSlot.followThroughSpeed.</summary>
+        private static CombatAnimationSlot FollowThrough(CombatAnimationSlot slot, float fastest)
+        {
+            slot.followThroughSpeed = fastest;
             return slot;
         }
 

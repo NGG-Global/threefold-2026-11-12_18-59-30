@@ -90,6 +90,12 @@ namespace Threefold.CombatAnimation
         [Min(0f)]
         public float blendOutSeconds = 0.15f;
 
+        [Tooltip("The fastest the part after contact is played. 0 uses the tuning's limit, which fits the whole recovery " +
+                 "into the rules' recovery time. A lower value lets the follow-through play out nearer its own speed: it " +
+                 "then lasts longer than the rules' recovery, as a tail that the next action cuts into. It changes no rule.")]
+        [Range(0f, 6f)]
+        public float followThroughSpeed;
+
         [Tooltip("Length of the clip at normal speed, in seconds. The setup fills it in from the model.")]
         [Min(0f)]
         public float clipSeconds = 1f;

@@ -13,6 +13,14 @@ namespace Threefold.Magic
         [Tooltip("Effect spawned on each target a melee swing hits.")]
         public PooledObject meleeImpactEffect;
 
+        [Tooltip("A second, larger effect shown on the target together with the impact effect, for the later strikes of a " +
+                 "combo. Empty: every strike shows the impact effect alone.")]
+        public PooledObject heavyImpactEffect;
+
+        [Tooltip("The first strike of the combo that shows the heavy impact effect as well: 1 is the second strike.")]
+        [Min(0)]
+        public int heavyImpactFromStep = 1;
+
         [Tooltip("Oriented slash or force burst played when a melee swing starts. World-space at swing height.")]
         public PooledObject meleeSwingEffect;
 
