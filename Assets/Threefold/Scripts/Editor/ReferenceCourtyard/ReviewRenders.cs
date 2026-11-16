@@ -399,6 +399,24 @@ namespace Threefold.EditorTools
                 UnityEngine.Object.DestroyImmediate(target);
             }
 
+            // One strike as a strip of frames, before and after the polish pass. It never costs the stills:
+            // whatever goes wrong is written into the metrics instead.
+            try
+            {
+                if (AnimationMode.InAnimationMode())
+                {
+                    AnimationMode.StopAnimationMode();
+                }
+
+                view.targetTexture = null;
+                metrics.AppendLine();
+                metrics.Append(StrikeSequenceCapture.CaptureHook(scene, view, Folder));
+            }
+            catch (Exception exception)
+            {
+                metrics.AppendLine("strike sequence: failed (" + exception.Message + ")");
+            }
+
             WriteMetrics(scene, metrics);
 
             Debug.Log($"[Threefold] Review renders: {written} written to '{Folder}'. Graphics device: " +
