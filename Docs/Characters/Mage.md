@@ -177,7 +177,8 @@ In Unity (`VisualStyleAssets`):
 ### Before and after
 
 Unity, Editor renders on the runner from the same cameras (runs 25 and 26). The Mage stands in the
-model's rest pose in both: posing him outside Play mode had no effect in these runs.
+model's rest pose in both, because posing him outside Play mode did not yet work in those runs; the
+comparison of outline is fair, since both stand the same way.
 
 | First version (run 25) | Second pass (run 26) |
 | --- | --- |
@@ -192,6 +193,14 @@ Blender, posed with the game's clips (Idle from behind and from the side, Jog, t
 | ![](images/wayfarer-v1-side.png) | ![](images/wayfarer-side.png) |
 | ![](images/wayfarer-v1-jog.png) | ![](images/wayfarer-jog.png) |
 | ![](images/wayfarer-v1-head.png) | ![](images/wayfarer-head.png) |
+
+Unity again, the second pass posed with the game's own clips (run 28): Idle from behind, Jog, and the
+Flame hook. One moment of a clip each. Nothing the game adds while it runs is in them: no bearing, no
+swing of cloak and hair (so the cloak stands stiff in the strike), no blinking.
+
+| Idle, from behind | Jog | Flame hook |
+| --- | --- | --- |
+| ![](images/unity-posed-run28-7-mage-back.png) | ![](images/unity-posed-run28-8-mage-jog.png) | ![](images/unity-posed-run28-9-mage-strike.png) |
 
 What the pictures show: from behind the outline now changes from head to hem (tufted hair, the hood's
 mass, a cloak that widens and narrows to two slanted points of different length) where it was a cap over a
@@ -303,7 +312,8 @@ Movement, camera, combat and input do not change in either case.
 | Unity imports `Mage.fbx` as a valid Humanoid | The first version of the file was, on the laptop runner (Android build run 13). The file with all 41 clips has the same skeleton and mesh (`compare_mage.py`); its import is recorded in `Docs/LivingMagicTesting.md` where a build ran |
 | Unity imports `MageWayfarer.fbx` as the same Humanoid | By itself it does not: Unity's automatic mapping takes `face_blink` for an eye. The setup gives the model the mapping of `Mage.fbx` and imports it again; then it is a valid Humanoid with the same mapping (Android build run 20, `MageWayfarerLookTests`). The painted atlas had also been imported as a cubemap, which is fixed in the import rules. See `Docs/LivingMagicTesting.md` |
 | The visual prefab is rebuilt in place and scenes follow | On the laptop runner (run 20): the prefab was rebuilt with the Wayfarer look, and the Mage of the assembled Fantasy Playground carries the Wayfarer mesh and the painted atlas. Checked by test, **not seen** |
-| **How the Wayfarer look appears in the game: shader, contour line on hair and cloak, texture filtering, on Android** | **Not verified** |
+| How the Wayfarer look appears in Unity: shader, contour line on hair and cloak, the painted atlas | Seen in Unity's Editor renders on the runner (runs 21 to 28), at rest and posed with three clips. **Not seen on Android, and not seen moving** |
+| The second pass keeps the skeleton, the extra bones, two materials and the triangle limit | `check_mage_wayfarer.py` in Blender; `MageWayfarerLookTests` in Unity (run 26: 17,494 triangles as Unity counts them, 2 materials) |
 | **Blinking, brows and the swing of cloak, hair and sash in the game** | **Not verified.** The rules behind them are tested outside Unity (`Docs/CharacterIdentity.md`) |
 
 ## Known limitations

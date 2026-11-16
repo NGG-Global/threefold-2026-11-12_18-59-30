@@ -52,9 +52,13 @@ namespace Threefold.EditorTools
         /// Poses the Mage with one moment of a clip of Mage.fbx, outside Play mode. Asking the Animator to
         /// update itself left the model in its rest pose (runs 21 to 24), and so did the Editor's animation
         /// preview, without any error (run 25); the ways are now tried in turn and each is checked. Nothing
-        /// moves after this: a picture shows a pose, not animation, and nothing the game adds while it runs
+        /// "Bones posed" says that the skeleton left the rest pose; whether the picture shows it has to be
+        /// seen in the picture (in run 27 it did not). Nothing moves after this: a picture shows a pose, not animation, and nothing the game adds while it runs
         /// (the bearing, the swing of cloak and hair, blinking) is in it. Returns what was done, for the log.
         /// </summary>
+        private static Quaternion restRotation;
+        private static bool restKnown;
+
         private static string PoseMage(Scene scene, string clipName, float clipTime)
         {
             Animator animator = null;
@@ -98,8 +102,23 @@ namespace Threefold.EditorTools
             // needed: the animation preview reported no error and the Mage still stood with his arms out.
             float seconds = Mathf.Clamp01(clipTime) * clip.length;
             Transform arm = animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            Quaternion rest = arm != null ? arm.localRotation : Quaternion.identity;
-            bool Moved() => arm != null && Quaternion.Angle(rest, arm.localRotation) > 2f;
+            if (arm != null && !restKnown)
+            {
+                // The rest pose, read once before anything is posed: later pictures are compared with it,
+                // not with the pose the picture before them left behind.
+                restRotation = arm.localRotation;
+                restKnown = true;
+            }
+
+            // Run 27: the bones were posed and the pictures still showed the rest pose. Outside Play mode the
+            // skinned meshes had not been skinned again. They are told to do so for every render.
+            foreach (SkinnedMeshRenderer skinned in animator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                skinned.forceMatrixRecalculationPerRender = true;
+                skinned.updateWhenOffscreen = true;
+            }
+
+            bool Moved() => arm != null && Quaternion.Angle(restRotation, arm.localRotation) > 2f;
             var tried = new StringBuilder();
 
             try
@@ -121,7 +140,7 @@ namespace Threefold.EditorTools
 
                 if (Moved())
                 {
-                    return $"posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (playable graph)";
+                    return $"bones posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (playable graph)";
                 }
 
                 tried.Append("playable graph: no change; ");
@@ -143,7 +162,7 @@ namespace Threefold.EditorTools
                 AnimationMode.EndSampling();
                 if (Moved())
                 {
-                    return $"posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (animation preview)";
+                    return $"bones posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (animation preview)";
                 }
 
                 tried.Append("animation preview: no change; ");
@@ -158,7 +177,7 @@ namespace Threefold.EditorTools
                 clip.SampleAnimation(animator.gameObject, seconds);
                 if (Moved())
                 {
-                    return $"posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (clip sampling)";
+                    return $"bones posed with '{clipName}' at {seconds:0.00} s of {clip.length:0.00} s (clip sampling)";
                 }
 
                 tried.Append("clip sampling: no change");
