@@ -529,8 +529,8 @@ namespace Threefold.EditorTools
             {
                 EditorUtility.SetDirty(set);
                 AssetDatabase.SaveAssetIfDirty(set);
-                report.AppendLine($"Updated the combat animation set to the martial styles (Docs/MartialStyles.md): {upgraded} " +
-                                  "discipline(s) now use the new stances and strikes.");
+                report.AppendLine($"Brought the combat animation set to version {CombatAnimationDefaults.DataVersion} " +
+                                  $"(Docs/MartialStyles.md, Docs/CombatPolish.md): {upgraded} discipline(s) changed.");
                 foreach (MagicDiscipline discipline in kept)
                 {
                     report.AppendLine($"Kept the {discipline} stance and strikes of the combat animation set as they are, because " +
