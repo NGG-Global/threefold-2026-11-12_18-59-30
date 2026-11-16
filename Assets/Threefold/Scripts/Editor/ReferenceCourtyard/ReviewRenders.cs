@@ -21,8 +21,7 @@ namespace Threefold.EditorTools
     /// What the pictures are, and are not: they are rendered by Unity's own renderer with the game's shaders,
     /// materials and lighting, through the scene's own camera. They are rendered in the Editor, which uses the
     /// Editor's quality level and render-pipeline asset, not the phone's; nothing is animated (the Mage is
-    /// given his idle stance once, if Unity allows it outside Play mode) and effects that need the game to
-    /// run are absent; and no touch control
+    /// given one pose of a clip per picture) and what the game adds while it runs is absent; and no touch control
     /// or HUD is drawn. They show composition, materials and light. They do not show how the game looks or
     /// performs on a device.
     /// </summary>
@@ -49,32 +48,65 @@ namespace Threefold.EditorTools
         }
 
         /// <summary>
-        /// Lets every Animator of the scene take the first pose of its controller (the idle stance), so that the
-        /// Mage does not stand in the model's rest pose with his arms out. Nothing moves after that: the
-        /// pictures show a pose, not animation. If Unity refuses outside Play mode, the rest pose stays.
+        /// Poses the Mage with one moment of a clip of Mage.fbx, through the Editor's animation preview
+        /// (AnimationMode), which plays Humanoid clips on a model outside Play mode. The first attempt,
+        /// asking the Animator to update itself, left the model in its rest pose (runs 21 to 24). Nothing
+        /// moves after this: a picture shows a pose, not animation, and nothing the game adds while it runs
+        /// (the bearing, the swing of cloak and hair, blinking) is in it. Returns what was done, for the log.
         /// </summary>
-        private static void PoseCharacters(Scene scene)
+        private static string PoseMage(Scene scene, string clipName, float clipTime)
         {
+            Animator animator = null;
             foreach (GameObject root in scene.GetRootGameObjects())
             {
-                foreach (Animator animator in root.GetComponentsInChildren<Animator>(true))
+                if (root.name != "Mage")
                 {
-                    try
-                    {
-                        if (animator.runtimeAnimatorController == null || !animator.gameObject.activeInHierarchy)
-                        {
-                            continue;
-                        }
+                    continue;
+                }
 
-                        animator.Rebind();
-                        animator.Update(0f);
-                        animator.Update(0.4f);
-                    }
-                    catch (Exception exception)
+                foreach (Animator candidate in root.GetComponentsInChildren<Animator>(true))
+                {
+                    if (candidate.avatar != null && candidate.avatar.isHuman)
                     {
-                        Debug.LogWarning($"[Threefold] '{animator.name}' could not be posed for the review renders: {exception.Message}");
+                        animator = candidate;
                     }
                 }
+            }
+
+            if (animator == null)
+            {
+                return "no Mage with a Humanoid Animator was found; rest pose";
+            }
+
+            AnimationClip clip = null;
+            foreach (UnityEngine.Object asset in AssetDatabase.LoadAllAssetsAtPath(CharacterModelPostprocessor.MageModelPath))
+            {
+                if (asset is AnimationClip candidate && candidate.name == clipName)
+                {
+                    clip = candidate;
+                }
+            }
+
+            if (clip == null)
+            {
+                return $"Mage.fbx has no clip '{clipName}'; rest pose";
+            }
+
+            try
+            {
+                if (!AnimationMode.InAnimationMode())
+                {
+                    AnimationMode.StartAnimationMode();
+                }
+
+                AnimationMode.BeginSampling();
+                AnimationMode.SampleAnimationClip(animator.gameObject, clip, Mathf.Clamp01(clipTime) * clip.length);
+                AnimationMode.EndSampling();
+                return $"posed with '{clipName}' at {Mathf.Clamp01(clipTime) * clip.length:0.00} s of {clip.length:0.00} s";
+            }
+            catch (Exception exception)
+            {
+                return $"could not be posed with '{clipName}' ({exception.Message}); rest pose";
             }
         }
 
@@ -242,8 +274,6 @@ namespace Threefold.EditorTools
                 view.targetTexture = target;
                 view.fieldOfView = L.CameraVerticalFov;
 
-                PoseCharacters(scene);
-
                 // The first picture Unity draws after starting showed one texture on every surface (run 21:
                 // the whole courtyard in the foliage's leaves), and the pictures after it were right. Why is
                 // not established. Two pictures are therefore drawn and thrown away before the first is kept.
@@ -254,6 +284,10 @@ namespace Threefold.EditorTools
 
                 foreach (L.Viewpoint viewpoint in L.Viewpoints)
                 {
+                    string pose = PoseMage(scene, viewpoint.Clip, viewpoint.ClipTime);
+                    Debug.Log($"[Threefold] Review render '{viewpoint.Name}': the Mage {pose}.");
+                    metrics.AppendLine($"pose {viewpoint.Name,-18} {pose}");
+
                     view.transform.SetPositionAndRotation(viewpoint.Position,
                         Quaternion.LookRotation(viewpoint.Target - viewpoint.Position, Vector3.up));
                     view.Render();
@@ -273,6 +307,11 @@ namespace Threefold.EditorTools
             finally
             {
                 // The scene is not saved after this, so the camera's changes are not kept.
+                if (AnimationMode.InAnimationMode())
+                {
+                    AnimationMode.StopAnimationMode();
+                }
+
                 RenderTexture.active = before;
                 view.targetTexture = null;
                 UnityEngine.Object.DestroyImmediate(picture);

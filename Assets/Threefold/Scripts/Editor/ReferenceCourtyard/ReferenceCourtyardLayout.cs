@@ -391,11 +391,17 @@ namespace Threefold.EditorTools
             internal readonly Vector3 Position;
             internal readonly Vector3 Target;
 
-            internal Viewpoint(string name, Vector3 position, Vector3 target)
+            /// <summary>The clip of Mage.fbx the Mage is posed with for this picture, and where in it (0 to 1).</summary>
+            internal readonly string Clip;
+            internal readonly float ClipTime;
+
+            internal Viewpoint(string name, Vector3 position, Vector3 target, string clip = "Idle", float clipTime = 0.2f)
             {
                 Name = name;
                 Position = position;
                 Target = target;
+                Clip = clip;
+                ClipTime = clipTime;
             }
         }
 
@@ -412,6 +418,12 @@ namespace Threefold.EditorTools
             new Viewpoint("4-wall-and-vines", new Vector3(-3f, 1.8f, -3f), new Vector3(-12f, 1.8f, 1.5f)),
             new Viewpoint("5-mage", Spawn + new Vector3(1.6f, 1.5f, 3.2f), Spawn + Vector3.up * 1.1f),
             new Viewpoint("6-overview", new Vector3(16f, 15f, -24f), new Vector3(0f, 1.5f, 4f)),
+
+            // The character, as the player sees him and in motion: from behind at close gameplay distance,
+            // from the side in a jog, and in a strike. One pose of a clip each; nothing moves.
+            new Viewpoint("7-mage-back", Spawn + new Vector3(0.35f, 1.9f, -3.1f), Spawn + Vector3.up * 1.05f),
+            new Viewpoint("8-mage-jog", Spawn + new Vector3(3.0f, 1.3f, 0.5f), Spawn + Vector3.up * 0.95f, "Jog", 0.3f),
+            new Viewpoint("9-mage-strike", Spawn + new Vector3(2.3f, 1.5f, 2.3f), Spawn + Vector3.up * 0.95f, "Flame_Hook", 0.45f),
         };
     }
 }
