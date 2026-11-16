@@ -82,6 +82,7 @@ namespace Threefold.DevTools
         private readonly DevSceneSwitcher sceneSwitcher = new DevSceneSwitcher();
         private string[] sceneNames = new string[0];
         private bool scenesOpen;
+        private bool feelOpen;
         private long deliveredBefore;
         private float deliveredAt;
         private float deliveredPerSecond;
@@ -216,6 +217,49 @@ namespace Threefold.DevTools
             return sceneSwitcher.Update(touches, Time.unscaledDeltaTime, visible);
         }
 
+        /// <summary>
+        /// The values that decide how the camera and the touch controls feel (Threefold.Feel.FeelSettings), for
+        /// trying on a device. Each press steps one value and saves it; "Defaults" puts the game back as it was.
+        /// </summary>
+        private void DrawFeelPanel()
+        {
+            Threefold.Feel.FeelSettings feel = Threefold.Feel.FeelSettingsStore.Current;
+            CultureInfo invariant = CultureInfo.InvariantCulture;
+
+            if (GUILayout.Button("Look speed (touch): x" + feel.LookSpeed.ToString("0.##", invariant), buttonStyle))
+            {
+                Threefold.Feel.FeelSettingsStore.Set(feel.WithNextLookSpeed());
+            }
+
+            if (GUILayout.Button("Camera shake: x" + feel.Shake.ToString("0.##", invariant) + (feel.Shake <= 0f ? " (off)" : string.Empty), buttonStyle))
+            {
+                Threefold.Feel.FeelSettingsStore.Set(feel.WithNextShake());
+            }
+
+            if (GUILayout.Button("Camera comes round by itself: " + (feel.AutoRecenter ? "ON" : "off"), buttonStyle))
+            {
+                Threefold.Feel.FeelSettingsStore.Set(feel.WithAutoRecenter(!feel.AutoRecenter));
+            }
+
+            if (feel.AutoRecenter)
+            {
+                if (GUILayout.Button("  ...after " + feel.RecenterDelay.ToString("0.#", invariant) + " s without turning it", buttonStyle))
+                {
+                    Threefold.Feel.FeelSettingsStore.Set(feel.WithNextRecenterDelay());
+                }
+
+                if (GUILayout.Button("  ...at up to " + feel.RecenterSpeed.ToString("0", invariant) + " degrees a second", buttonStyle))
+                {
+                    Threefold.Feel.FeelSettingsStore.Set(feel.WithNextRecenterSpeed());
+                }
+            }
+
+            if (GUILayout.Button("Defaults (the game as it was)", buttonStyle))
+            {
+                Threefold.Feel.FeelSettingsStore.ResetToDefaults();
+            }
+        }
+
         /// <summary>Loads a scene of the build by its index, if there is more than one and the index names one.</summary>
         private static void LoadScene(int buildIndex)
         {
@@ -232,6 +276,15 @@ namespace Threefold.DevTools
             CultureInfo invariant = CultureInfo.InvariantCulture;
 
             text.Append("BUILD  ").Append(Application.version).Append(", ").Append(buildLine).AppendLine();
+
+            // The feel settings in force, so that a note of what was judged also says with which values.
+            Threefold.Feel.FeelSettings feel = Threefold.Feel.FeelSettingsStore.Current;
+            text.Append("FEEL   look x").Append(feel.LookSpeed.ToString("0.##", invariant))
+                .Append(", shake x").Append(feel.Shake.ToString("0.##", invariant))
+                .Append(", camera comes round ").Append(feel.AutoRecenter
+                    ? "after " + feel.RecenterDelay.ToString("0.#", invariant) + " s at " + feel.RecenterSpeed.ToString("0", invariant) + " deg/s"
+                    : "off")
+                .AppendLine();
 
             FrameTimingSummary timing = frames.Summarize();
             text.Append("FRAME  ").Append(timing.AverageFps.ToString("0", invariant)).Append(" fps, ")
@@ -594,12 +647,23 @@ namespace Threefold.DevTools
                 scenesOpen = !scenesOpen;
             }
 
+            if (GUILayout.Button(feelOpen ? "Feel (close)" : "Feel", buttonStyle))
+            {
+                feelOpen = !feelOpen;
+            }
+
             if (sceneNames.Length > 1 && GUILayout.Button("Next scene", buttonStyle))
             {
                 LoadScene(DevSceneSwitcher.NextIndex(active, sceneNames.Length));
             }
 
             GUILayout.EndHorizontal();
+
+            // The feel panel: each button shows a value and steps it to the next; the change is saved at once.
+            if (feelOpen)
+            {
+                DrawFeelPanel();
+            }
 
             // The scene list: one button for each scene of the build; the one that is open is marked.
             if (scenesOpen)
