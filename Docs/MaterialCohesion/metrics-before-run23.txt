@@ -1,0 +1,43 @@
+Reference Courtyard: rendering metrics (Unity Editor, not a device)
+Unity 6000.6.0f1; Direct3D11, Intel(R) Graphics; quality level PC; 1600x900
+
+Per view (render call: CPU time on this computer, average of 20; counts as Unity reported them, 0 = not reported):
+view 1-start            render call   9.59 ms   draw calls    0   of which SRP Batcher    0   set-pass    0   triangles       0   shadow casters   0
+view 2-arch             render call   7.06 ms   draw calls    0   of which SRP Batcher    0   set-pass    0   triangles       0   shadow casters   0
+view 3-castle           render call   4.50 ms   draw calls    0   of which SRP Batcher    0   set-pass    0   triangles       0   shadow casters   0
+view 4-wall-and-vines   render call   5.68 ms   draw calls    0   of which SRP Batcher    0   set-pass    0   triangles       0   shadow casters   0
+view 5-mage             render call   4.73 ms   draw calls    0   of which SRP Batcher    0   set-pass    0   triangles       0   shadow casters   0
+view 6-overview         render call   5.61 ms   draw calls    0   of which SRP Batcher    0   set-pass    0   triangles       0   shadow casters   0
+
+Whole scene, counted:
+  renderers 102, of which cast shadows 68
+  triangles 39782
+  materials 20
+  shader variants asked for by materials 8
+  textures 14, 11.2 MB as Unity holds them in the Editor
+
+Shader variants (materials using each):
+    1  Threefold/Illustrated Lit  [_EMISSION _OUTLINE_SMOOTH_NORMALS]
+    1  Threefold/Illustrated Lit  [_HIGHLIGHT]
+    1  Threefold/Illustrated Lit  [_OUTLINE_SMOOTH_NORMALS]
+    9  Threefold/Illustrated Lit  [_PAINT_VARIATION]
+    3  Threefold/Illustrated Lit  [no keywords]
+    2  Universal Render Pipeline/Lit  [_EMISSION]
+    2  Universal Render Pipeline/Lit  [no keywords]
+    1  Universal Render Pipeline/Unlit  [no keywords]
+
+Textures:
+     9558 KB  1024x1024  MageWayfarer_Paint
+      310 KB  512x512  Painted_Wood
+      310 KB  512x512  Painted_StoneDark
+      310 KB  512x512  Painted_Stone
+      310 KB  512x512  Painted_Paving
+       79 KB  256x256  Painted_Moss
+       79 KB  256x256  Painted_Metal
+       79 KB  256x256  Painted_Ground
+       79 KB  256x256  Painted_Grass
+       79 KB  256x256  Painted_Foliage
+       79 KB  256x256  Painted_ClothCool
+       79 KB  256x256  Painted_Cloth
+       79 KB  256x256  Painted_Bark
+       21 KB  128x128  PaintVariation
