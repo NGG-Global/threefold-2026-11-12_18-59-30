@@ -79,6 +79,7 @@ below).
 | 28 | `e86c8c4` (render tool: skin again for every render), renders | **The Mage is drawn posed** with Idle, Jog and Flame_Hook on the rebuilt Wayfarer model: the first pictures from Unity of the model following the game's clips |
 | 29 | `f27069c` (camera and controls feel, first pass), tests and APK | **Green.** EditMode: **1,244 tests, 1,244 passed**, including the 25 cases of `CameraFeelTests`. APK built (artifact `threefold-android-development-29`, 62 MB zip). The Feel panel and the recentering have not been tried on a device |
 | 30 | `ce071ef` (combat polish, the Flame hook), tests and renders | **Green.** EditMode: **1,259 tests, 1,259 passed**. The existing animation set was brought to version 3 (one discipline changed); `FlameImpactBurst_Hovl` was adapted from the pack's explosion and passed the budget test. **First frame strips of a strike**: the hook drawn by Unity through the real animation model and Animator Controller, 26 frames before and 26 after (`Docs/CombatPolish.md`) |
+| 31 | `809e64a` (combat polish, the Flame hook; code identical to run 30's `ce071ef`), APK only | **Green.** APK built with 0 errors (artifact `threefold-android-development-31`, 63 MB zip); six scenes packaged; build stamp "commit 809e64a, run 31". Tests were not repeated in this run. The hook's follow-through, the heavy impact layer and the body's squash have not been seen on a device |
 
 Later runs are recorded below as they complete.
 
